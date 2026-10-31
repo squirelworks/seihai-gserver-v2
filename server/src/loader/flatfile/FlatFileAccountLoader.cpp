@@ -230,7 +230,8 @@ bool FlatFileAccountLoader::loadAccount(const std::string_view accountName, Acco
 		}
 		else if (section == "MAXHP")
 		{
-			const auto num = toByte(val);
+			// Seihai: stock account files write "MAXHP 3.00"; toNumber read that as 0.
+			const auto num = static_cast<uint8_t>(string::toFloat(val));
 			if (account.maxHitpoints != num)
 			{
 				account.maxHitpoints = num;
@@ -389,7 +390,9 @@ bool FlatFileAccountLoader::loadAccount(const std::string_view accountName, Acco
 		}
 		else if (section == "STATUS")
 		{
-			const auto num = toByte(val);
+			// Lab: never log in hidden. A client that closed while hiding under a carried
+			// object saved bit 0x02, and the player stayed invisible until the first step.
+			const auto num = static_cast<uint8_t>(toByte(val) & ~PLSTATUS_HIDDEN);
 			if (account.status != num)
 			{
 				account.status = num;
