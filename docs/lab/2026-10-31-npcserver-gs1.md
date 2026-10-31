@@ -64,7 +64,8 @@ and the rest of the block still runs.
 
 ## Bugs found (in priority order)
 
-1. **Crash when an idle level with items is unloaded.** The level destructor
+1. **Crash when an idle level with items is unloaded.** Fixed in the
+   `seihai-fix-level-unload-crash` PR, see `2026-10-31-level-unload-crash.md`. The level destructor
    removes its items with "inform clients", which asks for a shared pointer to
    the level that is being destroyed. The server stops with an unhandled
    `bad_weak_ptr` (console: `Level::removeItem` called from the level's
