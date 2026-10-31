@@ -946,6 +946,14 @@ HandlePacketResult PlayerClient::msgPLI_WEAPONADD(CString& pPacket)
 	return HandlePacketResult::Handled;
 }
 
+HandlePacketResult PlayerClient::msgPLI_WEAPONUPLOAD(CString& pPacket)
+{
+	// Lab: 1.33 to 1.37 upload each weapon they hold with id 25 (name, image, script,
+	// laid out as PLO_NPCWEAPONADD). 1.38 replaced it with id 33. The weapon stays on the
+	// client, so accept it without a kick and keep nothing.
+	return HandlePacketResult::Handled;
+}
+
 HandlePacketResult PlayerClient::msgPLI_UPDATEFILE(CString& pPacket)
 {
 	// Get the packet data and file mod time.

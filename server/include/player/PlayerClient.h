@@ -189,6 +189,7 @@ public:
 	HandlePacketResult msgPLI_PRIVATEMESSAGE(CString& pPacket);
 	HandlePacketResult msgPLI_NPCWEAPONDEL(CString& pPacket);
 	HandlePacketResult msgPLI_WEAPONADD(CString& pPacket);
+	HandlePacketResult msgPLI_WEAPONUPLOAD(CString& pPacket);
 	HandlePacketResult msgPLI_UPDATEFILE(CString& pPacket);
 	HandlePacketResult msgPLI_ADJACENTLEVEL(CString& pPacket);
 	HandlePacketResult msgPLI_HITOBJECTS(CString& pPacket);
