@@ -8,6 +8,9 @@ has two server folders, both set up for loopback only:
 | `servers/default` | newmain | 2.00 to 2.31, 3.04 to 3.153 | `127.0.0.1:14802` |
 | `servers/classic` | classic | 1.33 to 1.41r1 | `127.0.0.1:14803` |
 
+A third folder, `servers/npcdemo` (`127.0.0.1:14804`), is a sample world for the
+built-in NPC-server; see `servers/npcdemo/README.md`.
+
 ## Start it
 
 From the folder that holds `gs2emu`, start each server in its own terminal:

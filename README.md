@@ -15,6 +15,10 @@ Any account logs in without a listserver. Details, and how to open a server to
 other machines: [bin/docs/lab-world.md](bin/docs/lab-world.md). A one-step setup
 tool will live in seihai-servertools.
 
+To try the built-in NPC-server, run `./gs2emu --server npcdemo` from `bin/`
+(a loopback sample world, see `bin/servers/npcdemo/README.md`). What GS1 it
+lacks today: `docs/lab/2026-10-31-npcserver-gs1.md`.
+
 Seihai also makes a new Rust server stack, separate from this fork:
 [seihai-gserver](https://github.com/squirelworks/seihai-gserver),
 [seihai-listserver](https://github.com/squirelworks/seihai-listserver),

@@ -1,0 +1,13 @@
+# Lab probe for the built-in NPC-server. Not part of the server build.
+[package]
+name = "npcprobe"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+publish = false
+
+[dependencies]
+# Seihai's protocol code (login, framing, walk and trigger messages).
+seihai-core = { git = "https://github.com/squirelworks/seihai", default-features = false }
+
+[workspace]
