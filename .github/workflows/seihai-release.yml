@@ -94,7 +94,9 @@ jobs:
             for i in $(seq 1 30); do (echo > /dev/tcp/127.0.0.1/$port) 2>/dev/null && { up=1; break; }; sleep 1; done
             [ $up = 1 ] || { echo "nothing listens on 127.0.0.1:$port"; ok=0; }
           done
-          kill $p1 $p2 2>/dev/null; wait $p1 $p2 2>/dev/null
+          # wait returns the killed server's status (143 on Windows, where kill is TerminateProcess);
+          # with bash -e that ended the step before the logs were printed.
+          kill $p1 $p2 2>/dev/null || true; wait $p1 $p2 2>/dev/null || true
           if [ "$RUNNER_OS" = Windows ]; then taskkill //F //IM gs2emu.exe > /dev/null 2>&1 || true; fi
           for s in default classic; do echo "== $s"; tail -n 20 $s.out; done
           [ $ok = 1 ]
