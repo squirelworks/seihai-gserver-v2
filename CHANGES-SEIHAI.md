@@ -22,6 +22,7 @@ Each file we changed carries a one-line notice at its top.
 | On a classic server prop 10 is sent in the bow form. The gani string was read as the bow and the rest of the props were lost. | `PropertySerializers.cpp` | 1.33 to 1.41 |
 | gs2lib comes from our mirror [seihai-gs2lib](https://github.com/squirelworks/seihai-gs2lib) (branch `seihai`): the 3.153 token, and no abort on unknown tokens. | `server/CMakeLists.txt` | 3.04, 3.153 |
 | The default `allowedversions.txt` lets in 2.00 to 2.31 and 3.04 to 3.153 on the newmain generation (stock: 2.22 to 2.31). | `bin/servers/default/config/allowedversions.txt` | 2.00 to 2.17, 3.x |
+| 5.12 gets its own gen-5 step rule: once per whole 4-byte group on zlib and bz2 bodies (rounded down), set at login for both directions from seihai-gs2lib's `CEncryption::gen5StepsForClient`. Stock gs2lib rounds up. On beta4 the C>S side was only kept in step by accident, by the 2.x "bad Adler-32" fallback that rewinds the iterator one step; frames the server sends to 5.12 had no such cover. The gs2lib pin moves to the commit with the rule. Lab record: `docs/lab/2026-10-31-512-round-down.md`. | `PlayerClient.cpp`, `server/CMakeLists.txt` | 5.12 |
 | `-DANTLR4_JAR_LOCATION=<jar>` uses a local antlr jar that matches a system antlr4 runtime. | `server/CMakeLists.txt` | build only |
 | A baddy index is cast to `uint8_t` explicitly; MSVC refused the narrowing conversion. | `Level.cpp` | build only (Windows) |
 | Release workflow for Linux, Windows and macOS. | `.github/workflows/` | build only |

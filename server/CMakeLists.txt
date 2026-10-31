@@ -270,9 +270,10 @@ endif()
 # ----------------------------
 # Dependency: gs2lib.
 FetchContent_Declare(gs2lib
-	# Seihai: our mirror, branch seihai (upstream 5c36ab8 + the 3.153 token).
+	# Seihai: our mirror, branch seihai (upstream 5c36ab8 + the 3.153 token
+	# + the 5.12 gen-5 step rule).
 	GIT_REPOSITORY https://github.com/squirelworks/seihai-gs2lib.git
-	GIT_TAG        496f6dd43a5b5c3fb2e11b0227306c11099cda4d
+	GIT_TAG        a722b3bff76d510f31afd567b241e90d252eac13
 )
 FetchContent_MakeAvailable(gs2lib)
 add_dependencies(${TARGET_NAME} gs2lib)
