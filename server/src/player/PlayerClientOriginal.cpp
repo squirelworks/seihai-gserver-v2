@@ -140,17 +140,19 @@ bool PlayerClientOriginal::sendStaticLevelData(const std::shared_ptr<StaticLevel
 	{
 		if (!clientCachedTime.has_value() || clientCachedTime.value() != levelModTime)
 		{
+			// Tell the client the current level name.
+			// Only send it the very first time for original clients.
+			// Lab: before the board, as GServer efb5b90 and the live-trace stub do;
+			// real 2.05 stays on the loading screen when it comes after the board.
+			if (!m_firstLevel)
+				sendPacket(CString() >> (char)PLO_LEVELNAME << staticLevelData->levelName);
+			m_firstLevel = true;
+
 			// Send board tiles.
 			if (subLevel != nullptr)
 				subLevel->sendBoardToPlayer(self);
 			else
 				staticLevelData->sendBoardToPlayer(self);
-
-			// Tell the client the current level name.
-			// Only send it the very first time for original clients.
-			if (!m_firstLevel)
-				sendPacket(CString() >> (char)PLO_LEVELNAME << staticLevelData->levelName);
-			m_firstLevel = true;
 
 			// Send links.
 			staticLevelData->sendLinksToPlayer(self, false);
@@ -194,6 +196,11 @@ bool PlayerClientOriginal::sendDynamicLevelData(const std::shared_ptr<Level>& le
 	// If we are the leader, send it now.
 	if (level->isSinglePlayer || level->isPlayerLeader(getId()))
 		sendPacket(CString() >> (char)PLO_ISLEADER);
+
+	// Lab: 2.01 and later wait for PLO_SETACTIVELEVEL before they leave the loading
+	// screen (live 2.05 trace); 156 is in 2.01's handler table, not in 2.00's.
+	if (m_versionId >= CLVER_2_01)
+		sendPacket(CString() >> (char)PLO_SETACTIVELEVEL << level->levelName);
 
 	// Send NPCs.
 	level->sendNPCsToPlayer(self, cachedModTime);
