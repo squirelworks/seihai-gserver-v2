@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
 #ifndef __STD_GENERATOR_INCLUDED
 #define __STD_GENERATOR_INCLUDED
 
@@ -260,25 +261,27 @@ struct use_allocator_arg {};
 namespace ranges
 {
 
+// Seihai: renamed from elements_of. libc++ declares std::ranges::elements_of
+// without providing std::generator, and the two declarations clash.
 template <typename _Rng, typename _Allocator = use_allocator_arg>
-struct elements_of
+struct __compat_elements_of
 {
-	explicit constexpr elements_of(_Rng&& __rng) noexcept
+	explicit constexpr __compat_elements_of(_Rng&& __rng) noexcept
 		requires std::is_default_constructible_v<_Allocator>
 	: __range(static_cast<_Rng&&>(__rng))
 	{
 	}
 
-	constexpr elements_of(_Rng&& __rng, _Allocator&& __alloc) noexcept
+	constexpr __compat_elements_of(_Rng&& __rng, _Allocator&& __alloc) noexcept
 		: __range((_Rng&&)__rng), __alloc((_Allocator&&)__alloc)
 	{
 	}
 
-	constexpr elements_of(elements_of&&) noexcept = default;
+	constexpr __compat_elements_of(__compat_elements_of&&) noexcept = default;
 
-	constexpr elements_of(const elements_of&) = delete;
-	constexpr elements_of& operator=(const elements_of&) = delete;
-	constexpr elements_of& operator=(elements_of&&) = delete;
+	constexpr __compat_elements_of(const __compat_elements_of&) = delete;
+	constexpr __compat_elements_of& operator=(const __compat_elements_of&) = delete;
+	constexpr __compat_elements_of& operator=(__compat_elements_of&&) = delete;
 
 	constexpr _Rng&& get() noexcept
 	{
@@ -296,10 +299,10 @@ private:
 };
 
 template <typename _Rng>
-elements_of(_Rng&&) -> elements_of<_Rng>;
+__compat_elements_of(_Rng&&) -> __compat_elements_of<_Rng>;
 
 template <typename _Rng, typename Allocator>
-elements_of(_Rng&&, Allocator&&) -> elements_of<_Rng, Allocator>;
+__compat_elements_of(_Rng&&, Allocator&&) -> __compat_elements_of<_Rng, Allocator>;
 
 } // namespace ranges
 
@@ -538,14 +541,14 @@ struct __generator_promise_base
 
 	template <typename _OValue, typename _OAlloc>
 	__yield_sequence_awaiter<generator<_Ref, _OValue, _OAlloc>>
-		yield_value(std::ranges::elements_of<generator<_Ref, _OValue, _OAlloc>> __g) noexcept
+		yield_value(std::ranges::__compat_elements_of<generator<_Ref, _OValue, _OAlloc>> __g) noexcept
 	{
 		return std::move(__g).get();
 	}
 
 	template <std::ranges::range _Rng, typename _Allocator>
 	__yield_sequence_awaiter<generator<_Ref, std::remove_cvref_t<_Ref>, _Allocator>>
-		yield_value(std::ranges::elements_of<_Rng, _Allocator>&& __x)
+		yield_value(std::ranges::__compat_elements_of<_Rng, _Allocator>&& __x)
 	{
 		return [](allocator_arg_t, _Allocator alloc, auto&& __rng) -> generator<_Ref, std::remove_cvref_t<_Ref>, _Allocator>
 		{
@@ -587,11 +590,11 @@ struct __generator_promise<generator<_Ref, _Value, _Alloc>, _ByteAllocator, _Exp
 
 	template <std::ranges::range _Rng>
 	typename __generator_promise_base<_Ref>::template __yield_sequence_awaiter<generator<_Ref, _Value, _Alloc>>
-		yield_value(std::ranges::elements_of<_Rng>&& __x)
+		yield_value(std::ranges::__compat_elements_of<_Rng>&& __x)
 	{
 		static_assert (!_ExplicitAllocator,
 			"This coroutine has an explicit allocator specified with std::allocator_arg so an allocator needs to be passed "
-			"explicitely to std::elements_of");
+			"explicitely to std::ranges::elements_of");
 		return [](auto&& __rng) -> generator<_Ref, _Value, _Alloc>
 		{
 			for (auto&& e : __rng)

@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
 #ifndef STRINGUTILS_H
 #define STRINGUTILS_H
 
@@ -1353,9 +1354,19 @@ inline bool toFloat(const std::string_view str, float& result)
 {
 	try
 	{
+#if defined(__APPLE__) && defined(_LIBCPP_VERSION)
+		// libc++ on macOS marks the floating-point from_chars as unavailable before macOS 26.
+		if (str.empty())
+			return false;
+		const std::string copy(str);
+		char* end = nullptr;
+		result = std::strtof(copy.c_str(), &end);
+		return end == copy.c_str() + copy.size();
+#else
 		const auto end = str.data() + str.size();
 		const auto ret = std::from_chars(str.data(), end, result);
 		return ret.ptr == end;
+#endif
 	}
 	catch (...)
 	{

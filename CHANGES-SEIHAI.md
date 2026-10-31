@@ -24,6 +24,10 @@ Each file we changed carries a one-line notice at its top.
 | The default `allowedversions.txt` lets in 2.00 to 2.31 and 3.04 to 3.153 on the newmain generation (stock: 2.22 to 2.31). | `bin/servers/default/config/allowedversions.txt` | 2.00 to 2.17, 3.x |
 | `-DANTLR4_JAR_LOCATION=<jar>` uses a local antlr jar that matches a system antlr4 runtime. | `server/CMakeLists.txt` | build only |
 | A baddy index is cast to `uint8_t` explicitly; MSVC refused the narrowing conversion. | `Level.cpp` | build only (Windows) |
+| The death-drop displacement uses `uniform_int_distribution<int>` instead of `<int8_t>`; MSVC rejects 8-bit types there, as the standard allows it to. | `PlayerClient.cpp` | build only (Windows) |
+| `toSystemClock` casts the `file_clock::to_sys` result to the system clock's duration and loses a stray `)`. Only the libc++ path (no `clock_cast`) used it. | `CommonTypes.h` | build only (macOS) |
+| The bundled `std::generator` stand-in names its helper `__compat_elements_of`; libc++ declares its own `std::ranges::elements_of` and the two clashed. | `std/generator.h` | build only (macOS) |
+| `toFloat` uses `strtof` with libc++ on macOS, where the floating-point `from_chars` is marked unavailable before macOS 26. | `StringUtils.h` | build only (macOS) |
 | Release workflow for Linux, Windows and macOS. | `.github/workflows/` | build only |
 
 ## Source for every release
