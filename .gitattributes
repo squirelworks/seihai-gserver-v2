@@ -1,3 +1,4 @@
+# Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
 * text=auto
 *.cpp text
 *.h text
@@ -5,3 +6,7 @@
 *.exe binary
 bin/servers/** text
 .gitignore text
+# Seihai: start scripts keep the line endings their shells need.
+*.bat text eol=crlf
+*.sh text eol=lf
+*.command text eol=lf

@@ -25,6 +25,9 @@ Each file we changed carries a one-line notice at its top.
 | `-DANTLR4_JAR_LOCATION=<jar>` uses a local antlr jar that matches a system antlr4 runtime. | `server/CMakeLists.txt` | build only |
 | A baddy index is cast to `uint8_t` explicitly; MSVC refused the narrowing conversion. | `Level.cpp` | build only (Windows) |
 | Release workflow for Linux, Windows and macOS. | `.github/workflows/` | build only |
+| Lab world: both server folders listen on `127.0.0.1` only, hand out `127.0.0.1`, have UPnP off, accept logins without listserver verification (`localhost = true`), and look for a listserver on `127.0.0.1` instead of a public one. `url` is empty, and the welcome page no longer loads a logo from a public site. | `bin/servers/default/config/serveroptions.txt`, `servermessage.html` | lab setup |
+| A second server folder, `bin/servers/classic`: generation classic on port 14803, `flaghack_movement = false`, no `-gr_movement` weapon, 1.33 to 1.41r1 in `allowedversions.txt`, and accounts with `.gif` head, sword and shield. The account files have no comment syntax, so they carry no notice line. | `bin/servers/classic/` | 1.33 to 1.39 |
+| Start scripts for the lab world: `start.sh` (Linux, macOS), `start.command` (macOS Finder), `start.bat` (Windows); their install rules, line endings and ignore rules; a CI step that starts the packaged world with them on every OS; `bin/docs/lab-world.md`. | `bin/start.*`, `bin/CMakeLists.txt`, `bin/docs/lab-world.md`, `.gitattributes`, `.gitignore`, `.github/workflows/`, `README.md` | lab setup |
 
 ## Source for every release
 

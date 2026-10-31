@@ -5,6 +5,15 @@ clients. What changed and why is in [CHANGES-SEIHAI.md](CHANGES-SEIHAI.md).
 Prebuilt Linux, Windows and macOS builds are on the Releases page, each with its
 source. Licence: GPL-3.0, as upstream.
 
+## Lab world in one command
+
+The `bin` folder (and every release archive) holds a lab world that listens on
+`127.0.0.1` only, with UPnP off: `servers/default` for 2.00 to 3.153 on port
+14802 and `servers/classic` for 1.33 to 1.41r1 on port 14803. Start both with
+`./start.sh` on Linux and macOS (or double-click `start.command`), or
+`start.bat` on Windows. Any account logs in without a listserver. Details, and
+how to open a server to other machines: [bin/docs/lab-world.md](bin/docs/lab-world.md).
+
 Seihai also makes a new Rust server stack, separate from this fork:
 [seihai-gserver](https://github.com/squirelworks/seihai-gserver),
 [seihai-listserver](https://github.com/squirelworks/seihai-listserver),

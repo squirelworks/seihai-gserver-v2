@@ -1,3 +1,4 @@
+# Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
 # Sets the location where new players start on the server.
 # By default, the server uses the values inside the defaultaccount.
 # These values will override defaultaccount.
@@ -253,7 +254,7 @@ unloadinactiveleveltime = 600
 # The server details seen from the server list.
 name = My Server
 description = My Server
-url = http://www.graal.in/
+url =
 
 # Sets the server generation.
 # The server version controls certain aspects of the server, like how data is sent and saved.
@@ -274,22 +275,28 @@ nickname = NPC-Server
 
 # The information of the computer hosting the gserver.  This gets sent to people wanting to connect.
 # If myip is set to AUTO, it uses the IP address exposed to the list server.
-serverip = AUTO
+# Seihai lab default: 127.0.0.1, so the listserver hands out a loopback address.
+serverip = 127.0.0.1
 serverport = 14802
-serverinterface = AUTO
+# Seihai lab default: listen on loopback only.  Set AUTO to listen on every interface.
+serverinterface = 127.0.0.1
 
 # The local IP address of the computer.  Helps you connect to your server if your router can`t route on
 # its WAN-side IP address.  Leave it as AUTO unless you know what you are doing.
-localip = AUTO
-upnp = true
+localip = 127.0.0.1
+# Seihai lab default: UPnP off, so no router port is opened.
+upnp = false
 
-# Sets the server into localhost mode, which does not communicate with the list server.
-# All logins will be allowed with no verification.
-# localhost = false
+# Sets the server into localhost mode: all logins are allowed with no listserver verification.
+# The server still registers with the list server when one is running.
+# Seihai lab default: true, so the lab world runs without a listserver.  Only safe while
+# serverinterface is 127.0.0.1.  Set it to false before you open the server to other machines.
+localhost = true
 
 # Specifies the location of the list server.
 # DON`T CHANGE IF YOU DON`T KNOW WHAT YOU ARE DOING.
-listip = listserver.graal.in
+# Seihai lab default: a listserver on this machine (for example the Seihai lab listserver).
+listip = 127.0.0.1
 listport = 14900
 
 # Maximum number of players allowed on the server.
