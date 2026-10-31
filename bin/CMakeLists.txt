@@ -1,3 +1,4 @@
+# Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
 #
 #  bin/CMakeLists.txt
 #
@@ -151,3 +152,13 @@ install(DIRECTORY DESTINATION "./servers/default/world/global/bodies")
 install(DIRECTORY DESTINATION "./servers/default/world/global/heads")
 install(DIRECTORY DESTINATION "./servers/default/world/global/shields")
 install(DIRECTORY DESTINATION "./servers/default/world/global/swords")
+
+# Seihai: the classic lab server folder.
+install(DIRECTORY "./servers/classic"
+		DESTINATION "./servers"
+		REGEX "/(logs|accounts)/[^/]*\\.txt$" EXCLUDE)
+install(FILES
+		"servers/classic/accounts/(defaultaccount).txt"
+		"servers/classic/accounts/(npcserver).txt"
+		"servers/classic/accounts/YOURACCOUNT.txt"
+		DESTINATION "./servers/classic/accounts")

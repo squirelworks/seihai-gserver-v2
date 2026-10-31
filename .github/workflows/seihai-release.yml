@@ -75,6 +75,25 @@ jobs:
           cp LICENSE.md CHANGES-SEIHAI.md README.md dist/${{ matrix.name }}/
           cd dist
           if [ "$RUNNER_OS" = Windows ]; then 7z a ${{ matrix.name }}.zip ${{ matrix.name }}; else tar czf ${{ matrix.name }}.tar.gz ${{ matrix.name }}; fi
+      # Start both packaged lab servers (after the archive is made, so the run's logs
+      # and accounts stay out of it) and check both listen on 127.0.0.1.
+      - name: Lab world smoke test
+        shell: bash
+        run: |
+          cd dist/${{ matrix.name }}
+          exe=./gs2emu; [ "$RUNNER_OS" = Windows ] && exe=./gs2emu.exe
+          "$exe" --server default > default.out 2>&1 & p1=$!
+          "$exe" --server classic > classic.out 2>&1 & p2=$!
+          ok=1
+          for port in 14802 14803; do
+            up=0
+            for i in $(seq 1 30); do (echo > /dev/tcp/127.0.0.1/$port) 2>/dev/null && { up=1; break; }; sleep 1; done
+            [ $up = 1 ] || { echo "nothing listens on 127.0.0.1:$port"; ok=0; }
+          done
+          kill $p1 $p2 2>/dev/null; wait $p1 $p2 2>/dev/null
+          if [ "$RUNNER_OS" = Windows ]; then taskkill //F //IM gs2emu.exe > /dev/null 2>&1 || true; fi
+          for s in default classic; do echo "== $s"; tail -n 20 $s.out; done
+          [ $ok = 1 ]
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
