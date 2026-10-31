@@ -46,7 +46,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y gcc-14 g++-14 ninja-build autoconf automake libtool bison flex
       - name: macOS tools
         if: runner.os == 'macOS'
-        run: brew install ninja llvm autoconf automake libtool bison flex
+        run: brew install ninja llvm lld autoconf automake libtool bison flex
       - uses: ilammy/msvc-dev-cmd@v1
         if: runner.os == 'Windows'
       - name: vcpkg
@@ -57,14 +57,18 @@ jobs:
       - name: Configure
         shell: bash
         run: |
+          EXTRA=""
           if [ "$RUNNER_OS" = Linux ]; then export CC=gcc-14 CXX=g++-14; fi
           if [ "$RUNNER_OS" = macOS ]; then
             LLVM="$(brew --prefix llvm)"; export CC="$LLVM/bin/clang" CXX="$LLVM/bin/clang++"
             export PATH="$(brew --prefix bison)/bin:$(brew --prefix flex)/bin:$PATH"
+            # Link with Homebrew's lld: Apple's ld rejects the GNU-format archives llvm-ar
+            # writes and cannot read LLVM 23 LTO bitcode.
+            EXTRA="-DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=$(brew --prefix lld)/bin/ld64.lld"
           fi
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DTESTS=OFF -DUPNP=OFF \
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_DIR/scripts/buildsystems/vcpkg.cmake" \
-            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} $EXTRA
       - name: Build
         run: cmake --build build
       - name: Package
