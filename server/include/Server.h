@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
 #ifndef SERVER_H
 #define SERVER_H
 
@@ -156,6 +157,11 @@ struct ExternalServerCachedSettings
 	SettingCache<bool> itemDropEventsOnlyForGralats{"itemdropeventsonlyforgralats", false};
 	SettingCache<bool> projectilesStopOnWall{"projectilesstoponwall", true};
 	SettingCache<bool> runAllScriptEvents{"runallscriptevents", false};
+	// Seihai: level NPC scripts with no //#CLIENTSIDE line.  "clientside" (default) sends the whole
+	// script to the client, as 1.x did; "serverside" runs it all on the NPC-server (stock GServer-v2).
+	SettingCache<std::string> levelNPCScripts{"levelnpcscripts", "clientside"};
+	// Seihai: levels (globs) whose NPC scripts with no //#CLIENTSIDE line run on the NPC-server anyway.
+	SettingCache<std::vector<std::string>> serversideScriptLevels{"serversidescriptlevels", {}};
 	SettingCache<std::vector<std::string>> npcCarryObjectImages{"npccarryobjectimages", {"bushitem.png","signitem.png","vaseitem.png","stoneitem.png","blackstoneitem.png","bombitem.png","hotbombitem.png","superbombitem.png","joltbombitem.png","hotjoltbombitem.png","noneitem.png"}};
 	// security
 	SettingCache<bool> normalAdminsCanChangeGralats{"normaladminscanchangegralats", true};

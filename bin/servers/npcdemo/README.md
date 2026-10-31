@@ -4,6 +4,11 @@ A small world that only works when the fork's built-in NPC-server runs
 (`serverside = true`). Every NPC script runs on the server; the client gets
 NPC props and, for one NPC, the part after `//#CLIENTSIDE`.
 
+Its level NPC scripts have no `//#CLIENTSIDE` line, so the world sets
+`serversidescriptlevels = npcdemo_*.nw` to run them on the server (without it
+they would go to the client, which is the default since the classic-scripts
+change).
+
 It is set up for a loopback lab: `localhost = true` (no listserver, any
 account and password are accepted), `127.0.0.1`, port 14804, UPnP off.
 Do not open it to the internet as it is.
