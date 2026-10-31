@@ -10,23 +10,19 @@ has two server folders, both set up for loopback only:
 
 ## Start it
 
-From the folder that holds `gs2emu`:
+From the folder that holds `gs2emu`, start each server in its own terminal:
 
-| OS | Command |
-|---|---|
-| Linux | `./start.sh` |
-| macOS | `./start.sh`, or double-click `start.command` in Finder |
-| Windows | `start.bat`, or double-click it in Explorer |
+```
+./gs2emu --server default      # Windows: gs2emu.exe --server default
+./gs2emu --server classic      # Windows: gs2emu.exe --server classic
+```
 
-With no argument the script starts both servers. Give a folder name to start
-only that one, in the same window: `./start.sh classic` or `start.bat classic`.
+Stop a server with Ctrl+C. A one-step setup that starts both will be part of
+seihai-servertools.
 
-- Linux and macOS: stop with Ctrl+C. With both servers running, each one's
-  console output goes to `servers/<name>/logs/console.txt`.
-- Windows: each server gets its own window. Close it to stop that server.
-- macOS may block the unsigned `gs2emu` the first time. Open it once with
-  right-click and Open, or clear the download flag with
-  `xattr -dr com.apple.quarantine .` in this folder.
+macOS may block the unsigned `gs2emu` the first time. Open it once with
+right-click and Open, or clear the download flag with
+`xattr -dr com.apple.quarantine .` in this folder.
 
 ## What the lab settings are
 

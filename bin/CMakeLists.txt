@@ -153,9 +153,7 @@ install(DIRECTORY DESTINATION "./servers/default/world/global/heads")
 install(DIRECTORY DESTINATION "./servers/default/world/global/shields")
 install(DIRECTORY DESTINATION "./servers/default/world/global/swords")
 
-# Seihai: the lab world start scripts and the classic server folder.
-install(PROGRAMS start.sh start.command DESTINATION ".")
-install(FILES start.bat DESTINATION ".")
+# Seihai: the classic lab server folder.
 install(DIRECTORY "./servers/classic"
 		DESTINATION "./servers"
 		REGEX "/(logs|accounts)/[^/]*\\.txt$" EXCLUDE)
