@@ -21,7 +21,7 @@ workflow takes the current `brew install llvm`.
 ## Steps the workflow runs
 
 1. Java 21 (for the antlr generator), then per OS: `gcc-14`/`ninja` on Linux,
-   `ninja llvm autoconf automake libtool bison flex` on macOS, the MSVC
+   `ninja llvm lld autoconf automake libtool bison flex` on macOS, the MSVC
    developer prompt on Windows.
 2. vcpkg is cloned into `$VCPKG_DIR` (not `VCPKG_ROOT`, which the MSVC prompt
    overwrites) and bootstrapped.
@@ -47,6 +47,7 @@ Each one has a row in `CHANGES-SEIHAI.md`.
 | `FileSystem.cpp` | libc++ | `std::this_thread::sleep_for` without `<thread>` | include `<thread>` |
 | `filesystem/watch/` | macOS | macOS is `PLATFORM_UNIX` too, so it compiled the inotify watcher; the macOS file was empty | Linux file guarded with `!__APPLE__`; macOS gets a no-op watcher |
 | `UPNP.cpp` | macOS | `<malloc.h>` does not exist | `<cstdlib>` |
+| link of `bin/gs2emu` | macOS | Apple's `ld` rejects the GNU-format archives that `llvm-ar` writes (`archive member '/' not a mach-o file`) | workflow links with Homebrew's `lld` (`-fuse-ld=.../ld64.lld`) |
 | `main.cpp` | macOS | `_NSGetExecutablePath` without `<mach-o/dyld.h>`; home path kept the file name | include the header, keep the folder only |
 
 ## When a target goes red
