@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
 #ifndef COMMONTYPES_H
 #define COMMONTYPES_H
 
@@ -282,7 +283,7 @@ inline clock::time_point toSystemClock(const std::filesystem::file_time_type& fi
 {
 #if __cpp_lib_chrono < 201907L
 	// Clang doesn't support clock_cast, so convert to UTC, then the system clock.
-	return std::chrono::file_clock::to_sys(fileTime));
+	return std::chrono::time_point_cast<clock::duration>(std::chrono::file_clock::to_sys(fileTime));
 #else
 	return std::chrono::clock_cast<clock>(fileTime);
 #endif

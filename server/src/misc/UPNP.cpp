@@ -1,9 +1,10 @@
+// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
 #define UPNPCOMMAND_CONFLICTING_MAPPING 718
 
 #include <cstdint>
 #include <cstring>
 #include <format>
-#include <malloc.h>
+#include <cstdlib> // was <malloc.h>, which macOS does not have
 #include <string_view>
 #include <string>
 #include <utility>

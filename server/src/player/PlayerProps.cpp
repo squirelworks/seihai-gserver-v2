@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -716,9 +717,10 @@ SetResults Player::setProp(PlayerProp prop, SetBy setBy, PropertyBase* base)
 					// clang-format on
 
 					// Queue up the movement of the NPC so clients position it properly.
-					// clang-format off
-					LocalPixelPosition moveDelta{dir == 1_i16 ? -moveDistance : dir == 3 ? moveDistance : 0_i16, dir == 0 ? -moveDistance : dir == 2_i16 ? moveDistance : 0_i16};
-					// clang-format on
+					// -moveDistance is an int, so cast back to int16_t; MSVC refuses the narrowing in braces.
+					const auto moveX = static_cast<int16_t>(dir == 1 ? -moveDistance : dir == 3 ? moveDistance : 0);
+					const auto moveY = static_cast<int16_t>(dir == 0 ? -moveDistance : dir == 2 ? moveDistance : 0);
+					LocalPixelPosition moveDelta{moveX, moveY};
 					npc->addMoveToQueue(moveDelta, 0.5, ENUM(NPCMoveFlags::NOCACHE));
 					if (!npc->moveQueue.empty())
 					{
