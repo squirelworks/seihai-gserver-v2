@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <bit>
 #include <cassert>
@@ -1825,7 +1826,7 @@ LevelBaddy* Level::addBaddy(const LocalPixelPosition& position, const BaddyType 
 	nextIndex = std::clamp(nextIndex, static_cast<size_t>(0), subLevel->baddies.size());
 
 	// New Baddy
-	LevelBaddy newBaddy{nextIndex + 1, position, type, this->shared_from_this()};
+	LevelBaddy newBaddy{static_cast<uint8_t>(nextIndex + 1), position, type, this->shared_from_this()};
 
 	if (nextIndex == subLevel->baddies.size())
 		subLevel->baddies.emplace_back(std::move(newBaddy));

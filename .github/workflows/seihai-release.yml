@@ -46,7 +46,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y gcc-14 g++-14 ninja-build autoconf automake libtool bison flex
       - name: macOS tools
         if: runner.os == 'macOS'
-        run: brew install ninja llvm@18 autoconf automake libtool bison flex
+        run: brew install ninja llvm autoconf automake libtool bison flex
       - uses: ilammy/msvc-dev-cmd@v1
         if: runner.os == 'Windows'
       - name: vcpkg
@@ -59,7 +59,7 @@ jobs:
         run: |
           if [ "$RUNNER_OS" = Linux ]; then export CC=gcc-14 CXX=g++-14; fi
           if [ "$RUNNER_OS" = macOS ]; then
-            LLVM="$(brew --prefix llvm@18)"; export CC="$LLVM/bin/clang" CXX="$LLVM/bin/clang++"
+            LLVM="$(brew --prefix llvm)"; export CC="$LLVM/bin/clang" CXX="$LLVM/bin/clang++"
             export PATH="$(brew --prefix bison)/bin:$(brew --prefix flex)/bin:$PATH"
           fi
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DTESTS=OFF -DUPNP=OFF \
