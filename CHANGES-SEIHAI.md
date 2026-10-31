@@ -32,6 +32,7 @@ Each file we changed carries a one-line notice at its top.
 | The thrown-NPC move delta is built from two `int16_t` casts; `-moveDistance` is an `int` and MSVC refused the narrowing inside braces. | `PlayerProps.cpp` | build only (Windows) |
 | `FileSystem.cpp` includes `<thread>` for `std::this_thread::sleep_for`; libc++ does not pull it in through other headers. | `FileSystem.cpp` | build only (macOS) |
 | macOS gets its own file watcher, a no-op for now: it built the Linux inotify watcher, which does not exist there. Files changed on disk while the server runs are not reloaded on macOS until it restarts. | `FileWatchOS_OSX.cpp`, `FileWatchOS_Linux.cpp` | build only (macOS); known gap |
+| `UPNP.cpp` includes `<cstdlib>` instead of `<malloc.h>`, which macOS does not have. | `UPNP.cpp` | build only (macOS) |
 | `main.cpp` includes `<mach-o/dyld.h>` for `_NSGetExecutablePath`, and on macOS the home path is the executable's folder (as on Windows and Linux) instead of the whole buffer, which held the file name and trailing bytes. | `main.cpp` | build and start-up (macOS) |
 | `docs/SEIHAI-BUILD.md`: how the four targets are built, the compiler fixes so far, and what to do when one goes red. | `docs/` | docs only |
 | Release workflow for Linux, Windows and macOS. | `.github/workflows/` | build only |

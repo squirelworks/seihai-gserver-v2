@@ -46,6 +46,7 @@ Each one has a row in `CHANGES-SEIHAI.md`.
 | `StringUtils.h` `toFloat` | libc++ on macOS | float `from_chars` is unavailable before macOS 26 | `strtof` on that platform only |
 | `FileSystem.cpp` | libc++ | `std::this_thread::sleep_for` without `<thread>` | include `<thread>` |
 | `filesystem/watch/` | macOS | macOS is `PLATFORM_UNIX` too, so it compiled the inotify watcher; the macOS file was empty | Linux file guarded with `!__APPLE__`; macOS gets a no-op watcher |
+| `UPNP.cpp` | macOS | `<malloc.h>` does not exist | `<cstdlib>` |
 | `main.cpp` | macOS | `_NSGetExecutablePath` without `<mach-o/dyld.h>`; home path kept the file name | include the header, keep the folder only |
 
 ## When a target goes red
