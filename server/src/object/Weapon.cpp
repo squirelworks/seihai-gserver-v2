@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -224,7 +225,9 @@ std::string Weapon::getJoinedClassesList() const
 		}
 		else hasExpired = true;
 	}
-	result.pop_back();
+	// A weapon with no joined classes has an empty list: don't trim the trailing comma then.
+	if (!result.empty())
+		result.pop_back();
 
 	// If we have expired, clear them out.
 	if (hasExpired)

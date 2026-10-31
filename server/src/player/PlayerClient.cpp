@@ -354,6 +354,12 @@ bool PlayerClient::handleLogin(CString& pPacket)
 		// Read Client-Version
 		m_version = pPacket.readChars(8);
 		m_versionId = getVersionIDByVersion(m_version);
+
+		// Seihai: 5.12 steps the gen-5 cipher once per whole 4-byte group on
+		// compressed bodies (rounded down); every other client rounds up.
+		const auto gen5Steps = CEncryption::gen5StepsForClient(m_versionId);
+		Encryption.setGen5Steps(gen5Steps);
+		m_fileQueue.setGen5Steps(gen5Steps);
 	}
 
 	// Read Account & Password

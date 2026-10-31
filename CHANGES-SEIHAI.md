@@ -22,6 +22,7 @@ Each file we changed carries a one-line notice at its top.
 | On a classic server prop 10 is sent in the bow form. The gani string was read as the bow and the rest of the props were lost. | `PropertySerializers.cpp` | 1.33 to 1.41 |
 | gs2lib comes from our mirror [seihai-gs2lib](https://github.com/squirelworks/seihai-gs2lib) (branch `seihai`): the 3.153 token, and no abort on unknown tokens. | `server/CMakeLists.txt` | 3.04, 3.153 |
 | The default `allowedversions.txt` lets in 2.00 to 2.31 and 3.04 to 3.153 on the newmain generation (stock: 2.22 to 2.31). | `bin/servers/default/config/allowedversions.txt` | 2.00 to 2.17, 3.x |
+| 5.12 gets its own gen-5 step rule: once per whole 4-byte group on zlib and bz2 bodies (rounded down), set at login for both directions from seihai-gs2lib's `CEncryption::gen5StepsForClient`. Stock gs2lib rounds up. On beta4 the C>S side was only kept in step by accident, by the 2.x "bad Adler-32" fallback that rewinds the iterator one step; frames the server sends to 5.12 had no such cover. The gs2lib pin moves to the commit with the rule. Lab record: `docs/lab/2026-10-31-512-round-down.md`. | `PlayerClient.cpp`, `server/CMakeLists.txt` | 5.12 |
 | `-DANTLR4_JAR_LOCATION=<jar>` uses a local antlr jar that matches a system antlr4 runtime. | `server/CMakeLists.txt` | build only |
 | A baddy index is cast to `uint8_t` explicitly; MSVC refused the narrowing conversion. | `Level.cpp` | build only (Windows) |
 | The death-drop displacement uses `uniform_int_distribution<int>` instead of `<int8_t>`; MSVC rejects 8-bit types there, as the standard allows it to. | `PlayerClient.cpp` | build only (Windows) |
@@ -34,6 +35,7 @@ Each file we changed carries a one-line notice at its top.
 | `main.cpp` includes `<mach-o/dyld.h>` for `_NSGetExecutablePath`, and on macOS the home path is the executable's folder (as on Windows and Linux) instead of the whole buffer, which held the file name and trailing bytes. | `main.cpp` | build and start-up (macOS) |
 | `docs/SEIHAI-BUILD.md`: how the four targets are built, the compiler fixes so far, and what to do when one goes red. | `docs/` | docs only |
 | Release workflow for Linux, Windows and macOS. | `.github/workflows/` | build only |
+| A weapon with no joined classes no longer crashes the server when it is registered with a client that gets the GS2 path (5.12 and up on the modern generation). `getJoinedClassesList` dropped the last character of an empty string, and the weapon packet was then written with a bogus length. The stock `-gr_movement` (a GS1 weapon with no bytecode) crashed every such login. | `Weapon.cpp` | 5.12 to 6.x (crash at login) |
 
 ## Source for every release
 
