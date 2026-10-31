@@ -20,6 +20,8 @@ Each file we changed carries a one-line notice at its top.
 | `MAXHP 3.00`, as the stock account files write it, is read as 3 instead of 0. | `FlatFileAccountLoader.cpp` | all (new accounts had no hearts) |
 | Id 25 weapon uploads are accepted and ignored instead of kicking the player. | `PlayerClient.h`, `PlayerClient.cpp`, `PlayerClientPackets.cpp` | 1.33 to 1.37 |
 | On a classic server prop 10 is sent in the bow form. The gani string was read as the bow and the rest of the props were lost. | `PropertySerializers.cpp` | 1.33 to 1.41 |
+| gs2lib comes from our mirror [seihai-gs2lib](https://github.com/squirelworks/seihai-gs2lib) (branch `seihai`): the 3.153 token, and no abort on unknown tokens. | `server/CMakeLists.txt` | 3.04, 3.153 |
+| The default `allowedversions.txt` lets in 2.00 to 2.31 and 3.04 to 3.153 on the newmain generation (stock: 2.22 to 2.31). | `bin/servers/default/config/allowedversions.txt` | 2.00 to 2.17, 3.x |
 | `-DANTLR4_JAR_LOCATION=<jar>` uses a local antlr jar that matches a system antlr4 runtime. | `server/CMakeLists.txt` | build only |
 | Release workflow for Linux, Windows and macOS. | `.github/workflows/` | build only |
 
@@ -27,6 +29,6 @@ Each file we changed carries a one-line notice at its top.
 
 Each release on this repository attaches the full source at its tag. The
 dependencies are fetched at the commits pinned in `server/CMakeLists.txt` and
-`vcpkg.json`. gs2lib comes from upstream at the pinned commit; our own gs2lib
-changes, when there are any, live in
-[seihai-gs2lib](https://github.com/squirelworks/seihai-gs2lib).
+`vcpkg.json`. gs2lib comes from our mirror
+[seihai-gs2lib](https://github.com/squirelworks/seihai-gs2lib) at the pinned commit;
+its own `CHANGES-SEIHAI.md` lists our changes there.

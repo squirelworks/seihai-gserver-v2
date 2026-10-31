@@ -1,7 +1,8 @@
+// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
 [generation-range]
 
 classic = GNW13110           // 1.41r1
-newmain = GNW03014:GNW28015  // 2.22 - 2.31
+newmain = GNW24011:GNW28015, G3D03014:G3D28015  // 2.00 - 2.31, 3.04 - 3.153 (Seihai)
 modern = G3D14097:G3D0511C   // 5.12 - 6.037
 
 //newmain = GNW03014           // 2.22 (no npc-server)

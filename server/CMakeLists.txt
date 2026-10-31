@@ -270,10 +270,9 @@ endif()
 # ----------------------------
 # Dependency: gs2lib.
 FetchContent_Declare(gs2lib
-	GIT_REPOSITORY https://xtjoeytx@bitbucket.org/xtjoeytx/gs2lib.git
-	GIT_SHALLOW    ON
-	GIT_TAG        5c36ab82aa55adffc49b8019a85cd6cc3b1047e1
-	#URL "${PROJECT_SOURCE_DIR}/../gs2lib"
+	# Seihai: our mirror, branch seihai (upstream 5c36ab8 + the 3.153 token).
+	GIT_REPOSITORY https://github.com/squirelworks/seihai-gs2lib.git
+	GIT_TAG        496f6dd43a5b5c3fb2e11b0227306c11099cda4d
 )
 FetchContent_MakeAvailable(gs2lib)
 add_dependencies(${TARGET_NAME} gs2lib)
