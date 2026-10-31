@@ -27,3 +27,4 @@ packages/
 vcpkg_installed/
 CMakeSettings.json
 tools/lab/npcprobe/target/
+__pycache__/

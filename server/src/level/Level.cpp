@@ -570,8 +570,10 @@ Level::~Level()
 	m_arrows.clear();
 
 	// Delete items.
-	for (size_t i = m_items.size(); i > 0; --i)
-		removeItem(inform_client, i - 1);
+	// Seihai: do not tell clients here. The informing removeItem() calls shared_from_this(),
+	// which throws bad_weak_ptr while the level is being destroyed and ended the server
+	// when an idle level with items was unloaded. Levels are unloaded only after no player
+	// has been in them for unloadinactiveleveltime, so there is nobody in it to tell.
 	m_items.clear();
 
 	// Delete sub level data.
