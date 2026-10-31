@@ -1,3 +1,20 @@
+# Seihai GServer-v2
+
+This is the Seihai fork of GServer-v2 `beta4`, with fixes for real 1.33 to 2.31
+clients. What changed and why is in [CHANGES-SEIHAI.md](CHANGES-SEIHAI.md).
+Prebuilt Linux, Windows and macOS builds are on the Releases page, each with its
+source. Licence: GPL-3.0, as upstream.
+
+Seihai also makes a new Rust server stack, separate from this fork:
+[seihai-gserver](https://github.com/squirelworks/seihai-gserver),
+[seihai-listserver](https://github.com/squirelworks/seihai-listserver),
+[seihai-rc](https://github.com/squirelworks/seihai-rc) and
+[seihai-npcserver](https://github.com/squirelworks/seihai-npcserver).
+
+The upstream README follows.
+
+---
+
 # GServer-v2
 [![Build Status](https://jenkins.amigadev.com/job/GServer-v2/job/master/badge/icon)](https://jenkins.amigadev.com/job/GServer-v2/job/master/)
 

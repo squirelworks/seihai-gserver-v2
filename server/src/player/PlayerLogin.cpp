@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
 #include <cstdint>
 #include <memory>
 #include <optional>

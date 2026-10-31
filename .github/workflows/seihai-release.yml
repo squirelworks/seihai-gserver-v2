@@ -1,0 +1,95 @@
+# Seihai: build gs2emu for Linux, Windows and macOS. A tag push (v*) also makes a
+# GitHub release with the four archives and the full source, as the GPL asks.
+name: Seihai build and release
+
+on:
+  push:
+    branches: [seihai]
+    tags: ['v*']
+  pull_request:
+    branches: [seihai]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            name: seihai-gserver-v2-linux-x86_64
+          - os: windows-latest
+            name: seihai-gserver-v2-windows-x86_64
+          - os: macos-15-intel
+            name: seihai-gserver-v2-macos-x86_64
+          - os: macos-15
+            name: seihai-gserver-v2-macos-aarch64
+    runs-on: ${{ matrix.os }}
+    env:
+      VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Linux tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y gcc-14 g++-14 ninja-build autoconf automake libtool bison flex
+      - name: macOS tools
+        if: runner.os == 'macOS'
+        run: brew install ninja llvm@18 autoconf automake libtool bison flex
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+      - name: vcpkg
+        shell: bash
+        run: |
+          git clone https://github.com/microsoft/vcpkg "$VCPKG_ROOT"
+          if [ "$RUNNER_OS" = Windows ]; then "$VCPKG_ROOT/bootstrap-vcpkg.bat" -disableMetrics; else "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics; fi
+      - name: Configure
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then export CC=gcc-14 CXX=g++-14; fi
+          if [ "$RUNNER_OS" = macOS ]; then
+            LLVM="$(brew --prefix llvm@18)"; export CC="$LLVM/bin/clang" CXX="$LLVM/bin/clang++"
+            export PATH="$(brew --prefix bison)/bin:$(brew --prefix flex)/bin:$PATH"
+          fi
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DTESTS=OFF -DUPNP=OFF \
+            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+      - name: Build
+        run: cmake --build build
+      - name: Package
+        shell: bash
+        run: |
+          mkdir -p dist/${{ matrix.name }}
+          cp -r bin/. dist/${{ matrix.name }}/
+          cp LICENSE.md CHANGES-SEIHAI.md README.md dist/${{ matrix.name }}/
+          cd dist
+          if [ "$RUNNER_OS" = Windows ]; then 7z a ${{ matrix.name }}.zip ${{ matrix.name }}; else tar czf ${{ matrix.name }}.tar.gz ${{ matrix.name }}; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: dist/${{ matrix.name }}.*
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Source archive
+        run: git archive --format=tar.gz --prefix=seihai-gserver-v2-${GITHUB_REF_NAME}/ -o dist/seihai-gserver-v2-${GITHUB_REF_NAME}-source.tar.gz HEAD
+      - name: Upload to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* --title "Seihai GServer-v2 $GITHUB_REF_NAME" \
+            --notes "Seihai fork of GServer-v2 beta4. Changes: CHANGES-SEIHAI.md. Source: the -source archive. Licence: GPL-3.0." \
+            || gh release upload "$GITHUB_REF_NAME" dist/* --clobber

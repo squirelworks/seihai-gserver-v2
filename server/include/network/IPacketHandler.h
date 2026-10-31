@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
 #ifndef IPACKETHANDLER_H
 #define IPACKETHANDLER_H
 
