@@ -222,6 +222,18 @@ std::format_context::iterator PropertyShieldPower::format(std::format_context& c
 
 CString PropertyGaniOrBowGif::serialize() const
 {
+	// Lab: a classic server sends prop 10 in the bow form even when a gani is also set.
+	// 1.33 to 1.41 read prop 10 as the bow, so a gani string here breaks the rest of the props.
+	if (getServerGeneration() == 0 && bowGif.has_value())
+	{
+		auto& [image, preset] = *bowGif;
+		if (image.empty() && preset < 10)
+			return CString() >> (char)preset;
+
+		const auto len = std::clamp(image.length(), 0ZU, 223ZU - 10ZU);
+		return CString() >> (char)(10 + len) << image.substr(0, len);
+	}
+
 	if (gani.has_value())
 		return CString() >> (char)gani->length() << *gani;
 
