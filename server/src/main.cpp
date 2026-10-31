@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
 #include <atomic>
 #include <csignal>
 #include <cstdio>
@@ -35,6 +36,9 @@ using namespace preagonal;
 // Linux specific stuff.
 #if !(defined(_WIN32) || defined(_WIN64))
 	#include <unistd.h>
+	#ifdef __APPLE__
+		#include <mach-o/dyld.h>
+	#endif
 	#ifndef SIGBREAK
 		#define SIGBREAK SIGQUIT
 	#endif
@@ -79,12 +83,16 @@ static CString getBasePath()
 #elif __APPLE__
 	char path[1024];
 	uint32_t size = sizeof(path);
-	int result = _NSGetExecutablePath(&path[0], &size);
-	if (result == -1)
+	if (_NSGetExecutablePath(&path[0], &size) != 0)
 		printf("Error getting executable path\n");
-
-	std::string_view path_view{ path, size };
-	homePath = path_view;
+	else
+	{
+		// Keep the folder only, as on Windows and Linux.
+		std::string_view path_view{ path };
+		if (auto pos = path_view.find_last_of('/'); pos != std::string_view::npos)
+			path_view = path_view.substr(0, pos);
+		homePath = path_view;
+	}
 #else
 	// Get the path to the program.
 	char path[1024];
