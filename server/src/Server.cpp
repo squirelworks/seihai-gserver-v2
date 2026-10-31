@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -115,6 +116,7 @@ void ExternalServerCachedSettings::bind(Server* server)
 
 	// npc-server
 	settings.track(serverside, forceClientsideLinks, forceClientsideSigns, enableItemDropEvents, itemDropEventsOnlyForGralats, projectilesStopOnWall, runAllScriptEvents, npcCarryObjectImages);
+	settings.track(levelNPCScripts, serversideScriptLevels);
 
 	// security
 	settings.track(normalAdminsCanChangeGralats, protectedWeapons, jailLevels);

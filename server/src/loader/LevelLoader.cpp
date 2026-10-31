@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <cstdint>
 #include <filesystem>
@@ -34,6 +35,30 @@
 namespace preagonal
 {
 ///////////////////////////////////////////////////////////////////////////////
+
+/// @brief Seihai: decides where a level NPC script with no //#CLIENTSIDE line runs.
+/// 1.x clients ran every level NPC script themselves, so by default such a script is sent
+/// whole to the client (a //#CLIENTSIDE line is put in front of it). The server option
+/// levelnpcscripts = serverside, or a match in serversidescriptlevels, keeps the stock
+/// GServer-v2 behaviour: the whole script runs on the NPC-server.
+static std::string applyLevelNPCScriptMode(const std::string_view levelName, std::string code)
+{
+	const auto server = BabyDI::Get<Server>();
+	if (server == nullptr || !server->hasNPCServer() || !server->cached.serverside.getValue())
+		return code;
+	if (code.find("//#CLIENTSIDE") != std::string::npos)
+		return code;
+	if (string::trim(code).empty())
+		return code;
+	if (string::equalsi(server->cached.levelNPCScripts.getValue(), "serverside"sv))
+		return code;
+	for (const auto& glob : server->cached.serversideScriptLevels.getValue())
+	{
+		if (string::match<true>(levelName, std::string_view{glob}))
+			return code;
+	}
+	return "//#CLIENTSIDE\n" + code;
+}
 
 /*
 Z3-V1.03	(Zelda Online?)
@@ -661,7 +686,7 @@ void LevelLoader::loadBinaryNPCs(const StaticLevelDataPtr& levelData, const fs::
 		auto code = string::replace(lineView, "\xa7", "\n");
 
 		LevelNPCTemplate npc{.image = image, .position = toLocalPixelPosition(position)};
-		npc.script.setOriginalSource(std::format("{}.{}", levelData->levelName, index), ScriptType::NPC, code);
+		npc.script.setOriginalSource(std::format("{}.{}", levelData->levelName, index), ScriptType::NPC, applyLevelNPCScriptMode(levelData->levelName, std::move(code)));
 		levelData->npcs.emplace_back(std::move(npc));
 	}
 }
@@ -897,7 +922,7 @@ bool LevelLoader::loadNW(const StaticLevelDataPtr& levelData, std::string_view f
 			}
 
 			LevelNPCTemplate npc{.image = image, .position = toLocalPixelPosition(position)};
-			npc.script.setOriginalSource(std::format("{}.{}", levelData->levelName, npcIndex), ScriptType::NPC, code);
+			npc.script.setOriginalSource(std::format("{}.{}", levelData->levelName, npcIndex), ScriptType::NPC, applyLevelNPCScriptMode(levelData->levelName, std::move(code)));
 			levelData->npcs.emplace_back(std::move(npc));
 		}
 		else if (section == "HEIGHTS")

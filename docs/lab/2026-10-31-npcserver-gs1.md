@@ -106,7 +106,9 @@ and the rest of the block still runs.
    sizes from the world folder when an NPC's image is set (the server has the
    files), with a small cache; fall back to 32x32 for the built-in images the
    server does not have (`block.png`, `door.gif` and the like).
-2. **Scripts without `//#CLIENTSIDE` run only on the server.** None of the
+2. **Scripts without `//#CLIENTSIDE` run only on the server.** Changed in the
+   `seihai-classic-npc-scripts` PR: client-side by default, see
+   `2026-10-31-classic-npc-scripts.md`. None of the
    1,648 NPC scripts in the 690 1.x levels has the marker, so every one runs
    entirely server-side and the client gets none of it. Any client-side
    command or flag in them fails (see the sweep). A compatibility switch is

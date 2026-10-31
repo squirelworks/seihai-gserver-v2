@@ -311,6 +311,15 @@ nofoldersconfig = false
 # Determines whether the server handles certain things like signs and links.
 serverside = false
 
+# Seihai: where level NPC scripts with no //#CLIENTSIDE line run (only when serverside = true).
+#   clientside - the whole script goes to the client, as in 1.x (default).
+#   serverside - the whole script runs on the NPC-server (stock GServer-v2).
+# serversidescriptlevels lists levels (comma separated, * and ? globs) that run such scripts
+# on the NPC-server even when levelnpcscripts = clientside.  Scripts with a //#CLIENTSIDE
+# line always split there.  Levels already loaded keep their mode until they are reloaded.
+# levelnpcscripts = clientside
+# serversidescriptlevels =
+
 # If folders config is disabled, put additional search directories besides "world" here.
 # Comma delimited array.
 sharefolder =

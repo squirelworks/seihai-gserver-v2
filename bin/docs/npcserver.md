@@ -1,3 +1,4 @@
+<!-- Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md. -->
 # GS2Emu NPC-Server
 
 ## What is it?
@@ -69,11 +70,23 @@ The following options are available in the `serveroptions.txt` file:
         By default, NPCs will only respond to script events referenced in their scripts.  If true, the NPC will respond to all events.
     sleepwhennoplayers = true
         If true, the NPC-Server will not process scripts when there are no players connected.
+    levelnpcscripts = clientside
+        (Seihai) Where a level NPC script with no `//#CLIENTSIDE` line runs.  `clientside` (the default)
+        sends the whole script to the client, as 1.x clients ran every level script themselves.
+        `serverside` runs the whole script on the NPC-Server, as stock GServer-v2 does.
+    serversidescriptlevels =
+        (Seihai) Comma separated level names (`*` and `?` globs) whose NPC scripts with no `//#CLIENTSIDE`
+        line run on the NPC-Server even when `levelnpcscripts = clientside`.  Example: `npcdemo_*.nw`.
+
+Scripts that have a `//#CLIENTSIDE` line always split there, whatever these options say.
+Database NPCs, weapons, classes and `putnpc2` NPCs are not affected; only NPCs stored in level files are.
+A level that is already loaded keeps its mode until it is reloaded or unloaded.
 
 ---
 # Serverside NPC programming
 
 Inside a script, anything above the `//#CLIENTSIDE` separator is serverside.
+A level NPC script with no separator at all runs on the client by default; see `levelnpcscripts` above.
 The serverside script does not have access to all of the commands and events that clientside scripts can use.
 Things like `putleaps` or `seteffectmode` are only visible on the client, so you need to issue those commands from the clientside script, same with events like `weaponfired`.
 
