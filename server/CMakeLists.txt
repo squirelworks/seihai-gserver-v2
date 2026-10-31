@@ -244,6 +244,9 @@ find_package(antlr4-generator CONFIG REQUIRED)
 target_include_directories(${TARGET_NAME} PUBLIC ${ANTLR4_INCLUDE_DIR})
 target_link_directories(${TARGET_NAME} PUBLIC ${ANTLR4_LIBRARY_DIR})
 target_link_libraries(${TARGET_NAME} PUBLIC antlr4_static Threads::Threads)
+# Seihai: -DANTLR4_JAR_LOCATION=<jar> uses a local jar that matches the system
+# antlr4 runtime (for example 4.10.1 on Ubuntu 24.04) instead of downloading 4.13.2.
+if(NOT ANTLR4_JAR_LOCATION)
 FetchContent_Declare(AntlrJar
 	URL				https://www.antlr.org/download/antlr-4.13.2-complete.jar
 	DOWNLOAD_DIR	"${FETCHCONTENT_BASE_DIR}/antlr-jar"
@@ -252,6 +255,7 @@ FetchContent_Declare(AntlrJar
 )
 FetchContent_MakeAvailable(AntlrJar)
 set(ANTLR4_JAR_LOCATION "${FETCHCONTENT_BASE_DIR}/antlr-jar/antlr.jar")
+endif()
 
 # ----------------------------
 # Dependency: miniupnpc.
