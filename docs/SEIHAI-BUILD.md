@@ -40,6 +40,7 @@ Each one has a row in `CHANGES-SEIHAI.md`.
 |---|---|---|---|
 | `Level.cpp` | MSVC | narrowing conversion of a baddy index | explicit `uint8_t` cast |
 | `PlayerClient.cpp` | MSVC | `uniform_int_distribution<int8_t>` is not allowed | use `int` |
+| `PlayerProps.cpp` thrown NPC | MSVC | `int` to `int16_t` narrowing in a braced `LocalPixelPosition` | explicit `int16_t` casts |
 | `CommonTypes.h` `toSystemClock` | libc++ | stray `)`, and `file_clock::to_sys` returns nanoseconds in `__int128` | `time_point_cast<clock::duration>` |
 | `std/generator.h` | libc++ | libc++ declares `std::ranges::elements_of` but not `std::generator`; the stand-in's own `elements_of` clashed | stand-in's type renamed `__compat_elements_of` (nothing else in the server uses it) |
 | `StringUtils.h` `toFloat` | libc++ on macOS | float `from_chars` is unavailable before macOS 26 | `strtof` on that platform only |
