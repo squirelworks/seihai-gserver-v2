@@ -194,6 +194,18 @@ protected:
 	[[nodiscard]] virtual std::string_view whoAmI() const noexcept { return "(unknown);"sv; }
 
 public:
+	// Lab: the login frame of gen-3 clients (2.05, 2.17) also carries PLI_LANGUAGE.
+	// Keep the rest of that bundle so the new player can parse it; dropping it leaves
+	// the gen-3 iterator one step behind for the whole session.
+	CString LoginLeftover;
+
+	// Lab: set once the login packet is parsed. processBuffer used PacketCount == 0 for this,
+	// but PLI_PACKETCOUNT resets the count, so a frame that arrives after a lone id 31 (1.3x
+	// clients send one every 10 s) was read as a new login and counted as invalid.
+	bool LoginParsed = false;
+	void processLoginLeftover(CString& bundle) { parsePacketsFromBundle(bundle); }
+
+public:
 	CEncryption Encryption;
 	uint32_t PacketCount = 0;
 	uint32_t InvalidPackets = 0;
@@ -224,7 +236,7 @@ inline void IPacketHandler::processBuffer(CString& buffer)
 		processPacketBundle(bundle);
 
 		// Parse the packets.
-		if (PacketCount != 0) [[likely]]
+		if (LoginParsed || PacketCount != 0) [[likely]]
 			parsePacketsFromBundle(bundle);
 		else
 		{
@@ -375,9 +387,11 @@ inline void IPacketHandler::parsePacketsFromBundle(CString& bundle)
 inline void IPacketHandler::parseLoginPacket(CString& buffer)
 {
 	++PacketCount;
+	LoginParsed = true;
 
 	// Pull out the packet.
 	auto packet = buffer.readString("\n");
+	LoginLeftover = buffer.bytesLeft() > 0 ? buffer.readChars(buffer.bytesLeft()) : CString();
 
 #ifdef PACKETLOGGING
 	const std::string_view who = whoAmI();

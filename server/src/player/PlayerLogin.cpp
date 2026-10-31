@@ -86,6 +86,7 @@ HandlePacketResult PlayerLogin::msgLoginPacket(CString& pPacket)
 
 	// Update the new player's current packet state to match ours.
 	player->PacketCount = 1;
+	player->LoginParsed = true;
 	player->setReceivedBuffer(m_recvBuffer);
 
 	// Remove ourselves from the server.
@@ -98,6 +99,8 @@ HandlePacketResult PlayerLogin::msgLoginPacket(CString& pPacket)
 	pPacket.setRead(0);
 	if (player != nullptr && !player->handleLogin(pPacket))
 		player->disconnect();
+	else if (player != nullptr && !LoginLeftover.isEmpty())
+		player->processLoginLeftover(LoginLeftover);
 
 	return HandlePacketResult::Handled;
 }
