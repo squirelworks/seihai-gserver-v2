@@ -5,6 +5,10 @@ clients. What changed and why is in [CHANGES-SEIHAI.md](CHANGES-SEIHAI.md).
 Prebuilt Linux, Windows and macOS builds are on the Releases page, each with its
 source. Licence: GPL-3.0, as upstream.
 
+To try the built-in NPC-server, run `./gs2emu --server npcdemo` from `bin/`
+(a loopback sample world, see `bin/servers/npcdemo/README.md`). What GS1 it
+lacks today: `docs/lab/2026-10-31-npcserver-gs1.md`.
+
 Seihai also makes a new Rust server stack, separate from this fork:
 [seihai-gserver](https://github.com/squirelworks/seihai-gserver),
 [seihai-listserver](https://github.com/squirelworks/seihai-listserver),
