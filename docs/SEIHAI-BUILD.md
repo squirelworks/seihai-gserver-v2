@@ -44,6 +44,8 @@ Each one has a row in `CHANGES-SEIHAI.md`.
 | `CommonTypes.h` `toSystemClock` | libc++ | stray `)`, and `file_clock::to_sys` returns nanoseconds in `__int128` | `time_point_cast<clock::duration>` |
 | `std/generator.h` | libc++ | libc++ declares `std::ranges::elements_of` but not `std::generator`; the stand-in's own `elements_of` clashed | stand-in's type renamed `__compat_elements_of` (nothing else in the server uses it) |
 | `StringUtils.h` `toFloat` | libc++ on macOS | float `from_chars` is unavailable before macOS 26 | `strtof` on that platform only |
+| `FileSystem.cpp` | libc++ | `std::this_thread::sleep_for` without `<thread>` | include `<thread>` |
+| `filesystem/watch/` | macOS | macOS is `PLATFORM_UNIX` too, so it compiled the inotify watcher; the macOS file was empty | Linux file guarded with `!__APPLE__`; macOS gets a no-op watcher |
 | `main.cpp` | macOS | `_NSGetExecutablePath` without `<mach-o/dyld.h>`; home path kept the file name | include the header, keep the folder only |
 
 ## When a target goes red
@@ -60,6 +62,12 @@ Each one has a row in `CHANGES-SEIHAI.md`.
    5 minutes on macOS and 12 on Windows.
 
 ## TODO
+
+- [ ] **macOS file watching.** `FileWatchOS_OSX.cpp` is a no-op, so on macOS files
+      changed while the server runs are not reloaded. Implement it with kqueue
+      (`EVFILT_VNODE` on each directory, then rescan it) or FSEvents, and keep the
+      same event fix-ups as the Linux watcher (temp file renamed over the original
+      gives one Modified event).
 
 - [ ] Run the macOS binary once in the lab to confirm the home-path fix
       (`Calculated home path:` should print the `bin` folder).

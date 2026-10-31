@@ -1,4 +1,6 @@
-#ifdef PLATFORM_UNIX
+// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
+// Linux only: macOS is PLATFORM_UNIX too but has no inotify (see FileWatchOS_OSX.cpp).
+#if defined(PLATFORM_UNIX) && !defined(__APPLE__)
 
 #include <cerrno>
 #include <cstddef>
@@ -240,4 +242,4 @@ void FileWatch::update()
 ///////////////////////////////////////////////////////////////////////////////
 } // end namespace preagonal::fs::watch
 
-#endif // PLATFORM_UNIX
+#endif // PLATFORM_UNIX && !__APPLE__

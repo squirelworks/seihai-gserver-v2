@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <cerrno>
 #include <cstdint>
@@ -7,6 +8,7 @@
 #include <memory>
 #include <mutex>
 #include <system_error>
+#include <thread>
 #include <utility>
 #include <vector>
 

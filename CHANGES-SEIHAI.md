@@ -29,6 +29,8 @@ Each file we changed carries a one-line notice at its top.
 | The bundled `std::generator` stand-in names its helper `__compat_elements_of`; libc++ declares its own `std::ranges::elements_of` and the two clashed. | `std/generator.h` | build only (macOS) |
 | `toFloat` uses `strtof` with libc++ on macOS, where the floating-point `from_chars` is marked unavailable before macOS 26. | `StringUtils.h` | build only (macOS) |
 | The thrown-NPC move delta is built from two `int16_t` casts; `-moveDistance` is an `int` and MSVC refused the narrowing inside braces. | `PlayerProps.cpp` | build only (Windows) |
+| `FileSystem.cpp` includes `<thread>` for `std::this_thread::sleep_for`; libc++ does not pull it in through other headers. | `FileSystem.cpp` | build only (macOS) |
+| macOS gets its own file watcher, a no-op for now: it built the Linux inotify watcher, which does not exist there. Files changed on disk while the server runs are not reloaded on macOS until it restarts. | `FileWatchOS_OSX.cpp`, `FileWatchOS_Linux.cpp` | build only (macOS); known gap |
 | `main.cpp` includes `<mach-o/dyld.h>` for `_NSGetExecutablePath`, and on macOS the home path is the executable's folder (as on Windows and Linux) instead of the whole buffer, which held the file name and trailing bytes. | `main.cpp` | build and start-up (macOS) |
 | `docs/SEIHAI-BUILD.md`: how the four targets are built, the compiler fixes so far, and what to do when one goes red. | `docs/` | docs only |
 | Release workflow for Linux, Windows and macOS. | `.github/workflows/` | build only |
