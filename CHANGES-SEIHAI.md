@@ -27,6 +27,7 @@ Each file we changed carries a one-line notice at its top.
 | A baddy index is cast to `uint8_t` explicitly; MSVC refused the narrowing conversion. | `Level.cpp` | build only (Windows) |
 | Release workflow for Linux, Windows and macOS. | `.github/workflows/` | build only |
 | A weapon with no joined classes no longer crashes the server when it is registered with a client that gets the GS2 path (5.12 and up on the modern generation). `getJoinedClassesList` dropped the last character of an empty string, and the weapon packet was then written with a bogus length. The stock `-gr_movement` (a GS1 weapon with no bytecode) crashed every such login. | `Weapon.cpp` | 5.12 to 6.x (crash at login) |
+| A sample world, `bin/servers/npcdemo`, for the built-in NPC-server: `serverside = true`, localhost mode, `127.0.0.1` port 14804, UPnP off, two levels, 14 NPCs, a weapon with a server half and a Control-NPC. Plus a lab probe client (`tools/lab/npcprobe`, built on Seihai's protocol code), the level generator and scan scripts, and the lab write-up `docs/lab/2026-10-31-npcserver-gs1.md` with the GS1 gaps found. No server code changed. | `bin/servers/npcdemo/` (copied from `default`; changed `serveroptions.txt`, `servermessage.html`, the accounts' start level, the Control-NPC script), `tools/lab/`, `docs/lab/` | lab only: Seihai protocol code as 2.05, 2.17, 2.22, 2.31 |
 
 ## Source for every release
 

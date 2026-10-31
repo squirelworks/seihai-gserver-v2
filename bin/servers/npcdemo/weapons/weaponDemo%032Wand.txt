@@ -1,0 +1,16 @@
+GRAWP001
+REALNAME Demo Wand
+IMAGE wbomb1.png
+SCRIPT
+// Server half: runs when the client sends triggeraction 0,0,serverside,Demo Wand,...
+if (actionserverside) {
+  if (strequals(#p(0),zap)) {
+    setplayerprop #c,Zap from the server;
+    this.zaps = this.zaps + 1;
+  }
+}
+//#CLIENTSIDE
+if (weaponfired) {
+  triggeraction 0,0,serverside,Demo Wand,zap;
+}
+SCRIPTEND
