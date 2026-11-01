@@ -1,4 +1,4 @@
-# Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-11-01: see CHANGES-SEIHAI.md.
 #
 #  server/src/CMakeLists.txt
 #
@@ -271,9 +271,9 @@ endif()
 # Dependency: gs2lib.
 FetchContent_Declare(gs2lib
 	# Seihai: our mirror, branch seihai (upstream 5c36ab8 + the 3.153 token
-	# + the 5.12 gen-5 step rule).
+	# + the 5.12 gen-5 step rule + the socket wait/unregister fix).
 	GIT_REPOSITORY https://github.com/squirelworks/seihai-gs2lib.git
-	GIT_TAG        a722b3bff76d510f31afd567b241e90d252eac13
+	GIT_TAG        1775349455fa122311caa3b623d3925a3d28420c
 )
 FetchContent_MakeAvailable(gs2lib)
 add_dependencies(${TARGET_NAME} gs2lib)

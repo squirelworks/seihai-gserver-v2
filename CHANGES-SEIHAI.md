@@ -9,6 +9,12 @@ Every change below was checked on a private loopback lab with real Graal
 clients and with the [Seihai](https://github.com/squirelworks/seihai) client.
 Each file we changed carries a one-line notice at its top.
 
+## 2026-11-01
+
+| Change | Files | Clients it fixes |
+|---|---|---|
+| gs2lib pin moves to `1775349`: the socket wait is `poll` instead of `select` (a descriptor past `FD_SETSIZE` aborted the process), `unregisterSocket` removes only the stub it was given (a mass disconnect walked every closed socket and segfaulted), and a normal send queue that already holds 4096 packets drops further `PLO_OTHERPLPROPS` so a level of walkers cannot grow it without bound. A player whose socket is already gone reports an invalid handle and does not receive. | `server/CMakeLists.txt`, `Player.h`, `Player.cpp` | all. Loopback lab, synthetic 2.05 (token `GNW03081`): unfixed, 1100 raw connections exited 134 and 200 logins died mid-disconnect. Fixed, 1100 raw connections stayed up and 1000 walking players disconnected with the process still alive (RSS about 25 MB). |
+
 ## 2026-10-31
 
 | Change | Files | Clients it fixes |

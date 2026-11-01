@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-01: see CHANGES-SEIHAI.md.
 #ifndef PLAYER_H
 #define PLAYER_H
 
@@ -155,7 +156,7 @@ public:
 	[[nodiscard]] bool onSend() override;
 	[[nodiscard]] bool onRegister() override { return true; }
 	void onUnregister() override;
-	[[nodiscard]] SOCKET getSocketHandle() override { return m_playerSock->getHandle(); }
+	[[nodiscard]] SOCKET getSocketHandle() override { return m_playerSock != nullptr ? m_playerSock->getHandle() : INVALID_SOCKET; }
 	[[nodiscard]] bool canRecv() override;
 	[[nodiscard]] bool canSend() override;
 
