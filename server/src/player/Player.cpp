@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-01: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -455,7 +456,7 @@ void Player::onUnregister()
 
 bool Player::canRecv()
 {
-	if (m_playerSock->getState() == SOCKET_STATE_DISCONNECTED) return false;
+	if (m_playerSock == nullptr || m_playerSock->getState() == SOCKET_STATE_DISCONNECTED) return false;
 	return true;
 }
 
