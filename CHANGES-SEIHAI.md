@@ -9,6 +9,12 @@ Every change below was checked on a private loopback lab with real Graal
 clients and with the [Seihai](https://github.com/squirelworks/seihai) client.
 Each file we changed carries a one-line notice at its top.
 
+## 2026-11-04
+
+| Change | Files | Clients it fixes |
+|---|---|---|
+| An RC that bans a player who is online no longer hangs the server. The kick text was built with `replaceAll("", "\r")`; gs2lib's `find` matches an empty string at every position, so the loop never ended (100% CPU, nothing sent to anyone, the port still accepting). The reason's CSV lines are now joined with `\r`, as intended. The text is built in a new header so it can be tested; `Catch_tests/RC` tests it, and CI builds and runs that test on Linux. Upstream `beta4` (`5a90281`, 2026-11-03) still has the bug. | `PlayerRCPackets.cpp`, `RCBanMessage.h`, `Catch_tests/RC/`, `.github/workflows/` | RC (server hang). Lab capture `rc-capture-2026-11-04`: real Reborn 2.22 RemoteControl.exe banning an online 2.22 player |
+
 ## 2026-11-01
 
 | Change | Files | Clients it fixes |
