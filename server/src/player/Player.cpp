@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-01: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-01, 2026-11-04: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -1042,7 +1042,10 @@ void Player::synchronizeFlags(const std::vector<std::string>& flagPairs)
 				value->assign<bool>(true);
 				sendPacket(CString() >> (char)PLO_FLAGSET << search->first);
 			}
-			else if (!value->value.has<std::string>() || search->second != value->get<std::string>().value().get())
+			// Seihai: only when the RC sent a value. A flag with no value that is already
+			// set was turned into an empty string here, which is not a flag, so a flag like
+			// "gotsword" was dropped from the next save.
+			else if (!search->second.empty() && (!value->value.has<std::string>() || search->second != value->get<std::string>().value().get()))
 			{
 				value->value.unassign<bool>();
 				value->assign(search->second);
