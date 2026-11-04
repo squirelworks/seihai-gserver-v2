@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-04: see CHANGES-SEIHAI.md.
 #ifndef EXTENTS_H
 #define EXTENTS_H
 
@@ -284,7 +285,7 @@ struct Rectangle
 	constexpr Rectangle(Position<P> position, Dimension<S> size) : position(position), size(size) {}
 	constexpr Rectangle(with_positions_t, Position<P> corner1, Position<P> corner2)
 		: position(Position<P>{std::min(corner1.x(), corner2.x()), std::min(corner1.y(), corner2.y()), std::min(corner1.z(), corner2.z())}),
-		  size(Dimension<S>{std::abs(corner2.x() - corner1.x()), std::abs(corner2.y() - corner1.y()), std::abs(corner2.z() - corner1.z())})
+		  size(Dimension<S>{static_cast<S>(std::abs(corner2.x() - corner1.x())), static_cast<S>(std::abs(corner2.y() - corner1.y())), static_cast<S>(std::abs(corner2.z() - corner1.z()))})
 	{}
 
 	[[nodiscard]] constexpr P left() const noexcept { return position.x(); }
