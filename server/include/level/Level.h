@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-04: see CHANGES-SEIHAI.md.
 #ifndef LEVEL_H
 #define LEVEL_H
 
@@ -516,7 +517,7 @@ inline std::optional<PixelPosition> Level::getSubLevelOrigin(const SubLevelPtr& 
 		return std::nullopt;
 
 	auto pixelPerPart = pixelsPerSubLevel();
-	return PixelPosition{ static_cast<int32_t>(part->mapPosition.value().x()) * pixelPerPart.width(), static_cast<int32_t>(part->mapPosition.value().y()) * pixelPerPart.height(), 0};
+	return PixelPosition{ static_cast<int32_t>(part->mapPosition.value().x()) * static_cast<int32_t>(pixelPerPart.width()), static_cast<int32_t>(part->mapPosition.value().y()) * static_cast<int32_t>(pixelPerPart.height()), 0};
 }
 
 inline std::optional<MapPosition> Level::getSubLevelPositionInMap(const std::string_view levelPart) const noexcept
@@ -628,7 +629,7 @@ inline PixelPosition Level::convertToMapPosition(const std::string_view levelPar
 	{
 		auto mapPosition = getSubLevelPositionInMap(levelPart).value_or(MapPosition{});
 		auto pixelPerPart = pixelsPerSubLevel();
-		return { position.x() + static_cast<int32_t>(mapPosition.x()) * pixelPerPart.width(), position.y() + static_cast<int32_t>(mapPosition.y()) * pixelPerPart.height(), static_cast<int32_t>(position.z()) };
+		return { position.x() + static_cast<int32_t>(mapPosition.x()) * static_cast<int32_t>(pixelPerPart.width()), position.y() + static_cast<int32_t>(mapPosition.y()) * static_cast<int32_t>(pixelPerPart.height()), static_cast<int32_t>(position.z()) };
 	}
 	return { position.x(), position.y(), position.z() };
 }
@@ -644,7 +645,7 @@ inline PixelPosition Level::convertToMapPosition(const MapPosition& mapPosition,
 	if (isGmap())
 	{
 		auto pixelPerPart = pixelsPerSubLevel();
-		return { static_cast<int32_t>(position.x()) + (mapPosition.x() * pixelPerPart.width()), static_cast<int32_t>(position.y()) + (mapPosition.y() * pixelPerPart.height()), static_cast<int32_t>(position.z()) };
+		return { static_cast<int32_t>(position.x()) + (mapPosition.x() * static_cast<int32_t>(pixelPerPart.width())), static_cast<int32_t>(position.y()) + (mapPosition.y() * static_cast<int32_t>(pixelPerPart.height())), static_cast<int32_t>(position.z()) };
 	}
 	return { static_cast<int32_t>(position.x()), static_cast<int32_t>(position.y()), static_cast<int32_t>(position.z()) };
 }
@@ -656,7 +657,7 @@ inline PixelPosition Level::convertToMapPosition(const MapPosition& mapPosition,
 	if (isGmap())
 	{
 		auto pixelPerPart = pixelsPerSubLevel();
-		return { (static_cast<int32_t>(position.x()) * pixelPerTile.width()) + (mapPosition.x() * pixelPerPart.width()), (static_cast<int32_t>(position.y()) * pixelPerTile.height()) + (mapPosition.y() * pixelPerPart.height()), static_cast<int32_t>(position.z()) * pixelPerTile.length() };
+		return { (static_cast<int32_t>(position.x()) * static_cast<int32_t>(pixelPerTile.width())) + (mapPosition.x() * static_cast<int32_t>(pixelPerPart.width())), (static_cast<int32_t>(position.y()) * static_cast<int32_t>(pixelPerTile.height())) + (mapPosition.y() * static_cast<int32_t>(pixelPerPart.height())), static_cast<int32_t>(position.z()) * static_cast<int32_t>(pixelPerTile.length()) };
 	}
 	return { static_cast<int32_t>(position.x() * pixelPerTile.width()), static_cast<int32_t>(position.y() * pixelPerTile.height()), static_cast<int32_t>(position.z() * pixelPerTile.length()) };
 }

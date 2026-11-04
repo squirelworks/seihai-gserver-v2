@@ -543,7 +543,7 @@ void SubLevel::sleepNPCs()
 	[[maybe_unused]] bool processed = false;
 	if (const auto level = parentLevel.lock(); level != nullptr && server != nullptr)
 	{
-		for (const auto& npcId : level->findNPCsInLevelPart(mapPosition.value_or({0, 0})))
+		for (const auto& npcId : level->findNPCsInLevelPart(mapPosition.value_or(MapPosition{0, 0})))
 		{
 			if (auto npc = server->getNPC(npcId); npc != nullptr)
 			{
@@ -559,7 +559,7 @@ void SubLevel::sleepNPCs()
 	{
 		if (const auto staticLevel = staticData.lock(); staticLevel != nullptr)
 		{
-			const auto [x, y, _] = mapPosition.value_or({0, 0});
+			const auto [x, y, _] = mapPosition.value_or(MapPosition{0, 0});
 			log::printLine(log::server, "Putting NPCs to sleep in sublevel '{}' [{}, {}].", staticLevel->levelName, x, y);
 		}
 	}
@@ -571,7 +571,7 @@ void SubLevel::wakeNPCs()
 	[[maybe_unused]] bool processed = false;
 	if (const auto level = parentLevel.lock(); level != nullptr && server != nullptr)
 	{
-		for (const auto& npcId : level->findNPCsInLevelPart(mapPosition.value_or({0, 0})))
+		for (const auto& npcId : level->findNPCsInLevelPart(mapPosition.value_or(MapPosition{0, 0})))
 		{
 			if (auto npc = server->getNPC(npcId); npc != nullptr)
 			{
@@ -589,7 +589,7 @@ void SubLevel::wakeNPCs()
 	{
 		if (const auto staticLevel = staticData.lock(); staticLevel != nullptr)
 		{
-			const auto [x, y, _] = mapPosition.value_or({0, 0});
+			const auto [x, y, _] = mapPosition.value_or(MapPosition{0, 0});
 			log::printLine(log::server, "Waking NPCs in sublevel '{}' [{}, {}].", staticLevel->levelName, x, y);
 		}
 	}
@@ -746,7 +746,7 @@ void Level::doTimedEvents()
 			if (timeDifference(subLevel->timeSinceLastUsed.value(), nowInSeconds) > std::chrono::seconds{m_server->cached.unloadInactiveLevelTime.getValue()})
 			{
 				// We might want to sleep this sublevel.  Check if any players are in range.
-				const auto mapPosition = subLevel->mapPosition.value_or({0, 0});
+				const auto mapPosition = subLevel->mapPosition.value_or(MapPosition{0, 0});
 				const auto pixelPosition = PixelPosition{mapPosition.x() * static_cast<int32_t>(Level::pixelsPerSubLevel().width()), mapPosition.y() * static_cast<int32_t>(Level::pixelsPerSubLevel().height())};
 				if (auto playersInRange = findPlayersInRangeForData(pixelPosition); playersInRange.begin() == playersInRange.end())
 				{
