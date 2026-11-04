@@ -25,6 +25,7 @@
 #include <filesystem/FileSystem.h>
 #include <filesystem/FileSystemTypes.h>
 #include <loader/flatfile/FlatFileAccountLoader.h>
+#include <loader/AccountFlag.h>
 #include <object/Player.h>
 #include <player/PlayerProps.h>
 #include <scripting/ScriptContainers.h>
@@ -560,7 +561,7 @@ bool FlatFileAccountLoader::loadAccount(const std::string_view accountName, Acco
 	{
 		for (auto& val : flagList)
 		{
-			if (auto variable = GameVariable::deserialize(val); variable.has_value())
+			if (auto variable = deserializeAccountFlag(val); variable.has_value())
 				account.variables.add(std::move(variable.value()));
 		}
 	}
