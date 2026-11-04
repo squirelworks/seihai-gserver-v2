@@ -1295,12 +1295,7 @@ HandlePacketResult PlayerClient::msgPLI_TRIGGERACTION(CString& pPacket)
 						(void)level->reload(getMapPosition());
 					else
 					{
-						LevelPtr targetLevel;
-						if (levelName.ends_with(".singleplayer"))
-							targetLevel = m_singleplayerLevels[removeExtension(levelName)];
-						else
-							targetLevel = m_server->getLoadedLevel(levelName, shared_from_this());
-						if (targetLevel != nullptr)
+						if (LevelPtr targetLevel = m_server->getLoadedLevel(levelName, shared_from_this()); targetLevel != nullptr)
 							(void)targetLevel->reload(levelName);
 					}
 				}

@@ -17,8 +17,8 @@
 #include <optional>
 #include <ostream>
 #include <span>
-#include <string_view>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
@@ -317,7 +317,7 @@ std::optional<const LevelTiles*> SubLevel::getTiles() const noexcept
 	return tiles;
 }
 
-std::optional<LevelTiles::TileArray*> SubLevel::getTiles(size_t layer) noexcept
+std::optional<LevelTiles::TileArray*> SubLevel::getTiles(const size_t layer) noexcept
 {
 	// Get the tiles.
 	const auto tiles = getTiles();
@@ -332,7 +332,7 @@ std::optional<LevelTiles::TileArray*> SubLevel::getTiles(size_t layer) noexcept
 	return std::nullopt;
 }
 
-std::optional<const LevelTiles::TileArray*> SubLevel::getTiles(size_t layer) const noexcept
+std::optional<const LevelTiles::TileArray*> SubLevel::getTiles(const size_t layer) const noexcept
 {
 	// Get the tiles.
 	const auto tiles = getTiles();
@@ -386,11 +386,13 @@ double SubLevel::getHeightAt(const LocalPixelPosition& position) const noexcept
 	return point.z();
 }
 
-void SubLevel::sendBoardToPlayer(const std::shared_ptr<Player>& player) const
+void SubLevel::sendBoardToPlayer(const std::shared_ptr<Player>& player)
 {
 	const auto tiles = getTiles();
 	if (!tiles.has_value())
 		return;
+
+	updateTimeSinceLastUsed();
 
 	CString retVal;
 	retVal.writeGChar(PLO_BOARDPACKET);
@@ -399,11 +401,13 @@ void SubLevel::sendBoardToPlayer(const std::shared_ptr<Player>& player) const
 	player->sendRawPacket(retVal);
 }
 
-void SubLevel::sendBoardLayersToPlayer(const std::shared_ptr<Player>& player) const
+void SubLevel::sendBoardLayersToPlayer(const std::shared_ptr<Player>& player)
 {
 	const auto tiles = getTiles();
 	if (!tiles.has_value())
 		return;
+
+	updateTimeSinceLastUsed();
 
 	for (const auto layer : tiles.value()->getUsedTileLayers())
 	{
@@ -412,11 +416,13 @@ void SubLevel::sendBoardLayersToPlayer(const std::shared_ptr<Player>& player) co
 	}
 }
 
-void SubLevel::sendBoardLayerToPlayer(const std::shared_ptr<Player>& player, size_t layer) const
+void SubLevel::sendBoardLayerToPlayer(const std::shared_ptr<Player>& player, const size_t layer)
 {
 	const auto tiles = getTiles();
 	if (!tiles.has_value())
 		return;
+
+	updateTimeSinceLastUsed();
 
 	CString retVal;
 	retVal.writeGChar(PLO_BOARDLAYER);
@@ -429,11 +435,13 @@ void SubLevel::sendBoardLayerToPlayer(const std::shared_ptr<Player>& player, siz
 	player->sendRawPacket(retVal);
 }
 
-void SubLevel::sendBoardHeightsToPlayer(const std::shared_ptr<Player>& player) const
+void SubLevel::sendBoardHeightsToPlayer(const std::shared_ptr<Player>& player)
 {
 	// We only need to send heights if there are level overrides.
 	if (!mapPosition.has_value() || !terrain.has_value() || terrain.value().levelHeightOverrides.empty())
 		return;
+
+	updateTimeSinceLastUsed();
 
 	CString retVal;
 	retVal.writeGChar(PLO_BOARDHEIGHTS);
@@ -473,10 +481,12 @@ void SubLevel::sendBoardHeightsToPlayer(const std::shared_ptr<Player>& player) c
 	player->sendPacket(retVal);
 }
 
-void SubLevel::sendBoardChangesToPlayer(const std::shared_ptr<Player>& player, const std::optional<clock::time_point> time) const
+void SubLevel::sendBoardChangesToPlayer(const std::shared_ptr<Player>& player, const std::optional<clock::time_point> time)
 {
 	if (player == nullptr)
 		return;
+
+	updateTimeSinceLastUsed();
 
 	// Determine the style of board changes to send.
 	// 0 = PLO_BOARDMODIFY2 with pixel position (bad)
@@ -520,12 +530,79 @@ void SubLevel::sendBoardChangesToPlayer(const std::shared_ptr<Player>& player, c
 	}
 }
 
+void SubLevel::updateTimeSinceLastUsed()
+{
+	if (timeSinceLastUsed.has_value())
+		timeSinceLastUsed = server->getFrameStartTime();
+	if (sleeping)
+		wakeNPCs();
+}
+
+void SubLevel::sleepNPCs()
+{
+	[[maybe_unused]] bool processed = false;
+	if (const auto level = parentLevel.lock(); level != nullptr && server != nullptr)
+	{
+		for (const auto& npcId : level->findNPCsInLevelPart(mapPosition.value_or({0, 0})))
+		{
+			if (auto npc = server->getNPC(npcId); npc != nullptr)
+			{
+				npc->sleeping = true;
+				processed = true;
+			}
+		}
+	}
+	sleeping = true;
+
+#if DEBUG
+	if (processed)
+	{
+		if (const auto staticLevel = staticData.lock(); staticLevel != nullptr)
+		{
+			const auto [x, y, _] = mapPosition.value_or({0, 0});
+			log::printLine(log::server, "Putting NPCs to sleep in sublevel '{}' [{}, {}].", staticLevel->levelName, x, y);
+		}
+	}
+#endif
+}
+
+void SubLevel::wakeNPCs()
+{
+	[[maybe_unused]] bool processed = false;
+	if (const auto level = parentLevel.lock(); level != nullptr && server != nullptr)
+	{
+		for (const auto& npcId : level->findNPCsInLevelPart(mapPosition.value_or({0, 0})))
+		{
+			if (auto npc = server->getNPC(npcId); npc != nullptr)
+			{
+				npc->sleeping = false;
+				processed = true;
+			}
+		}
+	}
+	sleeping = false;
+	if (timeSinceLastUsed.has_value())
+		timeSinceLastUsed = server->getFrameStartTime();
+
+#if DEBUG
+	if (processed)
+	{
+		if (const auto staticLevel = staticData.lock(); staticLevel != nullptr)
+		{
+			const auto [x, y, _] = mapPosition.value_or({0, 0});
+			log::printLine(log::server, "Waking NPCs in sublevel '{}' [{}, {}].", staticLevel->levelName, x, y);
+		}
+	}
+#endif
+}
+
 //----------------------------
 
 Level::Level()
 {
 	m_server = BabyDI::Get<Server>();
 	assert(m_server != nullptr);
+	m_sleepTimeout1m.start();
 }
 
 Level::~Level()
@@ -559,7 +636,7 @@ Level::~Level()
 			// We need to do this for map levels because we many things refer to the sublevels by name, so we need to link them to a gmap.
 			auto stub = m_server->getStubbedLevel(levelName, groupMapName);
 			for (const auto& name : m_map->levels | std::views::keys)
-				gmapLevels.insert({ name, stub });
+				gmapLevels.insert({name, stub});
 		}
 	}
 
@@ -570,10 +647,9 @@ Level::~Level()
 	m_arrows.clear();
 
 	// Delete items.
-	// Seihai: do not tell clients here. The informing removeItem() calls shared_from_this(),
-	// which throws bad_weak_ptr while the level is being destroyed and ended the server
-	// when an idle level with items was unloaded. Levels are unloaded only after no player
-	// has been in them for unloadinactiveleveltime, so there is nobody in it to tell.
+	// Seihai: the non-informing removeItem(); see CHANGES-SEIHAI.md (level unload crash).
+	for (size_t i = m_items.size(); i > 0; --i)
+		removeItem(i - 1);
 	m_items.clear();
 
 	// Delete sub level data.
@@ -589,6 +665,155 @@ Level::~Level()
 	// Warp players out.
 	for (const auto& playerId : m_players)
 		(void)m_server->warpPlayerToSafePlace(playerId);
+}
+
+//----------------------------
+
+void Level::doTimedEvents()
+{
+	const auto& now = m_server->getFrameStartTimeHighPrecision();
+
+	// Run board change events.
+	for (const auto& part : m_levelParts | removeNulls)
+	{
+		for (auto& change : part->boardChanges)
+			change.update(now);
+	}
+
+	// Run bomb events.
+	for (auto& bomb : m_bombs) bomb.timeout.update(now);
+	std::erase_if(m_bombs, [this](const LevelBomb& bomb)
+	{
+		const bool exploded = !bomb.timeout.isRunning();
+		if (exploded)
+		{
+			// Generate bomb explosions.
+			// Don't send to players as they should see the bomb already.
+			if (bomb.power != 2)
+				addExplosion(bomb.position, bomb.owner, 1, bomb.power);
+			else
+			{
+				addExplosion(bomb.position, bomb.owner, 4, bomb.power);
+				addExplosion(translatePosition(bomb.position, -32, -32), bomb.owner, 4, bomb.power);
+				addExplosion(translatePosition(bomb.position, 32, -32), bomb.owner, 4, bomb.power);
+				addExplosion(translatePosition(bomb.position, -32, 32), bomb.owner, 4, bomb.power);
+				addExplosion(translatePosition(bomb.position, 32, 32), bomb.owner, 4, bomb.power);
+			}
+		}
+		return exploded;
+	});
+
+	// Run explosion events.
+	for (auto& explosion : m_explosions) explosion.timeout.update(now);
+	std::erase_if(m_explosions, [](const LevelExplosion& explosion)
+	{
+		return !explosion.timeout.isRunning();
+	});
+
+	// Run item events.
+	for (auto& item : m_items) item.timeout.update(now);
+	std::erase_if(m_items, [](const LevelItem& item)
+	{
+		return !item.timeout.isRunning();
+	});
+
+	// Run horse events.
+	for (auto& horse : m_horses) horse.timeout.update(now);
+	std::erase_if(m_horses, [](const LevelHorse& horse)
+	{
+		return !horse.timeout.isRunning();
+	});
+
+	// Run baddy events.
+	if (const auto subLevel = getSubLevelAtPosition(MapPosition{}); subLevel != nullptr && !isGmap())
+	{
+		for (auto& baddy : subLevel->baddies)
+			baddy.timeout.update(now);
+	}
+
+	// If we are a gmap, try to sleep sublevels.
+	if (isGmap() && !m_map->keepAllLevelsLoaded && m_sleepTimeout1m.update(now) != 0)
+	{
+		m_sleepTimeout1m.runOnceFor(1min);
+		const auto nowInSeconds = m_server->getFrameStartTime();
+		for (const auto& subLevel : m_levelParts)
+		{
+			// If we are sleeping, skip it.
+			// If we have no recorded last used value, this sublevel will never get put to sleep.
+			if (subLevel->sleeping || !subLevel->timeSinceLastUsed.has_value())
+				continue;
+
+			if (timeDifference(subLevel->timeSinceLastUsed.value(), nowInSeconds) > std::chrono::seconds{m_server->cached.unloadInactiveLevelTime.getValue()})
+			{
+				// We might want to sleep this sublevel.  Check if any players are in range.
+				const auto mapPosition = subLevel->mapPosition.value_or({0, 0});
+				const auto pixelPosition = PixelPosition{mapPosition.x() * static_cast<int32_t>(Level::pixelsPerSubLevel().width()), mapPosition.y() * static_cast<int32_t>(Level::pixelsPerSubLevel().height())};
+				if (auto playersInRange = findPlayersInRangeForData(pixelPosition); playersInRange.begin() == playersInRange.end())
+				{
+					// No players in range, so sleep.
+					subLevel->sleepNPCs();
+				}
+				else
+				{
+					// We have players in range, so reset the timer.
+					subLevel->timeSinceLastUsed = nowInSeconds;
+				}
+			}
+		}
+	}
+}
+
+void Level::doFrameEvents(const precise_clock::time_point time)
+{
+	// Don't bother with shoot and arrow processing if we don't have an npc-server.
+	if (!m_server->hasNPCServer())
+		return;
+
+	// Determine elapsed time.
+	const auto elapsed = time - m_lastFrameTime;
+	m_frameEventDuration += elapsed;
+	m_lastFrameTime = time;
+
+	// Count the iterations.
+	const auto iterations = static_cast<int>(m_frameEventDuration / 50ms);
+	if (iterations == 0)
+		return;
+
+	// Subtract our iterations.
+	m_frameEventDuration -= iterations * 50ms;
+
+	// Run shoot events.
+	std::vector<size_t> deletedItems;
+	for (size_t i = 0; i < m_shoots.size(); ++i)
+	{
+		if (!moveShoot(&m_shoots[i], iterations))
+			deletedItems.push_back(i);
+	}
+	std::erase_if(m_shoots, [this, &deletedItems](const LevelShoot& shoot)
+	{
+		return std::ranges::find(deletedItems, &shoot - &m_shoots[0]) != deletedItems.end();
+	});
+
+	// Run arrow events.
+	deletedItems.clear();
+	for (size_t i = 0; i < m_arrows.size(); ++i)
+	{
+		if (!moveArrow(&m_arrows[i], iterations))
+			deletedItems.push_back(i);
+	}
+	std::erase_if(m_arrows, [this, &deletedItems](const LevelArrow& arrow)
+	{
+		return std::ranges::find(deletedItems, &arrow - &m_arrows[0]) != deletedItems.end();
+	});
+
+	// Run thrown item events.
+	for (size_t i = 0; i < m_thrownItems.size(); ++i)
+	{
+		if (!moveThrownItem(i, iterations))
+			m_thrownItems.at(i) = std::nullopt;
+	}
+	if (!m_thrownItems.empty() && !m_thrownItems.back().has_value())
+		m_thrownItems.pop_back(); // Will eventually collapse the vector.
 }
 
 //----------------------------
@@ -916,124 +1141,6 @@ bool Level::saveLevel(const MapPosition& mapPosition, const std::string_view fil
 
 //----------------------------
 
-void Level::doTimedEvents()
-{
-	const auto& now = m_server->getFrameStartTimeHighPrecision();
-
-	// Run board change events.
-	for (const auto& part : m_levelParts | removeNulls)
-	{
-		for (auto& change : part->boardChanges)
-			change.update(now);
-	}
-
-	// Run bomb events.
-	for (auto& bomb : m_bombs) bomb.timeout.update(now);
-	std::erase_if(m_bombs, [this](const LevelBomb& bomb)
-	{
-		bool exploded = !bomb.timeout.isRunning();
-		if (exploded)
-		{
-			// Generate bomb explosions.
-			// Don't send to players as they should see the bomb already.
-			if (bomb.power != 2)
-				addExplosion(bomb.position, bomb.owner, 1, bomb.power);
-			else
-			{
-				addExplosion(bomb.position, bomb.owner, 4, bomb.power);
-				addExplosion(translatePosition(bomb.position, -32, -32), bomb.owner, 4, bomb.power);
-				addExplosion(translatePosition(bomb.position, 32, -32), bomb.owner, 4, bomb.power);
-				addExplosion(translatePosition(bomb.position, -32, 32), bomb.owner, 4, bomb.power);
-				addExplosion(translatePosition(bomb.position, 32, 32), bomb.owner, 4, bomb.power);
-			}
-		}
-		return exploded;
-	});
-
-	// Run explosion events.
-	for (auto& explosion : m_explosions) explosion.timeout.update(now);
-	std::erase_if(m_explosions, [](const LevelExplosion& explosion)
-	{
-		return !explosion.timeout.isRunning();
-	});
-
-	// Run item events.
-	for (auto& item : m_items) item.timeout.update(now);
-	std::erase_if(m_items, [](const LevelItem& item)
-	{
-		return !item.timeout.isRunning();
-	});
-
-	// Run horse events.
-	for (auto& horse : m_horses) horse.timeout.update(now);
-	std::erase_if(m_horses, [](const LevelHorse& horse)
-	{
-		return !horse.timeout.isRunning();
-	});
-
-	// Run baddy events.
-	if (auto subLevel = getSubLevelAtPosition(MapPosition{}); subLevel != nullptr && !isGmap())
-	{
-		for (auto& baddy : subLevel->baddies)
-			baddy.timeout.update(now);
-	}
-}
-
-void Level::doFrameEvents(precise_clock::time_point time)
-{
-	// Don't bother with shoot and arrow processing if we don't have an npc-server.
-	if (!m_server->hasNPCServer())
-		return;
-
-	// Determine elapsed time.
-	const auto elapsed = time - m_lastFrameTime;
-	m_frameEventDuration += elapsed;
-	m_lastFrameTime = time;
-
-	// Count the iterations.
-	const auto iterations = static_cast<int>(m_frameEventDuration / 50ms);
-	if (iterations == 0)
-		return;
-
-	// Subtract our iterations.
-	m_frameEventDuration -= iterations * 50ms;
-
-	// Run shoot events.
-	std::vector<size_t> deletedItems;
-	for (size_t i = 0; i < m_shoots.size(); ++i)
-	{
-		if (!moveShoot(&m_shoots[i], iterations))
-			deletedItems.push_back(i);
-	}
-	std::erase_if(m_shoots, [this, &deletedItems](const LevelShoot& shoot)
-	{
-		return std::ranges::find(deletedItems, &shoot - &m_shoots[0]) != deletedItems.end();
-	});
-
-	// Run arrow events.
-	deletedItems.clear();
-	for (size_t i = 0; i < m_arrows.size(); ++i)
-	{
-		if (!moveArrow(&m_arrows[i], iterations))
-			deletedItems.push_back(i);
-	}
-	std::erase_if(m_arrows, [this, &deletedItems](const LevelArrow& arrow)
-	{
-		return std::ranges::find(deletedItems, &arrow - &m_arrows[0]) != deletedItems.end();
-	});
-
-	// Run thrown item events.
-	for (size_t i = 0; i < m_thrownItems.size(); ++i)
-	{
-		if (!moveThrownItem(i, iterations))
-			m_thrownItems.at(i) = std::nullopt;
-	}
-	if (!m_thrownItems.empty() && !m_thrownItems.back().has_value())
-		m_thrownItems.pop_back(); // Will eventually collapse the vector.
-}
-
-//----------------------------
-
 std::generator<const LevelBaddy&> Level::getBaddies() const noexcept
 {
 	if (isGmap())
@@ -1342,7 +1449,7 @@ void Level::sendNPCsToPlayer(const std::shared_ptr<Player>& player, const std::o
 {
 	const Level* currentLevel = nullptr;
 
-	for (const auto& npcId : findInRangeNPCsForCommunication(player->getGlobalPosition()))
+	for (const auto& npcId : findNPCsInRangeForData(player->getGlobalPosition()))
 	{
 		const auto npc = m_server->getNPC(npcId);
 		if (!npc) continue;
@@ -1383,7 +1490,7 @@ void Level::sendNPCToNearbyPlayers(const std::shared_ptr<NPC>& npc, const std::o
 	if (npc == nullptr)
 		return;
 
-	for (const auto& pId : findInRangePlayersForCommunication(npc->getGlobalPosition()))
+	for (const auto& pId : findPlayersInRangeForData(npc->getGlobalPosition()))
 	{
 		if (auto player = m_server->getPlayer(pId); player != nullptr)
 			sendNPCToPlayer(npc, player, time);
@@ -1405,8 +1512,10 @@ bool Level::hasLivingBaddies() const
 	if (isGmap() || subLevel == nullptr)
 		return false;
 
+	// clang-format off
 	if (std::ranges::any_of(subLevel->baddies, [](const auto& baddy) { return baddy.mode != BaddyMode::DEAD; }))
 		return true;
+	// clang-format on
 
 	return false;
 }
@@ -1448,7 +1557,8 @@ bool Level::addNPC(const std::shared_ptr<NPC>& npc)
 		return false;
 
 	m_npcs.insert(npc->id);
-	npc->setLevel(shared_from_this());
+	if (const auto npclevel = npc->getLevel(); npclevel == nullptr || npclevel.get() != this)
+		npc->setLevel(shared_from_this());
 
 	if (const auto part = getSubLevelAtPosition(npc->getGlobalPosition()); part != nullptr)
 	{
@@ -2114,10 +2224,14 @@ void Level::addExplosion(const PixelPosition& position, const ScriptObject& from
 	{
 		const uint8_t dir = i / radius;
 		const auto step = static_cast<int16_t>(((i % static_cast<size_t>(radius)) + 1) * 2 * 16);
+
+		// clang-format off
 		PixelPosition partPosition = position.translate(
 			(dir == 0 || dir == 2) ? 0 : (dir == 1 ? -step : step),
 			(dir == 1 || dir == 3) ? 0 : (dir == 0 ? -step : step)
 		);
+		// clang-format on
+
 		addExplosionPart(partPosition, dir, power);
 	}
 
@@ -2154,10 +2268,12 @@ void Level::addSpyFire(const PixelPosition& position, const ScriptObject& from, 
 	if (!m_server->hasNPCServer())
 		return;
 
+	// clang-format off
 	const PixelPosition startingPosition = position.translate(
 		(direction == 0 || direction == 2) ? 8 : (direction == 1 ? -32 : 48),
 		(direction == 1 || direction == 3) ? 3 : (direction == 0 ? -24 : 35)
 	);
+	// clang-format on
 
 	for (size_t i = 0; i < static_cast<size_t>(length + 1); ++i)
 	{
@@ -2171,11 +2287,14 @@ void Level::addSpyFire(const PixelPosition& position, const ScriptObject& from, 
 	// Add exploded events to NPCs in the level.
 	if (m_server->hasNPCServer())
 	{
+		// clang-format off
 		const auto lengthInPixels = static_cast<int16_t>((length + 1) * 32);
 		PixelPosition testPosition = startingPosition.translate(
 			static_cast<int16_t>((direction == 1) ? -lengthInPixels : 0),
 			static_cast<int16_t>((direction == 0) ? -lengthInPixels : 0)
 		);
+		// clang-format on
+
 		Dimension<uint16_t> testDimension{
 			static_cast<uint16_t>((direction == 0 || direction == 2) ? 32 : lengthInPixels),
 			static_cast<uint16_t>((direction == 1 || direction == 3) ? 32 : lengthInPixels)
@@ -2475,7 +2594,7 @@ LevelShoot* Level::addShoot(const PixelPosition& position, const float angle, co
 	tilePosition.translate(0, 0, static_cast<float>(ground));
 
 	LevelShoot newShoot{.position = tilePosition, .angle = angle, .zangle = zangle, .powerIn44TileParts = power, .gani = gani, .gravity = gravity, .from = from};
-	if (newShoot.gani.back() == ',')
+	if (!newShoot.gani.empty() && newShoot.gani.back() == ',')
 		newShoot.gani.pop_back();
 	newShoot.calculateSpeeds();
 	m_shoots.emplace_back(std::move(newShoot));
@@ -2716,7 +2835,7 @@ bool Level::moveThrownItem(const size_t index, const int iterations)
 
 		// Check for NPC collision.
 		bool hitSomething = false;
-		PixelRectangleArea searchBox = {toPixelPosition(item.position), {32_ui16, 32_ui16} };
+		PixelRectangleArea searchBox = {toPixelPosition(item.position), {32_ui16, 32_ui16}};
 		auto center = searchBox.center();
 		for (const auto& npc : findIntersectingNPCsForCollision(searchBox))
 		{
@@ -2810,7 +2929,7 @@ bool Level::isOnWater2(const PixelRectangleArea& area) const noexcept
 bool Level::isOnNPC(const PixelPosition& position) const noexcept
 {
 	// NOLINTNEXTLINE(*-use-anyofallof)
-	for (const auto& npcId : findInRangeNPCs(position))
+	for (const auto& npcId : findNPCsInRangeByDistance(position, Level::pixelsPerSubLevel().width()))
 	{
 		if (auto npc = m_server->getNPC(npcId); npc != nullptr)
 		{
@@ -2823,8 +2942,10 @@ bool Level::isOnNPC(const PixelPosition& position) const noexcept
 
 bool Level::isOnNPC(const PixelRectangleArea& pixelArea) const noexcept
 {
+	const auto maxDistance = std::max(static_cast<uint32_t>(Level::pixelsPerSubLevel().width()), static_cast<uint32_t>(std::max(pixelArea.size.width(), pixelArea.size.height())));
+
 	// NOLINTNEXTLINE(*-use-anyofallof)
-	for (const auto& npcId : findInRangeNPCs(pixelArea.position))
+	for (const auto& npcId : findNPCsInRangeByDistance(pixelArea.position, maxDistance))
 	{
 		if (auto npc = m_server->getNPC(npcId); npc != nullptr)
 		{
@@ -2838,7 +2959,7 @@ bool Level::isOnNPC(const PixelRectangleArea& pixelArea) const noexcept
 bool Level::isOnPlayer(const PixelPosition& position) const noexcept
 {
 	// NOLINTNEXTLINE(*-use-anyofallof)
-	for (const auto& playerId : findInRangePlayers(position))
+	for (const auto& playerId : findPlayersInRange(position, Level::pixelsPerSubLevel()))
 	{
 		if (auto player = m_server->getPlayer(playerId); player != nullptr)
 		{
@@ -2851,8 +2972,13 @@ bool Level::isOnPlayer(const PixelPosition& position) const noexcept
 
 bool Level::isOnPlayer(const PixelRectangleArea& pixelArea) const noexcept
 {
+	const PixelDimension maxDistance{
+		std::max(Level::pixelsPerSubLevel().width(), static_cast<uint32_t>(pixelArea.size.width())),
+		std::max(Level::pixelsPerSubLevel().height(), static_cast<uint32_t>(pixelArea.size.height()))
+	};
+
 	// NOLINTNEXTLINE(*-use-anyofallof)
-	for (const auto& playerId : findInRangePlayers(pixelArea.position))
+	for (const auto& playerId : findPlayersInRange(pixelArea.position, maxDistance))
 	{
 		if (auto player = m_server->getPlayer(playerId); player != nullptr)
 		{
@@ -2974,7 +3100,7 @@ std::generator<SubLevelPtr> Level::getNearbySubLevels(const PixelPosition& posit
 	co_yield sourcePart;
 
 	// Now yield parts in an expanding square around the source part.
-	constexpr auto levelPixelSize = pixelsPerSubLevel().width();
+	constexpr auto levelPixelSize = static_cast<int32_t>(pixelsPerSubLevel().width());
 	constexpr uint32_t levelPartSize = tilesPerSubLevel().width();
 	uint32_t distance = 1;
 	while (distance * levelPartSize <= tileDistance)
@@ -3007,8 +3133,57 @@ std::generator<SubLevelPtr> Level::getNearbySubLevels(const PixelPosition& posit
 
 //----------------------------
 
-std::generator<PlayerID> Level::findInRangePlayers(const PixelPosition& position, const std::optional<std::pair<uint32_t, uint32_t>> range) const noexcept
+std::generator<PlayerID> Level::findPlayersInRange(const PixelPosition& position, const PixelDimension& range) const noexcept
 {
+	// If this is not a gmap, just return all players in the level.
+	if (!isGmap())
+	{
+		for (const auto& playerId : m_players)
+			co_yield playerId;
+		co_return;
+	}
+
+	const auto mapSize = sizeInPixels();
+
+	// If the sync distance is larger than the level, return all the level players.
+	if (range.width() >= mapSize.width() && range.height() >= mapSize.height())
+	{
+		for (const auto& playerId : m_players)
+			co_yield playerId;
+		co_return;
+	}
+
+	auto playerInRange = [&](const PlayerID& playerId)
+	{
+		if (const auto player = m_server->getPlayer(playerId); player != nullptr)
+		{
+			auto otherPosition = player->getGlobalPosition();
+			return std::abs(position.x() - otherPosition.x()) <= range.width() && std::abs(position.y() - otherPosition.y()) <= range.height();
+		}
+		return false;
+	};
+
+	// Find all players in range.
+	for (const auto& playerId : m_players)
+	{
+		if (playerInRange(playerId))
+			co_yield playerId;
+	}
+}
+
+std::generator<PlayerID> Level::findPlayersInRangeForSync(const PixelPosition& position) const noexcept
+{
+	// Used to send player props.
+	// When on a gmap, it uses the sync distance settings.
+	// On a bigmap, it uses a 3x3 grid around the current level.
+
+	if (isOnBigMap())
+	{
+		for (const auto playerId : findPlayersInRangeForData(position))
+			co_yield playerId;
+		co_return;
+	}
+
 	const bool syncInside = m_server->cached.enableInsideSyncDistance.getValue();
 	const bool isInsideLevel = !isGmap();
 
@@ -3020,16 +3195,10 @@ std::generator<PlayerID> Level::findInRangePlayers(const PixelPosition& position
 		co_return;
 	}
 
-	auto syncx = m_server->cached.syncDistance[0].getValue();
-	auto syncy = m_server->cached.syncDistance[1].getValue();
-	auto mapSize = sizeInTiles();
-	auto tilePosition = toTilePosition(position);
-
-	if (range.has_value())
-	{
-		syncx = range->first;
-		syncy = range->second;
-	}
+	const auto syncx = m_server->cached.syncDistance[0].getValue();
+	const auto syncy = m_server->cached.syncDistance[1].getValue();
+	const auto mapSize = sizeInTiles();
+	const auto tilePosition = toTilePosition(position);
 
 	// If the sync distance is larger than the level, return all the level players.
 	if (syncx >= mapSize.width() && syncy >= mapSize.height())
@@ -3057,19 +3226,21 @@ std::generator<PlayerID> Level::findInRangePlayers(const PixelPosition& position
 	}
 }
 
-std::generator<PlayerID> Level::findInRangePlayersForCommunication(const PixelPosition& position) const noexcept
+std::generator<PlayerID> Level::findPlayersInRangeForData(const PixelPosition& position) const noexcept
 {
-	// If this is not a bigmap, use the default search.
-	if (!isOnBigMap())
-	{
-		for (const auto& playerId : findInRangePlayers(position))
-			co_yield playerId;
-		co_return;
-	}
+	// All players in a 3x3 grid centered on the position (or the current level in the case of a bigmap).
 
-	auto mapPositionOpt = m_map->getLevelPosition(levelName);
+	std::optional<MapPosition> mapPositionOpt = std::nullopt;
+	if (isOnBigMap())
+		mapPositionOpt = m_map->getLevelPosition(levelName);
+	else if (isGmap())
+		mapPositionOpt = toMapPosition(position);
+
+	// No map position?  Send all players in the level.
 	if (!mapPositionOpt.has_value())
 	{
+		for (const auto& playerId : m_players)
+			co_yield playerId;
 		co_return;
 	}
 
@@ -3082,14 +3253,28 @@ std::generator<PlayerID> Level::findInRangePlayersForCommunication(const PixelPo
 	if (endX >= m_map->size.width()) endX = m_map->size.width() - 1;
 	if (endY >= m_map->size.height()) endY = m_map->size.height() - 1;
 
-	for (int y = startY; y <= endY; ++y)
+	if (isOnBigMap())
 	{
-		for (int x = startX; x <= endX; ++x)
+		for (int y = startY; y <= endY; ++y)
 		{
-			const auto hintLevel = std::const_pointer_cast<Level>(shared_from_this());
-			if (auto level = m_server->getLoadedLevel(m_map->getLevelNameAt(x, y), hintLevel); level != nullptr)
+			for (int x = startX; x <= endX; ++x)
 			{
-				for (const auto& playerId : level->m_players)
+				const auto hintLevel = std::const_pointer_cast<Level>(shared_from_this());
+				if (auto level = m_server->getLoadedLevel(m_map->getLevelNameAt(x, y), hintLevel); level != nullptr)
+				{
+					for (const auto& playerId : level->m_players)
+						co_yield playerId;
+				}
+			}
+		}
+	}
+	else if (isGmap())
+	{
+		for (const auto playerId : m_players)
+		{
+			if (const auto player = m_server->getPlayer(playerId); player != nullptr)
+			{
+				if (inRangeInclusive(player->account.character.mapX, startX, endX) && inRangeInclusive(player->account.character.mapY, startY, endY))
 					co_yield playerId;
 			}
 		}
@@ -3117,54 +3302,27 @@ std::generator<PlayerID> Level::findPlayersInLevelPart(const MapPosition& mapLev
 	}
 }
 
-std::generator<NPCID> Level::findInRangeNPCs(const PixelPosition& position) const noexcept
+std::generator<NPCID> Level::findNPCsInRangeByDistance(const PixelPosition& position, const uint32_t pixelDistance) const noexcept
 {
-	const bool syncInside = m_server->cached.enableInsideSyncDistance.getValue();
-	const bool isInsideLevel = !isGmap();
-
-	// If this is an inside level and we aren't going to sync by distance inside, return all level NPCs.
-	if (isInsideLevel && !syncInside)
+	// If this is not a map level, return all level NPCs.
+	if (!isGmap())
 	{
 		for (const auto& npcId : m_npcs)
 			co_yield npcId;
 		co_return;
 	}
 
-	const auto syncx = m_server->cached.syncDistance[0].getValue();
-	const auto syncy = m_server->cached.syncDistance[1].getValue();
-	auto mapSize = sizeInTiles();
-	auto tilePosition = toTilePosition(position);
-
 	auto npcInRange = [&](const NPCID& npcId)
 	{
 		if (const auto npc = m_server->getNPC(npcId); npc != nullptr)
 		{
-			auto otherTilePosition = npc->getTilePosition();
-			return std::abs(tilePosition.x() - otherTilePosition.x()) <= static_cast<float>(syncx) && std::abs(tilePosition.y() - otherTilePosition.y()) <= static_cast<float>(syncy);
+			const auto otherPosition = npc->getGlobalPosition();
+			const auto distance = std::hypotf(static_cast<float>(position.x() - otherPosition.x()), static_cast<float>(position.y() - otherPosition.y()));
+			return distance <= static_cast<float>(pixelDistance);
 		}
 		return false;
 	};
 
-	// Inside level (or bigmap), so just check the NPCs for the level.
-	if (m_map == nullptr || m_map->isBigMap())
-	{
-		// Sync is greater than the level bounds so return all the NPCs.
-		if (syncx >= mapSize.width() && syncy >= mapSize.height())
-		{
-			for (const auto& npcId : m_npcs)
-				co_yield npcId;
-			co_return;
-		}
-
-		for (const auto& npcId : m_npcs)
-		{
-			if (npcInRange(npcId))
-				co_yield npcId;
-		}
-		co_return;
-	}
-
-	// Gmaps.
 	// TODO(optimize): Optimize by only checking levels in range.
 	for (const auto& npcId : m_npcs)
 	{
@@ -3173,22 +3331,20 @@ std::generator<NPCID> Level::findInRangeNPCs(const PixelPosition& position) cons
 	}
 }
 
-std::generator<NPCID> Level::findInRangeNPCsForCommunication(const PixelPosition& position) const noexcept
+std::generator<NPCID> Level::findNPCsInRangeForData(const PixelPosition& position) const noexcept
 {
-	// If this is not a bigmap, or we aren't sending nearby NPCs, use the default search.
-	if (!isOnBigMap() || m_server->cached.sendToNearbyBigmapLevels.getValue() == false)
-	{
-		for (const auto& npcId : findInRangeNPCs(position))
-			co_yield npcId;
-		co_return;
-	}
+	// All NPCs in a 3x3 grid centered on the position (or the current level in the case of a bigmap).
 
-	// Get the position in the map.
-	// As a failsafe, use the default search.
-	auto mapPositionOpt = m_map->getLevelPosition(levelName);
+	std::optional<MapPosition> mapPositionOpt = std::nullopt;
+	if (isOnBigMap())
+		mapPositionOpt = m_map->getLevelPosition(levelName);
+	else if (isGmap())
+		mapPositionOpt = toMapPosition(position);
+
+	// No map position?  Send all NPCs in the level.
 	if (!mapPositionOpt.has_value())
 	{
-		for (const auto& npcId : findInRangeNPCs(position))
+		for (const auto& npcId : m_npcs)
 			co_yield npcId;
 		co_return;
 	}
@@ -3202,48 +3358,43 @@ std::generator<NPCID> Level::findInRangeNPCsForCommunication(const PixelPosition
 	if (endX >= m_map->size.width()) endX = m_map->size.width() - 1;
 	if (endY >= m_map->size.height()) endY = m_map->size.height() - 1;
 
-	for (int y = startY; y <= endY; ++y)
+	if (isOnBigMap())
 	{
-		for (int x = startX; x <= endX; ++x)
+		for (int y = startY; y <= endY; ++y)
 		{
-			const auto hintLevel = std::const_pointer_cast<Level>(shared_from_this());
-			if (auto level = m_server->getLoadedLevel(m_map->getLevelNameAt(x, y), hintLevel); level != nullptr)
+			for (int x = startX; x <= endX; ++x)
 			{
-				for (const auto& npcId : level->m_npcs)
+				const auto hintLevel = std::const_pointer_cast<Level>(shared_from_this());
+				if (auto level = m_server->getLoadedLevel(m_map->getLevelNameAt(x, y), hintLevel); level != nullptr)
+				{
+					for (const auto& npcId : level->m_npcs)
+						co_yield npcId;
+				}
+			}
+		}
+	}
+	else if (isGmap())
+	{
+		for (const auto npcId : m_npcs)
+		{
+			if (const auto npc = m_server->getNPC(npcId); npc != nullptr)
+			{
+				if (inRangeInclusive(npc->character.mapX, startX, endX) && inRangeInclusive(npc->character.mapY, startY, endY))
 					co_yield npcId;
 			}
 		}
 	}
 }
 
-std::generator<NPCID> Level::findInRangeNPCsByDistance(const PixelPosition& position, const uint32_t tileDistance) const noexcept
+std::generator<NPCID> Level::findNPCsInLevelPart(const MapPosition& mapLevel) const noexcept
 {
-	// If this is not a map level, return all level NPCs.
-	if (!isGmap())
-	{
-		for (const auto& npcId : m_npcs)
-			co_yield npcId;
-		co_return;
-	}
-
-	auto tilePosition = toTilePosition(position);
-
-	auto npcInRange = [&](const NPCID& npcId)
-	{
-		if (const auto npc = m_server->getNPC(npcId); npc != nullptr)
-		{
-			const auto otherTilePosition = npc->getTilePosition();
-			const auto distance = std::hypotf(tilePosition.x() - otherTilePosition.x(), tilePosition.y() - otherTilePosition.y());
-			return distance <= static_cast<float>(tileDistance);
-		}
-		return false;
-	};
-
-	// TODO(optimize): Optimize by only checking levels in range.
 	for (const auto& npcId : m_npcs)
 	{
-		if (npcInRange(npcId))
-			co_yield npcId;
+		if (auto npc = m_server->getNPC(npcId); npc != nullptr)
+		{
+			if (npc->character.mapX == mapLevel.x() && npc->character.mapY == mapLevel.y())
+				co_yield npcId;
+		}
 	}
 }
 
@@ -3255,7 +3406,8 @@ std::generator<NPCID> Level::findIntersectingNPCs(const PixelPosition& position,
 
 std::generator<NPCID> Level::findIntersectingNPCs(const PixelRectangleArea& area, const bool includeInvisible) const noexcept
 {
-	for (const auto& npcId : findInRangeNPCs(area.position))
+	const auto maxDistance = std::max(Level::pixelsPerSubLevel().width(), static_cast<uint32_t>(std::max(area.size.width(), area.size.height())));
+	for (const auto& npcId : findNPCsInRangeByDistance(area.position, maxDistance))
 	{
 		if (auto npc = m_server->getNPC(npcId); npc != nullptr)
 		{
@@ -3278,7 +3430,8 @@ std::generator<NPCID> Level::findIntersectingNPCsForCollision(const PixelPositio
 
 std::generator<NPCID> Level::findIntersectingNPCsForCollision(const PixelRectangleArea& area) const noexcept
 {
-	for (const auto& npcId : findInRangeNPCs(area.position))
+	const auto maxDistance = std::max(Level::pixelsPerSubLevel().width(), static_cast<uint32_t>(std::max(area.size.width(), area.size.height())));
+	for (const auto& npcId : findNPCsInRangeByDistance(area.position, maxDistance))
 	{
 		if (auto npc = m_server->getNPC(npcId); npc != nullptr)
 		{
@@ -3309,25 +3462,25 @@ std::shared_ptr<NPC> Level::generateItemNPC(const PixelPosition& position, const
 		return nullptr;
 
 	static const std::unordered_map<LevelItemType, NPCProp> stackableItems =
-		{
-			{LevelItemType::GREENRUPEE, NPCProp::GRALATS},
-			{LevelItemType::BLUERUPEE, NPCProp::GRALATS},
-			{LevelItemType::REDRUPEE, NPCProp::GRALATS},
-			{LevelItemType::GOLDRUPEE, NPCProp::GRALATS},
-			{LevelItemType::BOMBS, NPCProp::BOMBS},
-			{LevelItemType::DARTS, NPCProp::ARROWS},
-			{LevelItemType::HEART, NPCProp::HALFHEARTS},
-		};
+	{
+		{LevelItemType::GREENRUPEE, NPCProp::GRALATS},
+		{LevelItemType::BLUERUPEE, NPCProp::GRALATS},
+		{LevelItemType::REDRUPEE, NPCProp::GRALATS},
+		{LevelItemType::GOLDRUPEE, NPCProp::GRALATS},
+		{LevelItemType::BOMBS, NPCProp::BOMBS},
+		{LevelItemType::DARTS, NPCProp::ARROWS},
+		{LevelItemType::HEART, NPCProp::HALFHEARTS},
+	};
 	static const std::unordered_map<LevelItemType, uint32_t> stackableCount =
-		{
-			{LevelItemType::GREENRUPEE, 1},
-			{LevelItemType::BLUERUPEE, 5},
-			{LevelItemType::REDRUPEE, 30},
-			{LevelItemType::GOLDRUPEE, 100},
-			{LevelItemType::BOMBS, 5},
-			{LevelItemType::DARTS, 5},
-			{LevelItemType::HEART, 2},
-		};
+	{
+		{LevelItemType::GREENRUPEE, 1},
+		{LevelItemType::BLUERUPEE, 5},
+		{LevelItemType::REDRUPEE, 30},
+		{LevelItemType::GOLDRUPEE, 100},
+		{LevelItemType::BOMBS, 5},
+		{LevelItemType::DARTS, 5},
+		{LevelItemType::HEART, 2},
+	};
 
 	std::shared_ptr<NPC> itemNPC = nullptr;
 

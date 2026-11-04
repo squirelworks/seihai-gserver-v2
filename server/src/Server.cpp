@@ -107,9 +107,10 @@ void ExternalServerCachedSettings::bind(Server* server)
 	settings.track(enableBushItemDrops, enableVaseItemDrops, disableItemDropping);
 	settings.track(enableInsideSyncDistance, syncDistance[0], syncDistance[1], sendToNearbyBigmapLevels);
 	settings.track(eventDistance, triggerDistance, sendTriggerActionsToPlayers);
-	settings.track(enableFlagCropping, disableExplosions, enableClientsidePushPull, tileRespawnTime, enableIdleDisconnect, idleTimeoutSeconds);
+	settings.track(disableExplosions, enableClientsidePushPull, tileRespawnTime, enableIdleDisconnect, idleTimeoutSeconds);
 	settings.track(enablePermanentTileChanges, saveTileChangesToLevelFile);
 	settings.track(dontAddServerFlags);
+	settings.track(unloadInactiveLevelTime);
 
 	// triggerhacks
 	settings.track(enableFlaghackMovement, enableTriggerhackExecscript, enableTriggerhackFiles, enableTriggerhackGroups, enableTriggerhackGuilds, enableTriggerhackLevels, enableTriggerhackProps, enableTriggerhackRC, enableTriggerhackWeapons);
@@ -124,10 +125,10 @@ void ExternalServerCachedSettings::bind(Server* server)
 	// player
 	settings.track(enableDefaultWeapons, maxHeartLimit, enableExBodyColors, playerTouchesMeNoZ, lockPlayerZ);
 	settings.track(enableAPSystem, apSystemThresholdSeconds[0], apSystemThresholdSeconds[1], apSystemThresholdSeconds[2], apSystemThresholdSeconds[3], apSystemThresholdSeconds[4]);
-	settings.track(playerProfileVariables, playerStatusList);
+	settings.track(playerProfileVariables, playerStatusList, playerSwordGanis);
 
 	// diagnostics
-	settings.track(warnOnMissingFiles, warnOnLargeFiles, warnOnFilesystemIssues, warnOnInvalidLevelSections, logCorruptPackets);
+	settings.track(warnOnCroppedFlags, warnOnMissingFiles, warnOnLargeFiles, warnOnFilesystemIssues, warnOnInvalidLevelSections, logCorruptPackets);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -662,7 +663,6 @@ void Server::prepareSettings()
 	cached.bind(this);
 	m_settings.track(m_generationString, m_classicStyleLogs);
 	m_settings.track(m_newTilesets, m_newTilesetLevels);
-	m_settings.track(m_unloadInactiveLevelTime);
 	m_settings.track(m_staffList, m_bushItemTypes, m_deathItemTypes);
 	m_settings.track(m_gmaps, m_bigmaps, m_groupmaps, m_singleplayerLevels);
 }
@@ -1275,6 +1275,10 @@ std::shared_ptr<Level> Server::getLoadedLevel(const std::string_view levelName, 
 		return hintLevel;
 	}
 
+	// Check if the level belongs on a gmap.
+	if (auto gmapLevel = findGmapForLevel(levelName, nullptr); gmapLevel != nullptr)
+		return gmapLevel;
+
 	return getLoadedLevelNoHint(levelName);
 }
 
@@ -1462,7 +1466,7 @@ std::shared_ptr<NPC> Server::addNPC(const std::string_view image, const std::str
 		return nullptr;
 
 	// Pick the ID range for the NPC ID.
-	auto startId = NPCID_GEN_LOCAL;
+	auto startId = NPCID_GEN_DELETEABLE;
 	if (storageType == NPCStorageType::DATABASE)
 		startId = NPCID_GEN_DATABASE_LOCALN;
 
@@ -1892,8 +1896,14 @@ bool Server::setFlag(std::string_view flagName, std::optional<std::string> flagV
 	// Function to crop flags.
 	auto cropFlag = [this, &flagName](std::string& value)
 	{
-		if (cached.enableFlagCropping.getValue())
+		bool crop = !hasNPCServer();
+		crop = crop || flagName.starts_with("client.") || flagName.starts_with("clientr.") || flagName.starts_with("serverr.");
+		if (crop && (flagName.length() + 1 + value.length()) > 223)
+		{
 			value.erase(std::min(value.length(), static_cast<size_t>(223 - 1) - flagName.length()));
+			if (cached.warnOnCroppedFlags.getValue() == true)
+				log::printLine(log::server, "[WARNING] Flag '{}' was cropped (over 223 characters in total).", flagName);
+		}
 		return value;
 	};
 
@@ -2379,8 +2389,7 @@ void Server::sendNonLevelBoundPacketToNearby(const CString& packet, const PixelP
 {
 	if (!running || level == nullptr) return;
 
-	auto players = level->findInRangePlayersForCommunication(position);
-	for (const auto& playerId : players)
+	for (const auto& playerId : level->findPlayersInRangeForData(position))
 	{
 		if (exclude.contains(playerId))
 			continue;
@@ -2393,8 +2402,7 @@ void Server::sendPacketToNearby(const CString& packet, const PixelPosition& posi
 {
 	if (!running || level == nullptr) return;
 
-	auto players = level->findInRangePlayersForCommunication(position);
-	for (const auto& playerId : players)
+	for (const auto& playerId : level->findPlayersInRangeForData(position))
 	{
 		if (exclude.contains(playerId))
 			continue;

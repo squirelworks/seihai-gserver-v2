@@ -221,11 +221,6 @@ clientsidepushpull = true
 # The head used by RCs on the server.
 staffhead = head25.png
 
-# If cropflags is true, any client and server flags will be cropped to 223 characters.
-#    The flag name and equal sign are INCLUSIVE!
-#    It is recommended to not turn this off unless you know the repercussions of doing so.
-cropflags = true
-
 # The distance that an NPC listens for serverside events, in tiles.
 # The client has a hardcoded distance of 10 tiles for trigger events.
 # eventdistance = 64
@@ -235,12 +230,16 @@ cropflags = true
 classicstylelogs = false
 
 # Time in seconds after which inactive levels (levels without players) are unloaded from the server.
-# If 0, inactive levels are not unloaded.  Levels are unloaded during maintenance cycles (every 5 minutes), so this may not be exact.
+# If 0, inactive levels are not unloaded.  Levels are unloaded during maintenance cycles (every 1 minute), so this may not be exact.
 unloadinactiveleveltime = 600
 
 # The images used for when an NPC carries an object.
 # These must be kept in the same order.
 # npccarryobjectimages = bushitem.png,signitem.png,vaseitem.png,stoneitem.png,blackstoneitem.png,bombitem.png,hotbombitem.png,superbombitem.png,joltbombitem.png,hotjoltbombitem.png,noneitem.png
+
+# List of ganis that represent a sword attack, used to calculate serverside washit.
+# Comma-delimited list without the .gani extension.  Ganis should include any gani used with replaceani for the sword.
+# playerswordganis = sword
 
 # Sends data to players on nearby bigmap levels.
 # Official did not do this.  The upside is a more seamless experience as NPCs don`t pop in and you can see players moving around.
@@ -300,6 +299,7 @@ listip = 127.0.0.1
 listport = 14900
 
 # Maximum number of players allowed on the server.
+# Currently, the limit is around 1000.
 maxplayers = 128
 
 # Enables/disables staff only.  If true, only accounts in the staff option are allowed on.
@@ -366,6 +366,7 @@ runallscriptevents = false
 default_scriptengine = gs1
 
 # Diagnostics
+# warnoncroppedflags = true
 # warnonmissingfiles = false
 # warnonlargefiles = false
 # warnonfilesystemissues = true

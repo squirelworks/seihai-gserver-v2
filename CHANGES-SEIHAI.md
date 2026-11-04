@@ -1,13 +1,19 @@
 # Seihai changes to GServer-v2
 
 This is the Seihai fork of [GServer-v2](https://github.com/xtjoeytx/GServer-v2),
-branch `beta4` at `365bbd2` (2026-10-26). It is released under the same licence,
+branch `beta4` at `5a90281` (2026-11-03). It is released under the same licence,
 the GNU General Public License version 3 (see `LICENSE.md`). The original authors
 are credited in `README.md`.
 
 Every change below was checked on a private loopback lab with real Graal
 clients and with the [Seihai](https://github.com/squirelworks/seihai) client.
 Each file we changed carries a one-line notice at its top.
+
+## 2026-11-04
+
+| Change | Files | Clients it fixes |
+|---|---|---|
+| Upstream `beta4` merged up to `5a90281` (2026-11-03): NPC index recorded in the level file, sleeping NPCs on gmaps, serverside sword `washit`, automatic flag cropping, GS1 item placement, message codes `#a` and `#6`, NC NPC warps, sync-distance and crash fixes. Our changes are kept. Where upstream fixed the same thing, upstream's code is used: the level destructor now calls upstream's non-informing `removeItem(index)` (same effect as our 2026-10-31 unload fix), and the death-drop displacement uses upstream's `uniform_int_distribution<int32_t>`. Level NPC scripts loaded from `.nw` and binary levels keep upstream's new NPC index and still go through `levelnpcscripts` / `serversidescriptlevels`. | `Level.cpp`, `LevelLoader.cpp`, `PlayerClient.cpp`, `Weapon.cpp`, `bin/docs/npcserver.md` | all |
 
 ## 2026-11-01
 
