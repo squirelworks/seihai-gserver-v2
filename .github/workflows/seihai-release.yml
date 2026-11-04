@@ -26,14 +26,117 @@ permissions:
   contents: write
 
 jobs:
+  # Linux and Windows. The draft waits only for these, so a slow or queued macOS
+  # runner never holds the release up.
   build:
     strategy:
       fail-fast: false
-      # skip_macos (manual runs only) leaves out the macOS rows; a tag push builds all four.
-      # The Apple Silicon build is cross-compiled on the Intel runner (cross: arm64):
-      # GitHub's arm64 runners are often out of capacity and drop queued jobs.
       matrix:
-        include: ${{ fromJSON(inputs.skip_macos && '[{"os":"ubuntu-24.04","name":"seihai-gserver-v2-linux-x86_64","triplet":"x64-linux"},{"os":"windows-latest","name":"seihai-gserver-v2-windows-x86_64","triplet":"x64-windows-static"}]' || '[{"os":"ubuntu-24.04","name":"seihai-gserver-v2-linux-x86_64","triplet":"x64-linux"},{"os":"windows-latest","name":"seihai-gserver-v2-windows-x86_64","triplet":"x64-windows-static"},{"os":"macos-15-intel","name":"seihai-gserver-v2-macos-x86_64","triplet":"x64-osx"},{"os":"macos-15-intel","name":"seihai-gserver-v2-macos-aarch64","triplet":"arm64-osx","cross":"arm64"}]') }}
+        include:
+          - {os: ubuntu-24.04, name: seihai-gserver-v2-linux-x86_64, triplet: x64-linux}
+          - {os: windows-latest, name: seihai-gserver-v2-windows-x86_64, triplet: x64-windows-static}
+    runs-on: ${{ matrix.os }}
+    env:
+      # Not VCPKG_ROOT: the MSVC developer prompt overwrites that one.
+      VCPKG_DIR: ${{ github.workspace }}/vcpkg
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Linux tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y gcc-14 g++-14 ninja-build autoconf automake libtool bison flex
+      - name: macOS tools
+        if: runner.os == 'macOS'
+        run: brew install ninja llvm lld autoconf automake libtool bison flex
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+      - name: vcpkg
+        shell: bash
+        run: |
+          git clone https://github.com/microsoft/vcpkg "$VCPKG_DIR"
+          if [ "$RUNNER_OS" = Windows ]; then "$VCPKG_DIR/bootstrap-vcpkg.bat" -disableMetrics; else "$VCPKG_DIR/bootstrap-vcpkg.sh" -disableMetrics; fi
+      - name: Configure
+        shell: bash
+        run: |
+          EXTRA=""
+          if [ "$RUNNER_OS" = Linux ]; then export CC=gcc-14 CXX=g++-14; fi
+          if [ "$RUNNER_OS" = macOS ]; then
+            LLVM="$(brew --prefix llvm)"; export CC="$LLVM/bin/clang" CXX="$LLVM/bin/clang++"
+            export PATH="$(brew --prefix bison)/bin:$(brew --prefix flex)/bin:$PATH"
+            # Link with Homebrew's lld: Apple's ld rejects the GNU-format archives llvm-ar
+            # writes and cannot read LLVM 23 LTO bitcode.
+            EXTRA="-DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=$(brew --prefix lld)/bin/ld64.lld"
+            if [ -n "${{ matrix.cross }}" ]; then EXTRA="$EXTRA -DCMAKE_OSX_ARCHITECTURES=${{ matrix.cross }}"; fi
+          fi
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DTESTS=OFF -DUPNP=OFF \
+            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_DIR/scripts/buildsystems/vcpkg.cmake" \
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} $EXTRA
+      - name: Build
+        run: cmake --build build
+      # Seihai regression tests that are kept building. Linux only; the other test
+      # folders under Catch_tests are upstream's and are not built here.
+      - name: Regression tests
+        if: runner.os == 'Linux'
+        run: |
+          cmake -S . -B build -DTESTS=ON
+          cmake --build build --target RC
+          timeout 60 bin/RC
+          rm -f bin/RC
+      - name: Package
+        shell: bash
+        run: |
+          mkdir -p dist/${{ matrix.name }}
+          cp -r bin/. dist/${{ matrix.name }}/
+          cp LICENSE.md CHANGES-SEIHAI.md README.md dist/${{ matrix.name }}/
+          cd dist
+          if [ "$RUNNER_OS" = Windows ]; then 7z a ${{ matrix.name }}.zip ${{ matrix.name }}; else tar czf ${{ matrix.name }}.tar.gz ${{ matrix.name }}; fi
+      # Start both packaged lab servers (after the archive is made, so the run's logs
+      # and accounts stay out of it) and check both listen on 127.0.0.1.
+      # A cross-built binary cannot run here; check it is built for the right CPU.
+      - name: Check the architecture
+        if: matrix.cross != ''
+        run: file dist/${{ matrix.name }}/gs2emu | tee /dev/stderr | grep -q "${{ matrix.cross }}"
+      - name: Lab world smoke test
+        if: matrix.cross == ''
+        shell: bash
+        run: |
+          cd dist/${{ matrix.name }}
+          exe=./gs2emu; [ "$RUNNER_OS" = Windows ] && exe=./gs2emu.exe
+          "$exe" --server default > default.out 2>&1 & p1=$!
+          "$exe" --server classic > classic.out 2>&1 & p2=$!
+          ok=1
+          for port in 14802 14803; do
+            up=0
+            for i in $(seq 1 30); do (echo > /dev/tcp/127.0.0.1/$port) 2>/dev/null && { up=1; break; }; sleep 1; done
+            [ $up = 1 ] || { echo "nothing listens on 127.0.0.1:$port"; ok=0; }
+          done
+          # wait returns the killed server's status (143 on Windows, where kill is TerminateProcess);
+          # with bash -e that ended the step before the logs were printed.
+          kill $p1 $p2 2>/dev/null || true; wait $p1 $p2 2>/dev/null || true
+          if [ "$RUNNER_OS" = Windows ]; then taskkill //F //IM gs2emu.exe > /dev/null 2>&1 || true; fi
+          for s in default classic; do echo "== $s"; tail -n 20 $s.out; done
+          [ $ok = 1 ]
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: dist/${{ matrix.name }}.*
+
+  # macOS, best effort and in parallel with the rest. Both build on the Intel runner;
+  # the Apple Silicon build is cross-compiled (cross: arm64), because GitHub's arm64
+  # runners are often out of capacity and drop queued jobs. add-macos puts the
+  # archives on the draft if and when they are built. skip_macos (manual runs only)
+  # leaves them out.
+  build-macos:
+    if: ${{ !inputs.skip_macos }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: macos-15-intel, name: seihai-gserver-v2-macos-x86_64, triplet: x64-osx, cross: ''}
+          - {os: macos-15-intel, name: seihai-gserver-v2-macos-aarch64, triplet: arm64-osx, cross: arm64}
     runs-on: ${{ matrix.os }}
     env:
       # Not VCPKG_ROOT: the MSVC developer prompt overwrites that one.
@@ -131,6 +234,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
+          pattern: seihai-gserver-v2-linux-*
+          path: dist
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: seihai-gserver-v2-windows-*
           path: dist
           merge-multiple: true
       - name: Draft the release
@@ -155,3 +264,27 @@ jobs:
             gh release create "$TAG" dist/* --draft --target "$GITHUB_SHA" --title "Seihai GServer-v2 $TAG" --notes-file "$NOTES"
           fi
           echo "Draft: $(gh release view "$TAG" --json url -q .url)" >> "$GITHUB_STEP_SUMMARY"
+
+  # Adds the macOS archives to the draft if and when they are built.
+  add-macos:
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.version != ''
+    needs: [release, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: seihai-gserver-v2-macos-*
+          path: dist
+          merge-multiple: true
+      - name: Add the macOS archives to the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then TAG="v$INPUT_VERSION"; else TAG="$GITHUB_REF_NAME"; fi
+          ls -l dist
+          if [ "$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json isDraft -q .isDraft)" = true ]; then
+            gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber dist/*
+          else
+            echo "$TAG is already published; not adding files to it."
+          fi
