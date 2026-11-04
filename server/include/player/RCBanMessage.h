@@ -22,7 +22,7 @@ namespace preagonal
 		// string at every position, so that never ended: the server spun at 100% CPU
 		// and stopped sending to everyone whenever an online player was banned.
 		CString reason = csvReason.isEmpty() ? CString() : csvReason.guntokenize();
-		reason.replaceAllI("", "\r");
+		reason.replaceAllI("\n", "\r");
 		return CString() << rcAccount << " has banned you.  Reason: " << reason;
 	}
 } // namespace preagonal
