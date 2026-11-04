@@ -30,6 +30,7 @@
 #include <player/PlayerClient.h>
 #include <player/PlayerRC.h>
 #include <player/RCBanMessage.h>
+#include <player/RCFolderRights.h>
 #include <scripting/ScriptContainers.h>
 #include <utilities/CommonTypes.h>
 #include <utilities/Extents.h>
@@ -792,8 +793,8 @@ HandlePacketResult PlayerRC::msgPLI_RC_PLAYERRIGHTSGET(CString& pPacket)
 			return HandlePacketResult::Handled;
 	}
 
-	// Get the folder list.
-	const auto folders = string::toCSV(p->account.folderList);
+	// Get the folder list, quoted the way the RC sends it.
+	const auto folders = rcFolderRightsText(p->account.folderList);
 
 	// Send the packet.
 	const auto adminIp = string::join(p->account.adminIpRange);
