@@ -78,6 +78,15 @@ jobs:
             -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} $EXTRA
       - name: Build
         run: cmake --build build
+      # Seihai regression tests that are kept building. Linux only; the other test
+      # folders under Catch_tests are upstream's and are not built here.
+      - name: Regression tests
+        if: runner.os == 'Linux'
+        run: |
+          cmake -S . -B build -DTESTS=ON
+          cmake --build build --target RC
+          timeout 60 bin/RC
+          rm -f bin/RC
       - name: Package
         shell: bash
         run: |
