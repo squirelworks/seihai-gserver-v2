@@ -30,8 +30,10 @@ jobs:
     strategy:
       fail-fast: false
       # skip_macos (manual runs only) leaves out the macOS rows; a tag push builds all four.
+      # The Apple Silicon build is cross-compiled on the Intel runner (cross: arm64):
+      # GitHub's arm64 runners are often out of capacity and drop queued jobs.
       matrix:
-        include: ${{ fromJSON(inputs.skip_macos && '[{"os":"ubuntu-24.04","name":"seihai-gserver-v2-linux-x86_64","triplet":"x64-linux"},{"os":"windows-latest","name":"seihai-gserver-v2-windows-x86_64","triplet":"x64-windows-static"}]' || '[{"os":"ubuntu-24.04","name":"seihai-gserver-v2-linux-x86_64","triplet":"x64-linux"},{"os":"windows-latest","name":"seihai-gserver-v2-windows-x86_64","triplet":"x64-windows-static"},{"os":"macos-15-intel","name":"seihai-gserver-v2-macos-x86_64","triplet":"x64-osx"},{"os":"macos-15","name":"seihai-gserver-v2-macos-aarch64","triplet":"arm64-osx"}]') }}
+        include: ${{ fromJSON(inputs.skip_macos && '[{"os":"ubuntu-24.04","name":"seihai-gserver-v2-linux-x86_64","triplet":"x64-linux"},{"os":"windows-latest","name":"seihai-gserver-v2-windows-x86_64","triplet":"x64-windows-static"}]' || '[{"os":"ubuntu-24.04","name":"seihai-gserver-v2-linux-x86_64","triplet":"x64-linux"},{"os":"windows-latest","name":"seihai-gserver-v2-windows-x86_64","triplet":"x64-windows-static"},{"os":"macos-15-intel","name":"seihai-gserver-v2-macos-x86_64","triplet":"x64-osx"},{"os":"macos-15-intel","name":"seihai-gserver-v2-macos-aarch64","triplet":"arm64-osx","cross":"arm64"}]') }}
     runs-on: ${{ matrix.os }}
     env:
       # Not VCPKG_ROOT: the MSVC developer prompt overwrites that one.
@@ -66,6 +68,7 @@ jobs:
             # Link with Homebrew's lld: Apple's ld rejects the GNU-format archives llvm-ar
             # writes and cannot read LLVM 23 LTO bitcode.
             EXTRA="-DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=$(brew --prefix lld)/bin/ld64.lld"
+            if [ -n "${{ matrix.cross }}" ]; then EXTRA="$EXTRA -DCMAKE_OSX_ARCHITECTURES=${{ matrix.cross }}"; fi
           fi
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DTESTS=OFF -DUPNP=OFF \
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_DIR/scripts/buildsystems/vcpkg.cmake" \
@@ -91,7 +94,12 @@ jobs:
           if [ "$RUNNER_OS" = Windows ]; then 7z a ${{ matrix.name }}.zip ${{ matrix.name }}; else tar czf ${{ matrix.name }}.tar.gz ${{ matrix.name }}; fi
       # Start both packaged lab servers (after the archive is made, so the run's logs
       # and accounts stay out of it) and check both listen on 127.0.0.1.
+      # A cross-built binary cannot run here; check it is built for the right CPU.
+      - name: Check the architecture
+        if: matrix.cross != ''
+        run: file dist/${{ matrix.name }}/gs2emu | tee /dev/stderr | grep -q "${{ matrix.cross }}"
       - name: Lab world smoke test
+        if: matrix.cross == ''
         shell: bash
         run: |
           cd dist/${{ matrix.name }}
