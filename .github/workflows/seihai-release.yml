@@ -1,5 +1,7 @@
-# Seihai: build gs2emu for Linux, Windows and macOS. A tag push (v*) also makes a
-# GitHub release with the four archives and the full source, as the GPL asks.
+# Seihai: build gs2emu for Linux, Windows and macOS. A tag push (v*), or a manual
+# run with a version, also makes a DRAFT GitHub release with the four archives and
+# the full source, as the GPL asks. The tag is made when the owner presses Publish.
+# Modified by the Seihai project, 2026-11-04: see CHANGES-SEIHAI.md.
 name: Seihai build and release
 
 on:
@@ -9,6 +11,11 @@ on:
   pull_request:
     branches: [seihai]
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to draft, without the v (e.g. 4.0.0-seihai.1). Leave empty to build only.'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -106,7 +113,7 @@ jobs:
           path: dist/${{ matrix.name }}.*
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.version != ''
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -115,12 +122,22 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - name: Source archive
-        run: git archive --format=tar.gz --prefix=seihai-gserver-v2-${GITHUB_REF_NAME}/ -o dist/seihai-gserver-v2-${GITHUB_REF_NAME}-source.tar.gz HEAD
-      - name: Upload to the release
+      - name: Draft the release
         env:
           GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/* --title "Seihai GServer-v2 $GITHUB_REF_NAME" \
-            --notes "Seihai fork of GServer-v2 beta4. Changes: CHANGES-SEIHAI.md. Source: the -source archive. Licence: GPL-3.0." \
-            || gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          if [ -n "$INPUT_VERSION" ]; then TAG="v$INPUT_VERSION"; else TAG="$GITHUB_REF_NAME"; fi
+          echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$' || { echo "::error::bad version $TAG"; exit 1; }
+          git archive --format=tar.gz --prefix=seihai-gserver-v2-$TAG/ -o dist/seihai-gserver-v2-$TAG-source.tar.gz HEAD
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            if [ "$(gh release view "$TAG" --json isDraft -q .isDraft)" = true ]; then
+              gh release upload "$TAG" dist/* --clobber
+            else
+              echo "$TAG is already published; leaving it as it is."
+            fi
+          else
+            gh release create "$TAG" dist/* --draft --target "$GITHUB_SHA" --title "Seihai GServer-v2 $TAG" \
+              --notes "Seihai fork of GServer-v2 beta4. Changes: CHANGES-SEIHAI.md. Source: the -source archive. Licence: GPL-3.0."
+          fi
+          echo "Draft: $(gh release view "$TAG" --json url -q .url)" >> "$GITHUB_STEP_SUMMARY"

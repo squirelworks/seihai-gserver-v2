@@ -9,6 +9,12 @@ Every change below was checked on a private loopback lab with real Graal
 clients and with the [Seihai](https://github.com/squirelworks/seihai) client.
 Each file we changed carries a one-line notice at its top.
 
+## 2026-11-04
+
+| Change | Files | Clients it fixes |
+|---|---|---|
+| Releases are drafts. A `v*` tag, or a manual run of the workflow with a version, builds the four archives and the source archive and attaches them to a draft release; the tag is made when the owner presses Publish. | `.github/workflows/seihai-release.yml` | none (release process) |
+
 ## 2026-11-01
 
 | Change | Files | Clients it fixes |
