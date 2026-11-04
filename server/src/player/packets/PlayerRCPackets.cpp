@@ -29,6 +29,7 @@
 #include <object/Player.h>
 #include <player/PlayerClient.h>
 #include <player/PlayerRC.h>
+#include <player/RCBanMessage.h>
 #include <player/RCFolderRights.h>
 #include <scripting/ScriptContainers.h>
 #include <utilities/CommonTypes.h>
@@ -1038,7 +1039,7 @@ HandlePacketResult PlayerRC::msgPLI_RC_PLAYERBANSET(CString& pPacket)
 	// If the player was just now banned, kick him off the server.
 	if (banned && p->getId() != 0)
 	{
-		p->sendPacket(CString() >> (char)PLO_DISCMESSAGE << account.name << " has banned you.  Reason: " << reason.guntokenize().replaceAll("", "\r"));
+		p->sendPacket(CString() >> (char)PLO_DISCMESSAGE << rcBanDisconnectMessage(account.name, reason));
 		m_server->deletePlayer(p);
 	}
 
