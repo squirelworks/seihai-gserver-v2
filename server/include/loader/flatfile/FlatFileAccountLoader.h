@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-04: see CHANGES-SEIHAI.md.
 #ifndef FLATFILEACCOUNTLOADER_H
 #define FLATFILEACCOUNTLOADER_H
 
@@ -25,7 +26,7 @@ class FlatFileAccountLoader : public IAccountLoader
 public:
 	bool loadAccount(std::string_view accountName, Account& account) override;
 	bool loadAccount(std::string_view accountName, Player& player) override;
-	bool saveAccount(const Account& account) override;
+	bool saveAccount(const Account& account, bool evenIfLoadOnly = false) override;
 
 public:
 	[[nodiscard]] bool checkSearchConditions(std::string_view account, const std::vector<std::string>& searches) const override;

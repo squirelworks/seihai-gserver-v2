@@ -29,6 +29,7 @@
 #include <object/Player.h>
 #include <player/PlayerClient.h>
 #include <player/PlayerRC.h>
+#include <player/RCAccountFields.h>
 #include <player/RCBanMessage.h>
 #include <player/RCFolderRights.h>
 #include <scripting/ScriptContainers.h>
@@ -388,18 +389,14 @@ HandlePacketResult PlayerRC::msgPLI_RC_ACCOUNTADD(CString& pPacket)
 	}
 
 	const std::string acc = pPacket.readChars(pPacket.readGUChar()).toString();
-	const std::string pass = pPacket.readChars(pPacket.readGUChar()).toString();
-	const std::string email = pPacket.readChars(pPacket.readGUChar()).toString();
-	const bool banned = (pPacket.readGUChar() != 0);
-	const bool onlyLoad = (pPacket.readGUChar() != 0);
-	pPacket.readGUChar(); // Admin level, deprecated.
+	const RCAccountFields fields = readRCAccountFields(pPacket);
 
 	Account newAccount;
 	m_server->getAccountLoader().loadAccount(acc, newAccount);
-	newAccount.banned = banned;
-	newAccount.email = email;
-	newAccount.loadOnly = onlyLoad;
-	m_server->getAccountLoader().saveAccount(newAccount);
+	// Seihai: keep everything the RC sent; the ban as before, without a separate ban right.
+	applyRCAccountFields(newAccount, fields, true);
+	// Seihai: write a load-only account too; saveAccount skipped it, so it was never created.
+	m_server->getAccountLoader().saveAccount(newAccount, true);
 
 	log::printLine(log::rc, "{} has created a new account: {}", account.name, acc.c_str());
 	m_server->sendPacketToType(PLTYPE_ANYRC, CString() >> (char)PLO_RC_CHAT << account.name << " has created a new account: " << acc);
@@ -649,15 +646,7 @@ HandlePacketResult PlayerRC::msgPLI_RC_ACCOUNTGET(CString& pPacket)
 			return HandlePacketResult::Handled;
 	}
 
-	// clang-format off
-	sendPacket(CString() >> (char)PLO_RC_ACCOUNTGET >> (char)acc.length() << acc
-		>> (char)0 // >> (char)password_length << password
-		>> (char)p->account.email.size() << p->account.email
-		>> (char)(p->account.banned ? 1 : 0) >> (char)(p->account.loadOnly ? 1 : 0) >> (char)0 // admin level
-		>> (char)4 << "main"
-		>> (char)p->account.banLength.size() << p->account.banLength
-		>> (char)p->account.banReason.size() << p->account.banReason);
-	// clang-format on
+	sendPacket(CString() >> (char)PLO_RC_ACCOUNTGET << rcAccountGetPayload(acc.toString(), p->account));
 
 	return HandlePacketResult::Handled;
 }
@@ -676,13 +665,9 @@ HandlePacketResult PlayerRC::msgPLI_RC_ACCOUNTSET(CString& pPacket)
 		return HandlePacketResult::Handled;
 	}
 
-	const std::string pass = pPacket.readChars(pPacket.readGUChar()).toString();
-	const std::string email = pPacket.readChars(pPacket.readGUChar()).toString();
-	const bool banned = (pPacket.readGUChar() != 0 ? true : false);
-	const bool loadOnly = (pPacket.readGUChar() != 0 ? true : false);
-	pPacket.readGUChar();                    // admin level
-	pPacket.readChars(pPacket.readGUChar()); // world
-	const std::string banreason = pPacket.readChars(pPacket.readGUChar()).toString();
+	const RCAccountFields fields = readRCAccountFields(pPacket);
+	const bool banned = fields.banned;
+	const std::string& banreason = fields.banReason;
 
 	// Get player.
 	auto p = m_server->getPlayer(acc, PLTYPE_ANYCLIENT);
@@ -697,14 +682,10 @@ HandlePacketResult PlayerRC::msgPLI_RC_ACCOUNTSET(CString& pPacket)
 	}
 
 	// Set the new account stuff.
-	p->account.email = email;
-	p->account.loadOnly = loadOnly;
-	if (account.hasRight(PLPERM_BAN))
-	{
-		p->account.banned = banned;
-		p->account.banReason = banreason;
-	}
-	m_server->getAccountLoader().saveAccount(p->account);
+	// Seihai: the admin level and admin worlds are kept too, and a load-only account is
+	// still written: saveAccount skipped it, so ticking Load only was never saved.
+	applyRCAccountFields(p->account, fields, account.hasRight(PLPERM_BAN));
+	m_server->getAccountLoader().saveAccount(p->account, true);
 
 	// If the account is currently on RC, reload it.
 	if (const auto pRC = m_server->getPlayer(acc, PLTYPE_ANYRC); pRC)

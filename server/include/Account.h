@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-04: see CHANGES-SEIHAI.md.
 #ifndef ACCOUNT_H
 #define ACCOUNT_H
 
@@ -89,6 +90,9 @@ struct Account
 	uint32_t adminRights = 0;
 	std::vector<std::string> adminIpRange;
 	bool loadOnly = false;
+	// Seihai: the RC's Edit Account fields, kept so its readback shows what was set.
+	uint8_t adminLevel = 0;
+	std::string adminWorlds;
 	FilePermissions folderRights;
 	std::vector<std::string> folderList;
 	std::string lastFolderAccessed;

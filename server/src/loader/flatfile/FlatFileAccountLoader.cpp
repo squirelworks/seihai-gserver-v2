@@ -135,6 +135,8 @@ bool FlatFileAccountLoader::loadAccount(const std::string_view accountName, Acco
 	account.savedChests.clear();
 	account.folderList.clear();
 	account.folderRights.clear();
+	account.adminLevel = 0;
+	account.adminWorlds.clear();
 
 	// Store weapons / flags.
 	std::vector<std::string> flagList{};
@@ -511,6 +513,10 @@ bool FlatFileAccountLoader::loadAccount(const std::string_view accountName, Acco
 			account.adminIpRange = string::splitToVector(val, ","sv);
 		else if (section == "LOADONLY")
 			account.loadOnly = toByte(val) != 0;
+		else if (section == "ADMINLEVEL")
+			account.adminLevel = toByte(val);
+		else if (section == "ADMINWORLDS")
+			account.adminWorlds = val;
 		else if (section == "FOLDERRIGHT")
 		{
 			account.folderList.emplace_back(val);
@@ -590,12 +596,12 @@ bool FlatFileAccountLoader::loadAccount(const std::string_view accountName, Acco
 	return true;
 }
 
-bool FlatFileAccountLoader::saveAccount(const Account& account)
+bool FlatFileAccountLoader::saveAccount(const Account& account, const bool evenIfLoadOnly)
 {
 	auto server = BabyDI::Get<Server>();
 
-	// Don't save 'Load Only' or RC accounts.
-	if (account.loadOnly)
+	// Don't save 'Load Only' or RC accounts, unless an RC is editing the account itself.
+	if (account.loadOnly && !evenIfLoadOnly)
 		return false;
 
 #ifdef DEBUG
@@ -699,6 +705,8 @@ bool FlatFileAccountLoader::saveAccount(const Account& account)
 	writeLine(newFile, "LOCALRIGHTS", account.adminRights, static_cast<uint32_t>(0));
 	writeLine(newFile, "IPRANGE", string::join(account.adminIpRange), "");
 	writeLine(newFile, "LOADONLY", account.loadOnly ? 1 : 0, 0);
+	writeLine(newFile, "ADMINLEVEL", account.adminLevel, 0_ui8);
+	writeLine(newFile, "ADMINWORLDS", account.adminWorlds, "");
 
 	// Folder Rights
 	for (const auto& perm : account.folderList)
