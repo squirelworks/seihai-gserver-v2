@@ -16,6 +16,11 @@ on:
         description: 'Version to draft, without the v (e.g. 4.0.0-seihai.1). Leave empty to build only.'
         required: false
         default: ''
+      skip_macos:
+        description: 'Leave out the two macOS builds (when GitHub has no macOS runners). Run again without it later to add them to the same draft.'
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -24,20 +29,9 @@ jobs:
   build:
     strategy:
       fail-fast: false
+      # skip_macos (manual runs only) leaves out the macOS rows; a tag push builds all four.
       matrix:
-        include:
-          - os: ubuntu-24.04
-            name: seihai-gserver-v2-linux-x86_64
-            triplet: x64-linux
-          - os: windows-latest
-            name: seihai-gserver-v2-windows-x86_64
-            triplet: x64-windows-static
-          - os: macos-15-intel
-            name: seihai-gserver-v2-macos-x86_64
-            triplet: x64-osx
-          - os: macos-15
-            name: seihai-gserver-v2-macos-aarch64
-            triplet: arm64-osx
+        include: ${{ fromJSON(inputs.skip_macos && '[{"os":"ubuntu-24.04","name":"seihai-gserver-v2-linux-x86_64","triplet":"x64-linux"},{"os":"windows-latest","name":"seihai-gserver-v2-windows-x86_64","triplet":"x64-windows-static"}]' || '[{"os":"ubuntu-24.04","name":"seihai-gserver-v2-linux-x86_64","triplet":"x64-linux"},{"os":"windows-latest","name":"seihai-gserver-v2-windows-x86_64","triplet":"x64-windows-static"},{"os":"macos-15-intel","name":"seihai-gserver-v2-macos-x86_64","triplet":"x64-osx"},{"os":"macos-15","name":"seihai-gserver-v2-macos-aarch64","triplet":"arm64-osx"}]') }}
     runs-on: ${{ matrix.os }}
     env:
       # Not VCPKG_ROOT: the MSVC developer prompt overwrites that one.
