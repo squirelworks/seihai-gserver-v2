@@ -138,15 +138,18 @@ jobs:
         run: |
           if [ -n "$INPUT_VERSION" ]; then TAG="v$INPUT_VERSION"; else TAG="$GITHUB_REF_NAME"; fi
           echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$' || { echo "::error::bad version $TAG"; exit 1; }
+          # Hand-written notes, reviewed in a PR.
+          NOTES="docs/releases/$TAG.md"
+          [ -f "$NOTES" ] || { echo "::error::No release notes: write $NOTES in a PR first"; exit 1; }
           git archive --format=tar.gz --prefix=seihai-gserver-v2-$TAG/ -o dist/seihai-gserver-v2-$TAG-source.tar.gz HEAD
           if gh release view "$TAG" >/dev/null 2>&1; then
             if [ "$(gh release view "$TAG" --json isDraft -q .isDraft)" = true ]; then
               gh release upload "$TAG" dist/* --clobber
+              gh release edit "$TAG" --target "$GITHUB_SHA" --notes-file "$NOTES"
             else
               echo "$TAG is already published; leaving it as it is."
             fi
           else
-            gh release create "$TAG" dist/* --draft --target "$GITHUB_SHA" --title "Seihai GServer-v2 $TAG" \
-              --notes "Seihai fork of GServer-v2 beta4. Changes: CHANGES-SEIHAI.md. Source: the -source archive. Licence: GPL-3.0."
+            gh release create "$TAG" dist/* --draft --target "$GITHUB_SHA" --title "Seihai GServer-v2 $TAG" --notes-file "$NOTES"
           fi
           echo "Draft: $(gh release view "$TAG" --json url -q .url)" >> "$GITHUB_STEP_SUMMARY"
