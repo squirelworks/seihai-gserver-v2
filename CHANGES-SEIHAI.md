@@ -9,6 +9,12 @@ Every change below was checked on a private loopback lab with real Graal
 clients and with the [Seihai](https://github.com/squirelworks/seihai) client.
 Each file we changed carries a one-line notice at its top.
 
+## 2026-11-04
+
+| Change | Files | Clients it fixes |
+|---|---|---|
+| An RC's Edit Rights dialog gets the folder rights back the way it sent them. The rights were sent as plain CSV, which only quotes on `"`, `,` and `\`, so `rw levels/*` went out bare. The real RC split the reply at the space and showed two lines, `rw` and `levels/*`, and saving from the dialog then stored the wrong rights. Each line is now quoted with Graal's tokenizer (`gtokenize`), as the RC does itself. The text is built in a new header so it can be tested; `Catch_tests/RC` tests it, and CI builds and runs that test on Linux. | `PlayerRCPackets.cpp`, `RCFolderRights.h`, `Catch_tests/RC/`, `.github/workflows/` | RC (Edit Rights). Lab capture `rc-capture-2026-11-04`: real Reborn 2.22 RemoteControl.exe |
+
 ## 2026-11-01
 
 | Change | Files | Clients it fixes |
