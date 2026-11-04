@@ -185,7 +185,6 @@ void PlayerClient::cleanup()
 	// Clean up.
 	m_cachedStaticLevels.clear();
 	m_cachedDynamicLevels.clear();
-	m_singleplayerLevels.clear();
 
 	Player::cleanup();
 }
@@ -264,15 +263,6 @@ bool PlayerClient::doTimedEvents()
 						account.apCounter = m_server->cached.apSystemThresholdSeconds[4].getValue();
 				}
 			}
-		}
-	}
-
-	// Do singleplayer level events.
-	{
-		for (auto& level : m_singleplayerLevels | std::views::values)
-		{
-			if (level)
-				level->doTimedEvents();
 		}
 	}
 
@@ -1390,7 +1380,7 @@ bool PlayerClient::leaveLevel(const bool keepLevelReference)
 	{
 		m_server->sendPacketToNearby(CString() >> (char)PLO_OTHERPLPROPS >> (short)m_id >> (char)PlayerProp::JOINLEAVELVL >> (char)0, getGlobalPosition(), levelp, {m_id});
 
-		for (const auto& pid : levelp->findInRangePlayersForCommunication(getGlobalPosition()))
+		for (const auto& pid : levelp->findPlayersInRangeForSync(getGlobalPosition()))
 		{
 			if (auto player = m_server->getPlayer<PlayerClient>(pid); player != nullptr)
 				sendPacket(CString() >> (char)PLO_OTHERPLPROPS >> (short)player->getId() >> (char)PlayerProp::JOINLEAVELVL >> (char)0);
@@ -1588,7 +1578,7 @@ bool PlayerClient::sendDynamicLevelData(const std::shared_ptr<Level>& level, std
 	if (!level->isSinglePlayer)
 	{
 		const CString myProps = CString() >> (char)PLO_OTHERPLPROPS >> (short)m_id >> (char)PlayerProp::JOINLEAVELVL >> (char)1 << getPropsPacketFromList(loginPropsClientOthers);
-		for (const auto& playerId : level->findInRangePlayersForCommunication(getGlobalPosition()))
+		for (const auto& playerId : level->findPlayersInRangeForSync(getGlobalPosition()))
 		{
 			if (playerId == m_id) continue;
 			if (auto other = m_server->getPlayer(playerId); other != nullptr)
@@ -1817,8 +1807,8 @@ void PlayerClient::testForTouch(SetResults& result, uint8_t movementDirection)
 		}
 		if (touchedNPC)
 		{
-			const auto eventDistance = m_server->cached.eventDistance.getValue();
-			for (const auto& npcId : level->findInRangeNPCsByDistance(testBox.position, eventDistance))
+			const auto eventDistance = m_server->cached.eventDistance.getValue() * Level::pixelsPerTile().width();
+			for (const auto& npcId : level->findNPCsInRangeByDistance(testBox.position, eventDistance))
 			{
 				auto intersectingNPCs = level->findIntersectingNPCsForCollision(testBox);
 				if (!std::ranges::contains(intersectingNPCs, npcId))
@@ -1927,8 +1917,8 @@ void PlayerClient::dropItemsOnDeath()
 	std::mt19937 gen(rd());
 	std::uniform_int_distribution<uint32_t> gralatDistribution(mindeathgralats, maxdeathgralats);
 	std::uniform_int_distribution<uint32_t> itemDistribution(0, 3);
-	// int, not int8_t: the standard does not allow 8-bit types here and MSVC rejects them.
-	std::uniform_int_distribution<int> displacementDistribution(-4, 4);
+	// int32_t, not int8_t: the standard does not allow 8-bit types here and MSVC rejects them.
+	std::uniform_int_distribution<int32_t> displacementDistribution(-4, 4);
 
 	// Determine how many gralats to remove from the account.
 	uint32_t drop_gralats = 0;
