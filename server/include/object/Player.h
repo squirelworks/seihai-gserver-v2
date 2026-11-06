@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-01: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-01, 2026-11-06: see CHANGES-SEIHAI.md.
 #ifndef PLAYER_H
 #define PLAYER_H
 
@@ -339,6 +339,10 @@ public:
 	void sendPacket(const CString& packet);
 	void sendRawPacket(const CString& packet);
 	std::pair<bool, bool> sendFile(const std::filesystem::path& file);
+	// For an encrypted package (.gpake), sends its key (PLO_UNKNOWN104) from
+	// config/gpakkeys.txt. raw puts it in the file queue, so it goes out before a file
+	// queued after it. Returns false when the package has no key; true for other files.
+	bool sendGpakKey(std::string_view filename, bool raw);
 	void setReceivedBuffer(const CString& buffer) { m_recvBuffer = buffer; }
 
 	// Type of player

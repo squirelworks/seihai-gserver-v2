@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-06: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -31,6 +31,7 @@
 #include <level/Level.h>
 #include <level/LevelItem.h>
 #include <level/Map.h>
+#include <misc/GpakPackages.h>
 #include <misc/WordFilter.h>
 #include <network/IPacketHandler.h>
 #include <npcserver/NPCServer.h>
@@ -514,6 +515,17 @@ bool PlayerClient::sendLogin()
 				if (const std::vector<CString> vminimap = minimap.tokenize(","); vminimap.size() == 4)
 					sendPacket(CString() >> (char)PLO_MINIMAP << vminimap[0].trim() << "," << vminimap[1].trim() << "," << vminimap[2].trim() << "," << vminimap[3].trim());
 			}
+		}
+
+		// Resource packages named in the gpaks option, to the clients that load them
+		// (misc/GpakPackages.h). sendFile sends an encrypted package's key first.
+		const std::string gpaks = settings.get<std::string>("gpaks").value_or("");
+		for (const auto& name : string::split(gpaks, ","sv) | range::string_trim)
+		{
+			if (name.empty())
+				continue;
+			if (preagonal::clientLoadsGpak(m_versionId, preagonal::gpakKind(name)) && preagonal::gpakKind(name) != preagonal::GpakKind::None)
+				sendFile(std::filesystem::path{std::string{name}});
 		}
 
 		// Send out RPG Window greeting.
