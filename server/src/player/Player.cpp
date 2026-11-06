@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-01, 2026-11-04: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-01, 2026-11-04, 2026-11-06: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -34,6 +34,7 @@
 #include <filesystem/FileSystemTypes.h>
 #include <level/Level.h>
 #include <level/LevelItem.h>
+#include <misc/GpakPackages.h>
 #include <misc/WordFilter.h>
 #include <network/IPacketHandler.h>
 #include <npcserver/NPCServer.h>
@@ -541,6 +542,32 @@ void Player::sendRawPacket(const CString& packet)
 	m_fileQueue.addRawPacket(packet);
 }
 
+bool Player::sendGpakKey(std::string_view filename, bool raw)
+{
+	if (preagonal::gpakKind(filename) != preagonal::GpakKind::Encrypted)
+		return true;
+
+	std::string text;
+	if (const auto keys = m_server->getFileSystemServer().openi(fs::FileCategory::CONFIG, "gpakkeys.txt"); keys && keys->opened())
+	{
+		for (const auto& line : keys->readAllLines())
+			text.append(line).push_back('\n');
+	}
+
+	const auto slash = filename.find_last_of("/\\");
+	const auto name = slash == std::string_view::npos ? filename : filename.substr(slash + 1);
+	const auto key = preagonal::gpakKeyFromText(text, name);
+	if (!key)
+		return false;
+
+	const auto packet = preagonal::gpakKeyPacket(name, *key);
+	if (raw)
+		sendRawPacket(packet);
+	else
+		sendPacket(packet);
+	return true;
+}
+
 std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file)
 {
 	// Add the filename to the list of known files so we can resend the file
@@ -597,6 +624,18 @@ std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file)
 		}
 
 		fileModTime = clock::to_time_t(info->getModTime());
+	}
+
+	// Resource packages (.gpak, .gpake). A client that cannot load the kind never gets one.
+	// An encrypted package goes out only with its key, sent first: the client takes the key
+	// for a package only when it comes before the file.
+	if (isClient())
+	{
+		const auto kind = preagonal::gpakKind(filename);
+		if (!preagonal::clientLoadsGpak(m_versionId, kind))
+			return {sendFailure("This client version does not load this kind of package"), false};
+		if (kind == preagonal::GpakKind::Encrypted && !sendGpakKey(filename, true))
+			return {sendFailure("No key in config/gpakkeys.txt for encrypted package"), false};
 	}
 
 	// Warn for very large files.  These are the cause of many bug reports.

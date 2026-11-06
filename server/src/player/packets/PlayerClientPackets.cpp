@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-06: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -995,7 +995,11 @@ HandlePacketResult PlayerClient::msgPLI_UPDATEFILE(CString& pPacket)
 	if (m_versionId < CLVER_2_1)
 		sendPacket(CString() >> (char)PLO_FILESENDFAILED << file);
 	else
+	{
+		// A cached encrypted package opens only with its key, which must come first.
+		sendGpakKey(file.toStringView(), false);
 		sendPacket(CString() >> (char)PLO_FILEUPTODATE << file);
+	}
 
 	return HandlePacketResult::Handled;
 }
@@ -1463,6 +1467,8 @@ HandlePacketResult PlayerClient::msgPLI_VERIFYWANTSEND(CString& pPacket)
 		{
 			if (calculateCrc32Checksum(fileData) == fileChecksum)
 			{
+				// A cached encrypted package opens only with its key, which must come first.
+				sendGpakKey(fileName.toStringView(), false);
 				sendPacket(CString() >> (char)PLO_FILEUPTODATE << fileName);
 				return HandlePacketResult::Handled;
 			}

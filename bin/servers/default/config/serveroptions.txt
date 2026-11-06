@@ -1,4 +1,4 @@
-# Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-10-31, 2026-11-06: see CHANGES-SEIHAI.md.
 # Sets the location where new players start on the server.
 # By default, the server uses the values inside the defaultaccount.
 # These values will override defaultaccount.
@@ -182,6 +182,16 @@ singleplayerlevels =
 #   defaultx and defaulty is the position where the heads of players not on the map will be drawn.
 bigmap =
 minimap =
+
+# Resource packages sent at login, comma-separated file names (art.gpake), kept in the
+# world folder's gpaks/. A package is a ZIP the client saves under levels/gpaks/; it then finds
+# every file inside by name. Build them with `seihai-servertools gpak pack`.
+#   .gpake (encrypted) goes to 4.20r8 and every 5.x and 6.x client. Its key is sent first,
+#          from config/gpakkeys.txt (one "name.gpake KEY" line each; never put that file
+#          in the world folder).
+#   .gpak (plain) goes to 5.x and 6.x only: 4.20r8 saves it but never loads it.
+# Older clients get none. foldersconfig.txt must list the gpaks folder.
+gpaks =
 
 # Radius, in tiles, in which players receive updates.
 # By default it only works on gmaps, but syncbydistanceinside can allow in non-gmap levels.

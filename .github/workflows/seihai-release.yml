@@ -82,9 +82,10 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cmake -S . -B build -DTESTS=ON
-          cmake --build build --target RC
+          cmake --build build --target RC Gpak
           timeout 60 bin/RC
-          rm -f bin/RC
+          timeout 60 bin/Gpak
+          rm -f bin/RC bin/Gpak
       - name: Package
         shell: bash
         run: |
@@ -184,9 +185,10 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cmake -S . -B build -DTESTS=ON
-          cmake --build build --target RC
+          cmake --build build --target RC Gpak
           timeout 60 bin/RC
-          rm -f bin/RC
+          timeout 60 bin/Gpak
+          rm -f bin/RC bin/Gpak
       - name: Package
         shell: bash
         run: |

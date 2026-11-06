@@ -9,6 +9,12 @@ Every change below was checked on a private loopback lab with real Graal
 clients and with the [Seihai](https://github.com/squirelworks/seihai) client.
 Each file we changed carries a one-line notice at its top.
 
+## 2026-11-06
+
+| Change | Files | Clients it fixes |
+|---|---|---|
+| Resource packages. A `.gpak` is a ZIP the client saves under `levels/gpaks/` and then reads every file from by name; a `.gpake` is the same with each entry DES-encrypted, which the client opens only with the key the server sent in `PLO_UNKNOWN104` (104) before the file. `sendFile` now sends a `.gpake`'s key first, from the new `config/gpakkeys.txt` (`name.gpake KEY` lines, as `seihai-servertools gpak pack` writes them), and refuses a `.gpake` with no key there. `PLO_FILEUPTODATE` for a `.gpake` (`PLI_UPDATEFILE`, `PLI_VERIFYWANTSEND`) is preceded by its key too, so a cached package opens. A package goes only to clients that load it: `.gpake` to 4.20r8 up to 6.037, plain `.gpak` to 5.07 up to 6.037 (4.20r8 saves a `.gpak` but never loads it; 4.04r2 and older load no packages); others get `PLO_FILESENDFAILED`. The new `gpaks` server option lists packages to send at login. The default `foldersconfig.txt` serves `gpaks/*.gpak` and `gpaks/*.gpake`. The rules are in a new header; `Catch_tests/Gpak` tests them against the packet the real clients took, and CI runs it on Linux. | `GpakPackages.h`, `Player.h`, `Player.cpp`, `PlayerClient.cpp`, `PlayerClientPackets.cpp`, `serveroptions.txt`, `foldersconfig.txt`, `Catch_tests/Gpak/`, `.github/workflows/` | 4.20r8, 5.x, 6.x (packages). Wine lab 2026-11-06, loopback: real 4.20r8 got `sample.gpake` at login, key first, and drew its image; with a wrong key it did not, with no key the server refused to send it, and the plain `.gpak` was not sent to it. Real 6.03r7 got the key, then the package, and saved it to `levels/gpaks/` |
+
 ## 2026-11-04
 
 | Change | Files | Clients it fixes |
