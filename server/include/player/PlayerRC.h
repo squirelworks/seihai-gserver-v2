@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-07: see CHANGES-SEIHAI.md.
 #ifndef PLAYERRC_H
 #define PLAYERRC_H
 
@@ -134,7 +135,8 @@ public:
 	HandlePacketResult msgPLI_RC_LARGEFILESTART(CString& pPacket);
 	HandlePacketResult msgPLI_RC_LARGEFILEEND(CString& pPacket);
 	HandlePacketResult msgPLI_RC_FOLDERDELETE(CString& pPacket);
-	HandlePacketResult msgPLI_RC_UNKNOWN162(CString& pPacket);
+	// RC keepalive: empty body, every 60 s. Game clients use this id to answer PLO_PING.
+	HandlePacketResult msgPLI_PING(CString& pPacket);
 
 protected:
 	bool m_isFtp = false;

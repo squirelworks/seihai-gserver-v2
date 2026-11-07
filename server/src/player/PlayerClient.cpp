@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-06: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-07: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -92,7 +92,7 @@ static PacketHandleArray GeneratePacketHandlers()
 	handlers[PLI_LEVELWARPMOD] = &PlayerClient::msgPLI_LEVELWARP; // Shared with PLI_LEVELWARP
 	handlers[PLI_ITEMTAKE] = &PlayerClient::msgPLI_ITEMDEL;       // Shared with PLI_ITEMDEL
 	handlers[PLI_WEAPONADD] = &PlayerClient::msgPLI_WEAPONADD;
-	handlers[PLI_UNKNOWN25] = &PlayerClient::msgPLI_WEAPONUPLOAD;
+	handlers[PLI_WEAPONUPLOAD] = &PlayerClient::msgPLI_WEAPONUPLOAD;
 	handlers[PLI_UPDATEFILE] = &PlayerClient::msgPLI_UPDATEFILE;
 	handlers[PLI_ADJACENTLEVEL] = &PlayerClient::msgPLI_ADJACENTLEVEL;
 	handlers[PLI_HITOBJECTS] = &PlayerClient::msgPLI_HITOBJECTS;
