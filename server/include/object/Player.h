@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-01, 2026-11-06: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-01, 2026-11-06, 2026-11-07: see CHANGES-SEIHAI.md.
 #ifndef PLAYER_H
 #define PLAYER_H
 
@@ -339,7 +339,7 @@ public:
 	void sendPacket(const CString& packet);
 	void sendRawPacket(const CString& packet);
 	std::pair<bool, bool> sendFile(const std::filesystem::path& file);
-	// For an encrypted package (.gpake), sends its key (PLO_UNKNOWN104) from
+	// For an encrypted package (.gpake), sends its key (PLO_FILEKEY) from
 	// config/gpakkeys.txt. raw puts it in the file queue, so it goes out before a file
 	// queued after it. Returns false when the package has no key; true for other files.
 	bool sendGpakKey(std::string_view filename, bool raw);
@@ -434,7 +434,7 @@ public:
 	//HandlePacketResult msgPLI_NPCDEL(CString& pPacket);
 	//HandlePacketResult msgPLI_WANTFILE(CString& pPacket);
 	//HandlePacketResult msgPLI_SHOWIMGPLAYER(CString& pPacket);
-	// PLI_UNKNOWN25
+	// PLI_WEAPONUPLOAD
 	//HandlePacketResult msgPLI_HURTPLAYER(CString& pPacket);
 	//HandlePacketResult msgPLI_EXPLOSION(CString& pPacket);
 	HandlePacketResult msgPLI_PRIVATEMESSAGE(CString& pPacket);

@@ -9,6 +9,12 @@ Every change below was checked on a private loopback lab with real Graal
 clients and with the [Seihai](https://github.com/squirelworks/seihai) client.
 Each file we changed carries a one-line notice at its top.
 
+## 2026-11-07
+
+| Change | Files | Clients it fixes |
+|---|---|---|
+| Packet names follow seihai-gs2lib `0eaaeec`. The ids that note settled on 2026-11-06 are called by those names here, and the log tables use them too. `PLI_WEAPONUPLOAD` (25) is the 1.21 to 1.37 weapon upload. `PLI_PING` (162) is the RC keepalive (empty, every 60 s) and, for a game client, the answer to `PLO_PING`. `PLO_FILEKEY` (104), `PLO_PING` (108), `PLO_DOWNLOADURL` (109), `PLO_RC_PLAYERFLAGS` (124), `PLO_LOGGEDIN` (168) and `PLO_WEAPONCRC` (193) replace the old `UNKNOWN` names. 60, 81, 83, 110, 132, 133 and 181 stay unnamed. The gs2lib pin is that commit; the old names remain there as aliases. | `server/CMakeLists.txt`, `IPacketHandler.h`, `Player.h`, `Player.cpp`, `PlayerClient.cpp`, `PlayerRC.h`, `PlayerRC.cpp`, `PlayerRCPackets.cpp`, `GpakPackages.h`, `Catch_tests/Gpak/GpakPackages_tests.cpp` | none. No client was run. The Gpak test still checks the same 104 bytes the 4.20r8 and 6.03r7 lab took; this change only renames the constant. |
+
 ## 2026-11-06
 
 | Change | Files | Clients it fixes |

@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-06: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-06, 2026-11-07: see CHANGES-SEIHAI.md.
 // New file: tests for resource packages (.gpak, .gpake) and their key packet.
 #include "catch2/catch_all.hpp"
 
@@ -15,7 +15,7 @@ namespace
 	constexpr GpakKey sampleKey{ 0x13, 0x34, 0x57, 0x79, 0x9B, 0xBC, 0xDF, 0xF1 };
 }
 
-SCENARIO("gpakKeyPacket matches the PLO_UNKNOWN104 the real clients took")
+SCENARIO("gpakKeyPacket matches the PLO_FILEKEY the real clients took")
 {
 	GIVEN("sample.gpake and its key")
 	{

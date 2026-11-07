@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-07: see CHANGES-SEIHAI.md.
 #include <array>
 #include <cstdint>
 #include <format>
@@ -83,7 +84,7 @@ static PacketHandleArray GeneratePacketHandlers()
 	handlers[PLI_RC_LARGEFILESTART] = &PlayerRC::msgPLI_RC_LARGEFILESTART;
 	handlers[PLI_RC_LARGEFILEEND] = &PlayerRC::msgPLI_RC_LARGEFILEEND;
 	handlers[PLI_RC_FOLDERDELETE] = &PlayerRC::msgPLI_RC_FOLDERDELETE;
-	handlers[PLI_RC_UNKNOWN162] = &PlayerRC::msgPLI_RC_UNKNOWN162;
+	handlers[PLI_PING] = &PlayerRC::msgPLI_PING;
 
 	return handlers;
 }

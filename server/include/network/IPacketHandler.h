@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-07: see CHANGES-SEIHAI.md.
 #ifndef IPACKETHANDLER_H
 #define IPACKETHANDLER_H
 
@@ -48,7 +48,7 @@ namespace preagonal
 	DO(PLI_NPCDEL) \
 	DO(PLI_WANTFILE) \
 	DO(PLI_SHOWIMGPLAYER) \
-	DO(PLI_UNKNOWN25) \
+	DO(PLI_WEAPONUPLOAD) \
 	DO(PLI_HURTPLAYER) \
 	DO(PLI_EXPLOSION) \
 	DO(PLI_PRIVATEMESSAGE) \
@@ -147,7 +147,7 @@ namespace preagonal
 	DO(PLI_UPDATEPACKAGEREQUESTFILE) \
 	DO(PLI_RC_FOLDERDELETE) \
 	DO(PLI_UPDATECLASS) \
-	DO(PLI_RC_UNKNOWN162) \
+	DO(PLI_PING) \
 	DO(PLI_SET_ENC_KEY) \
 	DO(PLI_BUNDLE)
 #define FILL_INPUT_ARRAY(name) names[(uint8_t)name] = #name;

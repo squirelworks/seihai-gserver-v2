@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-04: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-04, 2026-11-07: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
@@ -1556,9 +1556,10 @@ HandlePacketResult PlayerRC::msgPLI_NPCSERVERQUERY(CString& pPacket)
 	return HandlePacketResult::Handled;
 }
 
-HandlePacketResult PlayerRC::msgPLI_RC_UNKNOWN162(CString& pPacket)
+HandlePacketResult PlayerRC::msgPLI_PING(CString& pPacket)
 {
-	// Stub.
+	// RC keepalive: empty, every 60 s. Nothing in the body is read.
+	(void)pPacket;
 	return HandlePacketResult::Handled;
 }
 

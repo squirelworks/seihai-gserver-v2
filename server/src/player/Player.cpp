@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-01, 2026-11-04, 2026-11-06: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-01, 2026-11-04, 2026-11-06, 2026-11-07: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -162,13 +162,14 @@ static constexpr std::array<std::string_view, 30> ganiAttributePropertyNames = {
 		DO(PLO_BOARDPACKET)            \
 		DO(PLO_FILE)                   \
 		DO(PLO_RC_MAXUPLOADFILESIZE)   \
-		DO(PLO_UNKNOWN104)             \
+		DO(PLO_FILEKEY)                \
 		DO(PLO_UPDATEPACKAGESIZE)      \
 		DO(PLO_UPDATEPACKAGEDONE)      \
 		DO(PLO_BOARDLAYER)             \
-		DO(PLO_UNKNOWN109)             \
+		DO(PLO_PING)                   \
+		DO(PLO_DOWNLOADURL)            \
 		DO(PLO_SETNETCOOKIE)           \
-		DO(PLO_UNKNOWN124)             \
+		DO(PLO_RC_PLAYERFLAGS)         \
 		DO(PLO_NPCBYTECODE)            \
 		DO(PLO_UNKNOWN132)             \
 		DO(PLO_UNKNOWN133)             \
@@ -191,7 +192,7 @@ static constexpr std::array<std::string_view, 30> ganiAttributePropertyNames = {
 		DO(PLO_MOVE)                   \
 		DO(PLO_SHOWIMGNPC)             \
 		DO(PLO_NC_WEAPONLISTGET)       \
-		DO(PLO_UNKNOWN168)             \
+		DO(PLO_LOGGEDIN)               \
 		DO(PLO_UPGRADEURL)             \
 		DO(PLO_GHOSTMODE)              \
 		DO(PLO_BIGMAP)                 \
@@ -216,7 +217,7 @@ static constexpr std::array<std::string_view, 30> ganiAttributePropertyNames = {
 		DO(PLO_SERVERLISTCONNECTED)    \
 		DO(PLO_SHOOT2)                 \
 		DO(PLO_NC_WEAPONGET)           \
-		DO(PLO_UNKNOWN193)             \
+		DO(PLO_WEAPONCRC)              \
 		DO(PLO_CLEARWEAPONS)           \
 		DO(PLO_LOADGANI)               \
 		DO(PLO_LOADSCRIPT)             \
@@ -800,7 +801,7 @@ bool Player::sendLogin()
 			sendPacket(CString() >> (char)PLO_HASNPCSERVER);
 
 		// This seems to inform the client that they have logged in.
-		sendPacket(CString() >> (char)PLO_UNKNOWN168);
+		sendPacket(CString() >> (char)PLO_LOGGEDIN);
 	}
 
 	// Tell the serverlist the player is logged in.
