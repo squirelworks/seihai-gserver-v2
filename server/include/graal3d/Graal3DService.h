@@ -30,6 +30,7 @@
 #include <map>
 #include <memory>
 #include <random>
+#include <set>
 #include <string>
 #include <string_view>
 
@@ -43,6 +44,7 @@
 namespace preagonal
 {
 	class Server;
+	class Player;
 }
 
 namespace graal3d
@@ -93,6 +95,9 @@ namespace graal3d
 
 		void handleDatagram(const Endpoint& from, std::string_view data, uint64_t nowMs);
 		void handleConnectRequest(const Endpoint& from, std::string_view data, uint64_t nowMs);
+		// The TCP client a 3D connect request belongs to: the named account,
+		// logged in from `ip`, or for "guest" that address's guest client.
+		std::shared_ptr<preagonal::Player> findTcpPlayer(const std::string& requested, const std::string& ip);
 		void handleText(PlayerID player, const TextMessage& message);
 		void handleClientState(PlayerID player, const ClientState& state);
 		void ghostWorld(PlayerID player, const std::string& account, Connection& connection);
@@ -115,6 +120,7 @@ namespace graal3d
 		World m_world;
 		bool m_packetStrings = true;
 		std::map<PlayerID, GhostObject> m_avatars;
+		std::set<std::string> m_unmatched; // "ip,account" already logged as unmatched
 	};
 
 } // namespace graal3d

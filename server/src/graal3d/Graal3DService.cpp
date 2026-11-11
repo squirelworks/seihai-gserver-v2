@@ -247,18 +247,18 @@ namespace graal3d
 
 		// The client opens TCP and UDP together, and the TCP login may not be done
 		// yet. Until it is, say nothing: Torque resends the connect request.
-		const std::string& account = req->args[0];
-		auto player = m_server.getPlayer(CString(account), PLTYPE_ANYCLIENT);
-		if (player == nullptr || !player->isLoaded() || player->getSocket() == nullptr)
-			return;
-
-		const char* tcpIp = player->getSocket()->getRemoteIp();
-		if (tcpIp == nullptr || plainIpv4(tcpIp) != ipString(from))
+		const std::string& requested = req->args[0];
+		auto player = findTcpPlayer(requested, ipString(from));
+		if (player == nullptr)
 		{
-			log::printLine(log::server, "Graal3D: {} asked for a 3D link from {}, but is logged in from another address.", account, ipString(from));
-			sendTo(from, buildConnectReject(req->sequence, "CHR_INVALID"));
+			// Say it once per address and name, not on every resend.
+			if (m_unmatched.size() > 1024)
+				m_unmatched.clear();
+			if (m_unmatched.insert(ipString(from) + "," + requested).second)
+				log::printLine(log::server, "Graal3D: {} asked for a 3D link from {}, but no client logged in over TCP from there matches it (yet).", requested, ipString(from));
 			return;
 		}
+		const std::string account = player->account.name;
 
 		if (!hasGraal3D(player->getVersion()))
 		{
@@ -313,6 +313,36 @@ namespace graal3d
 
 		sendTo(from, buildConnectAccept(req->sequence, *profile));
 		log::printLine(log::server, "Graal3D: {} linked from {} (protocol {}, {}).", account, ipString(from), profile->protocol, profile->clients);
+	}
+
+	std::shared_ptr<Player> Service::findTcpPlayer(const std::string& requested, const std::string& ip)
+	{
+		const auto fromThere = [&](const std::shared_ptr<Player>& p) {
+			if (p == nullptr || !p->isLoaded() || p->getSocket() == nullptr || !p->isClient())
+				return false;
+			const char* tcpIp = p->getSocket()->getRemoteIp();
+			return tcpIp != nullptr && plainIpv4(tcpIp) == ip;
+		};
+
+		if (auto p = m_server.getPlayer(CString(requested), PLTYPE_ANYCLIENT); fromThere(p))
+			return p;
+
+		// The 5.x client sends "guest" for a guest login, but the gserver renames
+		// guests to pc:<number>. Take the guest client from the same address,
+		// preferring one without a 3D link; the newest login wins a tie.
+		if (requested != "guest")
+			return nullptr;
+		std::shared_ptr<Player> best;
+		for (const auto& [id, p] : m_server.getPlayerList())
+		{
+			if (!fromThere(p) || !p->isGuest() || !hasGraal3D(p->getVersion()))
+				continue;
+			const bool linked = m_byPlayer.contains(id);
+			const bool bestLinked = best != nullptr && m_byPlayer.contains(best->getId());
+			if (best == nullptr || (bestLinked && !linked) || (bestLinked == linked && id > best->getId()))
+				best = p;
+		}
+		return best;
 	}
 
 	void Service::closeSession(const Endpoint& endpoint, std::string_view reason, bool notifyClient)
