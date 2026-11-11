@@ -7,7 +7,7 @@ license = "GPL-3.0-or-later"
 publish = false
 
 [dependencies]
-# Seihai's protocol code (login, framing, walk and trigger messages).
-seihai-core = { git = "https://github.com/squirelworks/seihai", default-features = false }
+# Seihai's protocol code (login, framing, walk and trigger messages), pinned to a release tag.
+seihai-core = { git = "https://github.com/squirelworks/seihai", tag = "v0.0.6", default-features = false }
 
 [workspace]
