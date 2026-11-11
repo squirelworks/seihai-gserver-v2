@@ -9,6 +9,12 @@ Every change below was checked on a private loopback lab with real Graal
 clients and with the [Seihai](https://github.com/squirelworks/seihai) client.
 Each file we changed carries a one-line notice at its top.
 
+## 2026-11-12
+
+| Change | Files | Clients it fixes |
+|---|---|---|
+| Graal 3D, the world: the UDP side now ghosts objects to the 4.20r6 and 5.x clients and gives each one a control object, which the 5.x client needs for login steps 5 and 6. The objects come from a new `config/graal3dworld.txt` (`object`, `sun`, `playershape`, `spawn`), plus one `GameObject` per linked player named `G3DPlayer_<account>` with the player's nickname. Each client's reported position and chat move its object on the other clients. Ghosts are created, updated by changed fields only, deleted, and sent again when their packet is lost. Also a fix to the first version: strings inside game packets now start with Torque's prefix flag, because the clients give every game packet a string buffer as stock TGE 1.x does (new option `graal3dstringprefix`, default `true`; the server logs when a client's events read the other way). The layouts (ghost section, `GameObject` sections, control object, `Sun`) come from a static read of the 5.00r7 `Graal3DEngine.dll`, which also uses protocol 24. | `server/include/graal3d/Graal3DObjects.h`, `server/src/graal3d/Graal3DObjects.cpp`, `server/include/graal3d/Graal3DConnection.h`, `server/src/graal3d/Graal3DConnection.cpp`, `server/include/graal3d/Graal3DService.h`, `server/src/graal3d/Graal3DService.cpp`, `server/include/graal3d/Graal3DProtocol.h`, `server/src/graal3d/Graal3DProtocol.cpp`, `server/include/graal3d/TorqueBitStream.h`, `server/src/graal3d/TorqueBitStream.cpp`, `server/src/Server.cpp`, `server/CMakeLists.txt`, `Catch_tests/Graal3D/Graal3D_tests.cpp`, `bin/docs/graal3d.md`, `bin/servers/default/config/serveroptions.txt`, `bin/servers/modern/config/serveroptions.txt` | 4.20r6, 5.x; not yet run with a real client |
+
 ## 2026-11-11
 
 | Change | Files | Clients it fixes |

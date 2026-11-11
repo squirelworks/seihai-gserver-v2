@@ -1,12 +1,15 @@
-// Modified by the Seihai project, 2026-11-11: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
 // New file: the bit stream the Torque-based Graal 3D clients (3.153 to 5.x) use on
 // their UDP connection to a 3D server. Bits are packed least significant first.
 // Strings use Torque's fixed Huffman tree. The character frequency table is the
 // one in the MIT-licensed Torque3D source (core/stream/bitStream.cpp); the Graal
 // clients use the same table. Kept apart from the server so it can be tested alone.
 //
-// The Graal clients do not use Torque's string prefix buffer: in 5.12 nothing ever
-// sets it, so every string goes out as a Huffman or raw string with no prefix flag.
+// Inside game packets the Graal clients, like stock TGE 1.x, give the stream a
+// 256-byte string buffer for the length of the packet (GameConnection::readPacket
+// and writePacket of the 5.00r7 Graal3DEngine.dll). Every string then starts with
+// a flag saying it reuses a prefix of the previous string in that packet. Out-of-
+// band packets (the handshake) have no buffer and no flag.
 
 #ifndef SEIHAI_GRAAL3D_TORQUEBITSTREAM_H
 #define SEIHAI_GRAAL3D_TORQUEBITSTREAM_H
@@ -33,8 +36,13 @@ namespace graal3d
 		void writeBits(const BitWriter& other);
 
 		// A Torque string: flag (1 = Huffman), U8 length, then codes or bytes.
-		// At most 255 bytes are written.
+		// At most 255 bytes are written. With packet strings on, a 0 prefix flag
+		// comes first (no prefix is ever shared).
 		void writeString(std::string_view text);
+
+		// Strings for a game packet (see above). Off by default.
+		void setPacketStrings(bool on) { m_packetStrings = on; }
+		[[nodiscard]] bool packetStrings() const { return m_packetStrings; }
 
 		// Overwrite `bits` bits at an earlier position (for length prefixes).
 		void patchInt(size_t bitPos, uint32_t value, int bits);
@@ -49,6 +57,7 @@ namespace graal3d
 
 		std::vector<uint8_t> m_data;
 		size_t m_bitCount = 0;
+		bool m_packetStrings = false;
 	};
 
 	class BitReader
@@ -69,6 +78,10 @@ namespace graal3d
 		std::string readBytes(size_t count);
 		std::string readString();
 
+		// Game packet strings: `buffer` holds the last string read in this packet
+		// and is updated by every readString. nullptr (the default) for none.
+		void setStringBuffer(std::string* buffer) { m_stringBuffer = buffer; }
+
 		[[nodiscard]] size_t bitPosition() const { return m_bitPos; }
 		void setBitPosition(size_t pos) { m_bitPos = pos > m_bitSize ? m_bitSize : pos; }
 		[[nodiscard]] size_t bitsLeft() const { return m_bitPos >= m_bitSize ? 0 : m_bitSize - m_bitPos; }
@@ -77,10 +90,13 @@ namespace graal3d
 		[[nodiscard]] bool overrun() const { return m_overrun; }
 
 	private:
+		std::string readPlainString();
+
 		const uint8_t* m_data;
 		size_t m_bitSize;
 		size_t m_bitPos = 0;
 		bool m_overrun = false;
+		std::string* m_stringBuffer = nullptr;
 	};
 
 	// The Huffman code length in bits of a string, as Torque counts it.

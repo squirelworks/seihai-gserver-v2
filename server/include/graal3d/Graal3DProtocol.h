@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
 // New file: the wire format of the Torque UDP connection that the Graal 3.153 to 5.x
 // clients open to a 3D server, on the gserver's port + 1. Out-of-band handshake
 // packets, the per-version profiles (protocol 19, 21, 24), the data packet header,
@@ -66,6 +66,7 @@ namespace graal3d
 	// Server class ids: the index in the profile's object or event list.
 	std::optional<uint32_t> eventClassId(const Profile& profile, std::string_view name);
 	std::string_view eventClassName(const Profile& profile, uint32_t id);
+	std::optional<uint32_t> objectClassId(const Profile& profile, std::string_view name);
 
 	using Digest = std::array<uint32_t, 4>;
 
@@ -144,8 +145,10 @@ namespace graal3d
 	void packCommandArg(BitWriter& writer, const CommandArg& arg);
 	CommandArg unpackCommandArg(BitReader& reader);
 
-	BitWriter netStringEvent(uint32_t index, std::string_view text);
-	BitWriter remoteCommandEvent(const std::vector<CommandArg>& args);
+	// Event payloads travel inside game packets, so their strings carry the
+	// packet string flag unless `packetStrings` is false (see TorqueBitStream.h).
+	BitWriter netStringEvent(uint32_t index, std::string_view text, bool packetStrings = true);
+	BitWriter remoteCommandEvent(const std::vector<CommandArg>& args, bool packetStrings = true);
 
 	// Graal's text channel: one message is four strings, like a GS2 sendtext.
 	struct TextMessage
@@ -168,21 +171,23 @@ namespace graal3d
 		Bzip2 = 2,
 	};
 
-	BitWriter bigDataStartEvent(uint32_t id, const TextMessage& message, uint32_t totalLength, BigDataMode mode);
+	BitWriter bigDataStartEvent(uint32_t id, const TextMessage& message, uint32_t totalLength, BigDataMode mode, bool packetStrings = true);
 	BitWriter bigDataChunkEvent(uint32_t id, std::string_view bytes);
 
 	// Splits a message into a start event and its chunk events. The data is sent
 	// uncompressed: mode 0 is valid in every build and avoids depending on the
 	// exact zlib and bzip2 framing.
-	std::vector<BitWriter> bigDataEvents(uint32_t id, const TextMessage& message);
+	std::vector<BitWriter> bigDataEvents(uint32_t id, const TextMessage& message, bool packetStrings = true);
 
 	// Reassembles BigData transfers that arrive from a client.
 	class BigDataAssembler
 	{
 	public:
 		void start(BitReader& payload);
+		void start(uint32_t id, TextMessage header, uint32_t total, BigDataMode mode);
 		// Returns the finished message once its last chunk is in.
 		std::optional<TextMessage> chunk(BitReader& payload);
+		std::optional<TextMessage> chunk(uint32_t id, std::string_view bytes);
 
 	private:
 		struct Transfer

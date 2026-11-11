@@ -1,4 +1,4 @@
-# Modified by the Seihai project, 2026-11-07, 2026-11-11: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-11-07, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
 #
 #  server/src/CMakeLists.txt
 #
@@ -36,6 +36,7 @@ set(
 	"include/filesystem/FileSystemTypes.h"
 	"include/filesystem/watch/FileWatch.h"
 	"include/graal3d/Graal3DConnection.h"
+	"include/graal3d/Graal3DObjects.h"
 	"include/graal3d/Graal3DProtocol.h"
 	"include/graal3d/Graal3DService.h"
 	"include/graal3d/TorqueBitStream.h"
@@ -127,6 +128,7 @@ set(
 	"src/filesystem/watch/FileWatchOS_Poll.cpp"
 	"src/filesystem/watch/FileWatchOS_Windows.cpp"
 	"src/graal3d/Graal3DConnection.cpp"
+	"src/graal3d/Graal3DObjects.cpp"
 	"src/graal3d/Graal3DProtocol.cpp"
 	"src/graal3d/Graal3DService.cpp"
 	"src/graal3d/TorqueBitStream.cpp"

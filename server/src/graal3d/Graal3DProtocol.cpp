@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
 // New file: wire format of the Graal 3D (Torque) UDP connection. See Graal3DProtocol.h.
 
 #include <graal3d/Graal3DProtocol.h>
@@ -68,6 +68,16 @@ namespace graal3d
 		for (uint32_t i = 0; i < profile.eventClasses.size(); ++i)
 		{
 			if (profile.eventClasses[i] == name)
+				return i;
+		}
+		return std::nullopt;
+	}
+
+	std::optional<uint32_t> objectClassId(const Profile& profile, std::string_view name)
+	{
+		for (uint32_t i = 0; i < profile.objectClasses.size(); ++i)
+		{
+			if (profile.objectClasses[i] == name)
 				return i;
 		}
 		return std::nullopt;
@@ -274,26 +284,29 @@ namespace graal3d
 		return arg;
 	}
 
-	BitWriter netStringEvent(uint32_t index, std::string_view text)
+	BitWriter netStringEvent(uint32_t index, std::string_view text, bool packetStrings)
 	{
 		BitWriter w;
+		w.setPacketStrings(packetStrings);
 		w.writeInt(index, StringTableBits);
 		w.writeString(text);
 		return w;
 	}
 
-	BitWriter remoteCommandEvent(const std::vector<CommandArg>& args)
+	BitWriter remoteCommandEvent(const std::vector<CommandArg>& args, bool packetStrings)
 	{
 		BitWriter w;
+		w.setPacketStrings(packetStrings);
 		w.writeInt(static_cast<uint32_t>(args.size()), CommandArgsBits);
 		for (const auto& a : args)
 			packCommandArg(w, a);
 		return w;
 	}
 
-	BitWriter bigDataStartEvent(uint32_t id, const TextMessage& message, uint32_t totalLength, BigDataMode mode)
+	BitWriter bigDataStartEvent(uint32_t id, const TextMessage& message, uint32_t totalLength, BigDataMode mode, bool packetStrings)
 	{
 		BitWriter w;
+		w.setPacketStrings(packetStrings);
 		w.writeInt(id, BigDataIdBits);
 		w.writeString(message.weapon);
 		w.writeString(message.type);
@@ -312,14 +325,14 @@ namespace graal3d
 		return w;
 	}
 
-	std::vector<BitWriter> bigDataEvents(uint32_t id, const TextMessage& message)
+	std::vector<BitWriter> bigDataEvents(uint32_t id, const TextMessage& message, bool packetStrings)
 	{
 		std::vector<BitWriter> out;
 		std::string_view data = message.data;
 		if (data.size() >= (1u << BigDataLengthBits))
 			data = data.substr(0, (1u << BigDataLengthBits) - 1);
 
-		out.push_back(bigDataStartEvent(id, message, static_cast<uint32_t>(data.size()), BigDataMode::Raw));
+		out.push_back(bigDataStartEvent(id, message, static_cast<uint32_t>(data.size()), BigDataMode::Raw, packetStrings));
 		for (size_t pos = 0; pos < data.size(); pos += BigDataChunkMax)
 			out.push_back(bigDataChunkEvent(id, data.substr(pos, BigDataChunkMax)));
 		return out;
@@ -328,14 +341,22 @@ namespace graal3d
 	void BigDataAssembler::start(BitReader& r)
 	{
 		const auto id = r.readInt(BigDataIdBits);
+		TextMessage header;
+		header.weapon = r.readString();
+		header.type = r.readString();
+		header.option = r.readString();
+		const auto total = r.readInt(BigDataLengthBits);
+		const auto mode = static_cast<BigDataMode>(r.readInt(BigDataModeBits));
+		if (!r.overrun())
+			start(id, std::move(header), total, mode);
+	}
+
+	void BigDataAssembler::start(uint32_t id, TextMessage header, uint32_t total, BigDataMode mode)
+	{
 		Transfer t;
-		t.message.weapon = r.readString();
-		t.message.type = r.readString();
-		t.message.option = r.readString();
-		t.total = r.readInt(BigDataLengthBits);
-		t.mode = static_cast<BigDataMode>(r.readInt(BigDataModeBits));
-		if (r.overrun())
-			return;
+		t.message = std::move(header);
+		t.total = total;
+		t.mode = mode;
 		m_transfers[id] = std::move(t);
 		if (m_transfers.size() > 64)
 			m_transfers.erase(m_transfers.begin());
@@ -348,7 +369,11 @@ namespace graal3d
 		auto bytes = r.readBytes(length);
 		if (r.overrun())
 			return std::nullopt;
+		return chunk(id, bytes);
+	}
 
+	std::optional<TextMessage> BigDataAssembler::chunk(uint32_t id, std::string_view bytes)
+	{
 		const auto it = m_transfers.find(id);
 		if (it == m_transfers.end())
 			return std::nullopt;

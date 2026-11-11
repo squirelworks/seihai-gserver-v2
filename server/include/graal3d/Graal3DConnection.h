@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
 // New file: one accepted Graal 3D (Torque) UDP connection, server side. It keeps
 // Torque's notify protocol (sequence numbers, acks, pings), resends guaranteed
 // events that were lost, drives the mission start phases and carries Graal's
@@ -6,8 +6,12 @@
 // a callback and come in through receive(), with the time passed in, so it can be
 // tested without sockets.
 //
-// Not done here: ghosting (GameObject, terrain, the control object). Without a
-// control object a 5.x client stops at login step 4 ("mission lighting done").
+// Ghosting (GameObject era, 4.20r6 and 5.x): the owner names objects by key and
+// the connection gives each a ghost index, sends creates, updates and deletes in
+// the ghost section of its packets, and resends what a lost packet carried. Once
+// the client has a ghost, it can be made the control object; the first control
+// object takes a 5.x client to login step 5. The client then reports its own
+// position and its control object's changes in every packet (onClientState).
 
 #ifndef SEIHAI_GRAAL3D_GRAAL3DCONNECTION_H
 #define SEIHAI_GRAAL3D_GRAAL3DCONNECTION_H
@@ -17,10 +21,13 @@
 #include <deque>
 #include <functional>
 #include <map>
+#include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include <graal3d/Graal3DObjects.h>
 #include <graal3d/Graal3DProtocol.h>
 
 namespace graal3d
@@ -34,6 +41,17 @@ namespace graal3d
 		Done,       // every phase acknowledged
 	};
 
+	// What a 5.x client says about itself in each packet.
+	struct ClientState
+	{
+		std::array<float, 3> position{}; // its control object's position
+		bool controlling = false;        // `object` and `changed` are filled in
+		uint32_t changed = 0;            // GameObjectBits the client changed
+		GameObjectState object;          // the client's control object, as it now is
+	};
+
+	using ObjectKey = uint32_t;
+
 	class Connection
 	{
 	public:
@@ -43,6 +61,7 @@ namespace graal3d
 			std::function<void(const TextMessage&)> onText;
 			std::function<void(std::string_view)> log;
 			std::function<void(MissionState)> onMission;
+			std::function<void(const ClientState&)> onClientState;
 		};
 
 		// Time-outs in milliseconds.
@@ -50,6 +69,7 @@ namespace graal3d
 		static constexpr uint64_t KeepAliveMs = 1000;
 		static constexpr uint64_t SendIntervalMs = 50;
 		static constexpr size_t MaxPacketBytes = 400; // the clients accept up to 450
+		static constexpr uint32_t MaxGhosts = 4096;   // the client's ghost table
 
 		Connection(const Profile& profile, uint32_t connectSequence, uint64_t nowMs, Callbacks callbacks);
 
@@ -62,6 +82,23 @@ namespace graal3d
 		// Queues a text message for the client (BigDataStartEvent + chunks).
 		// Ignored for profiles whose game packets are not implemented.
 		void sendText(const TextMessage& message);
+
+		// Strings inside game packets carry the packet string flag (default on;
+		// see TorqueBitStream.h). Set before anything is sent.
+		void setPacketStrings(bool on) { m_packetStrings = on; }
+
+		// Ghosting. setGhost adds an object or updates it (only what changed is
+		// sent); removeGhost deletes it on the client. Ignored for profiles whose
+		// game packets are not implemented.
+		void setGhost(ObjectKey key, const GhostObject& object);
+		void removeGhost(ObjectKey key);
+		// Gives the client this object as its control object, once its ghost is in.
+		void setControlObject(ObjectKey key);
+
+		[[nodiscard]] std::optional<uint32_t> ghostIndex(ObjectKey key) const;
+		[[nodiscard]] bool ghostDelivered(ObjectKey key) const;
+		[[nodiscard]] size_t ghostCount() const { return m_ghosts.size(); }
+		[[nodiscard]] bool controlObjectDelivered() const { return m_controlDelivered; }
 
 		// The out-of-band disconnect packet for this connection.
 		[[nodiscard]] std::string disconnectPacket(std::string_view reason) const;
@@ -81,17 +118,47 @@ namespace graal3d
 			BitWriter payload;
 		};
 
+		// A client event, decoded where it stood in its packet: strings can refer
+		// to the string before them in the same packet.
 		struct InEvent
 		{
-			uint32_t classId;
-			std::string payload; // the payload bits, byte padded
-			size_t bits;
+			std::string_view name;
+			uint32_t id = 0; // NetString index, BigData id, ConnectionMessage type
+			std::string text;
+			std::vector<CommandArg> args;
+			TextMessage header;
+			uint32_t total = 0;
+			BigDataMode mode = BigDataMode::Raw;
+			uint32_t sequence = 0;
+			uint32_t count = 0;
+		};
+
+		struct Ghost
+		{
+			uint32_t index = 0;
+			uint32_t classId = 0;
+			GhostObject object;
+			uint32_t pending = 0;        // dirty bits not yet sent
+			bool created = false;        // the client acked the create
+			bool createInFlight = false;
+			bool kill = false;
+			bool killInFlight = false;
+		};
+
+		struct GhostSent
+		{
+			ObjectKey key;
+			uint32_t mask;
+			bool create;
+			bool kill;
 		};
 
 		struct Notify
 		{
 			uint32_t sequence;
 			std::vector<int32_t> events; // guaranteed event sequence numbers
+			std::vector<GhostSent> ghosts;
+			bool control = false;
 		};
 
 		void postEvent(std::string_view className, BitWriter payload);
@@ -100,7 +167,14 @@ namespace graal3d
 		void handleNotify(bool delivered);
 		void readDataPacket(BitReader& reader);
 		bool readClientGameSection(BitReader& reader);
-		void processEvent(uint32_t classId, BitReader& payload);
+		std::optional<InEvent> decodeEvent(uint32_t classId, const std::string& payload, size_t bits, std::string& stringBuffer);
+		void processEvent(const InEvent& event);
+		void writeControlSection(BitWriter& writer, Notify& note, uint64_t nowMs);
+		void writeGhostSection(BitWriter& writer, Notify& note);
+		void ghostNotify(const Notify& note, bool delivered);
+		[[nodiscard]] bool ghostWorkPending() const;
+		[[nodiscard]] bool controlPending() const;
+		std::optional<uint32_t> allocateGhostIndex();
 		void onEstablished();
 		void log(std::string_view text) const;
 
@@ -141,7 +215,18 @@ namespace graal3d
 		uint32_t m_nextBigDataId = 0;
 
 		MissionState m_mission = MissionState::NotStarted;
-		bool m_warnedControl = false;
+		bool m_packetStrings = true;
+		bool m_warnedStrings = false;
+
+		std::map<ObjectKey, Ghost> m_ghosts;
+		std::set<uint32_t> m_usedIndices;
+		std::optional<ObjectKey> m_controlKey;
+		bool m_controlInFlight = false;
+		bool m_controlDelivered = false;
+
+		// The client's own control object, as its echoes describe it.
+		GameObjectState m_clientObject;
+		std::string m_clientMoveType;
 	};
 
 } // namespace graal3d

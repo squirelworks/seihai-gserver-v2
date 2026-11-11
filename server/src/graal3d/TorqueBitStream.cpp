@@ -1,10 +1,12 @@
-// Modified by the Seihai project, 2026-11-11: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
 // New file: Torque bit stream and Huffman strings for the Graal 3D UDP connection.
 // The frequency table and the tree construction follow the MIT-licensed Torque3D
 // source (core/stream/bitStream.cpp, HuffmanProcessor), which matches the strings
 // the real 5.12 client sent in the 2026-10-30 lab.
 
 #include <graal3d/TorqueBitStream.h>
+
+#include <algorithm>
 
 #include <array>
 #include <cstring>
@@ -192,6 +194,11 @@ namespace graal3d
 		if (text.size() > 255)
 			text = text.substr(0, 255);
 
+		// Inside a game packet the reader has a string buffer and first reads a
+		// "shares a prefix with the last string" flag. This writer never shares.
+		if (m_packetStrings)
+			writeFlag(false);
+
 		const auto bits = huffmanBits(text);
 		if (bits >= text.size() * 8)
 		{
@@ -264,6 +271,23 @@ namespace graal3d
 	}
 
 	std::string BitReader::readString()
+	{
+		if (m_stringBuffer == nullptr)
+			return readPlainString();
+
+		std::string out;
+		if (readFlag())
+		{
+			const auto offset = std::min<size_t>(readInt(8), m_stringBuffer->size());
+			out = m_stringBuffer->substr(0, offset) + readPlainString();
+		}
+		else
+			out = readPlainString();
+		*m_stringBuffer = out;
+		return out;
+	}
+
+	std::string BitReader::readPlainString()
 	{
 		const bool huffman = readFlag();
 		const auto length = readInt(8);

@@ -303,6 +303,9 @@ upnp = false
 graal3d = false
 # The UDP port. Unset or 0 means serverport + 1, which is the port the clients use.
 # graal3dport = 0
+# Strings in game packets start with Torque's prefix flag (see docs/graal3d.md).
+# graal3dstringprefix = true
+# The world the 3D clients are sent: config/graal3dworld.txt (see docs/graal3d.md).
 
 # Sets the server into localhost mode: all logins are allowed with no listserver verification.
 # The server still registers with the list server when one is running.

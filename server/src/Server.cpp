@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-11: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -249,6 +249,15 @@ int Server::init(const std::string_view serverip, const std::string_view serverp
 			udpPort = tcpPort + 1;
 
 		m_graal3d = std::make_unique<graal3d::Service>(*this);
+
+		// The 3D world: config/graal3dworld.txt (see bin/docs/graal3d.md).
+		std::string worldText;
+		for (const auto& line : CString::loadToken(CString() << "config/graal3dworld.txt", "\n", false))
+			worldText.append(line.text(), static_cast<size_t>(line.length())).push_back('\n');
+		auto world = graal3d::parseWorld(worldText);
+		for (const auto& error : world.errors)
+			log::printLine(log::server, "** [Error] Graal3D: graal3dworld.txt {}", error);
+		m_graal3d->setWorld(std::move(world), m_settings.get<bool>("graal3dstringprefix").value_or(true));
 		if (udpPort < 65536 && m_graal3d->start(oInter, static_cast<uint16_t>(udpPort)))
 		{
 			auto indent = log::server.indent();

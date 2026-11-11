@@ -24,12 +24,48 @@ In `config/serveroptions.txt`:
 ```
 graal3d = true
 # graal3dport = 0      (0 or unset: serverport + 1, the port the clients use)
+# graal3dstringprefix = true
 ```
+
+`graal3dstringprefix` says whether strings inside game packets start with Torque's
+"shares a prefix with the last string" flag. The 5.00r7 `Graal3DEngine.dll` gives
+every game packet a string buffer, as stock TGE 1.x does, so the default is `true`.
+If a lab client's events log `does not fill its length with packet strings on; it
+does with them off`, set it to `false`.
 
 To list the server as a 3D server, set `hq_level = 4` in `config/adminconfig.txt`.
 seihai-listserver tags HQ level 4 as `3 ` on the gen 4 and gen 5 lists.
 
 Open UDP `serverport + 1` in the firewall as well as the TCP port.
+
+## The world
+
+`config/graal3dworld.txt` lists what every 3D client is sent. One entry per line,
+`#` starts a comment:
+
+```
+# object <name> <shape> <x> <y> <z> [<axis x> <axis y> <axis z> <angle in radians>]
+object Ground ground.dts 0 0 0
+object Tower tower.dif 20 5 0  0 0 1 1.5708
+
+# sun <direction x y z> <colour r g b a> <ambient r g b a>
+sun 0.57 0.57 -0.57  0.8 0.8 0.8 1  0.3 0.3 0.35 1
+
+# the shape of every player's own object, and where it starts
+playershape player.dts
+spawn 0 0 1
+```
+
+A shape is a file name the client loads: `.dts`, `.dif`, `.3ds` or `.ft`. A client
+asks the gserver over TCP for any file it does not have, and stays at login step 5
+until every one of those requests has been answered (with the file or with "file not
+found"), so put the shapes and their textures in the server's file folders.
+
+Each linked player also gets a `GameObject` named `G3DPlayer_<account>`, with the
+player's nickname, on every 3D client. A player's own object is that client's control
+object. Each client reports its position in every packet, and the server moves the
+player's object on the other clients. Chat said on the object (`chat`) is passed on
+too. The server never sends a player's position back to that player.
 
 ## What the server does
 
@@ -42,7 +78,10 @@ Open UDP `serverport + 1` in the firewall as well as the TCP port.
 | Mission start (`MissionStartPhase1`, `2`) | 5.x and 4.20r6. The client answers each phase and raises `onGraal3DLoginStep`. |
 | Flags | sent at link time as one `events` text (`s name=value` lines), then every flag change as `set` / `unset`. |
 | From the client: `events` text | `s name=value` sets a flag or client variable (as `PLI_FLAGSET`), `w name` gives a weapon, `t weapon,name,params` runs a serverside triggeraction on that weapon. |
-| The 3D world (objects, terrain, the player's own object) | **not done.** No objects are ghosted, so a 5.x client stops at login step 4 ("mission lighting done") and does not switch to the 3D view. |
+| Ghosting (4.20r6, 5.x) | done. Objects are created, updated (only what changed) and deleted in the ghost section of each packet, and what a lost packet carried is sent again. `GameObject` (name, shape, skin, position and rotation, velocity, chat, `attr[1..8]`, nickname and colour, the solid/shadow/collision flags) and `Sun`. |
+| Control object (4.20r6, 5.x) | done. Once the client has its player object, the server makes it the control object, which is login step 5. Step 6 follows once the client's TCP file downloads are done. |
+| From the client: its own object | read in every packet: the position, and the client's changes to the object (moves, chat, shape). Other players see them. |
+| `Sky`, `TerrainBlock`, `Camera`, `movetype` | **not sent.** None is needed for login steps 5 and 6. Terrain and sky layouts are only partly known. |
 | 3.153 and 4.04r2 game packets | **not done.** They use Torque's older game packet (moves, datablocks). Those clients get the handshake and keep-alive only. |
 
 The server log shows each link: `Graal3D: <account> linked from <ip> (protocol 24, 5.x ...)`.
@@ -50,6 +89,7 @@ The server log shows each link: `Graal3D: <account> linked from <ip> (protocol 2
 ## Not checked with a real client yet
 
 The handshake bytes are tested against the packets a real 5.12 client sent in a
-2026-10-30 lab (`Catch_tests/Graal3D`). The mission phases, the text channel and
-the flag bridge were written from static reads of the 4.04r2 and 5.0.0.7
-`Graal3DEngine.dll` and have not been run against a real client.
+2026-10-30 lab (`Catch_tests/Graal3D`). The mission phases, the text channel, the
+flag bridge and the ghosting were written from static reads of the 4.04r2 and 5.00r7
+`Graal3DEngine.dll` (the ghost, control-object and `GameObject` layouts from 5.00r7,
+which also uses protocol 24) and have not been run against a real client.

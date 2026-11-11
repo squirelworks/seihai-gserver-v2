@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
 // New file: the gserver's Graal 3D UDP side. See Graal3DService.h.
 
 #include <graal3d/Graal3DService.h>
@@ -290,10 +290,26 @@ namespace graal3d
 				log::printLine(log::server, "Graal3D: {} finished the mission start.", account);
 		};
 
+		cb.onClientState = [this, playerId](const ClientState& state) { handleClientState(playerId, state); };
+
 		Session session{from, playerId, std::make_unique<Connection>(*profile, req->sequence, now, std::move(cb))};
+		auto& connection = *session.connection;
+		connection.setPacketStrings(m_packetStrings);
 		m_sessions.emplace(from, std::move(session));
 		m_byPlayer[playerId] = from;
 		player->setGraal3DLinked(true);
+
+		// The player's own object, on every screen; the world and the other
+		// players on theirs. Ghosts go out once the connection is up.
+		GhostObject avatar;
+		avatar.object.name = "G3DPlayer_" + account;
+		avatar.object.shape = m_world.playerShape;
+		avatar.object.transform = m_world.spawn;
+		avatar.object.nickname = player->account.character.nickName;
+		avatar.object.flags = GameObjectFlags::Shadow;
+		m_avatars[playerId] = avatar;
+		ghostWorld(playerId, account, connection);
+		forEachOtherConnection(playerId, [&](Connection& other) { other.setGhost(avatarKey(playerId), avatar); });
 
 		sendTo(from, buildConnectAccept(req->sequence, *profile));
 		log::printLine(log::server, "Graal3D: {} linked from {} (protocol {}, {}).", account, ipString(from), profile->protocol, profile->clients);
@@ -314,9 +330,62 @@ namespace graal3d
 			m_byPlayer.erase(p);
 			if (auto player = m_server.getPlayer(playerId))
 				player->setGraal3DLinked(false);
+			m_avatars.erase(playerId);
+			forEachOtherConnection(playerId, [&](Connection& other) { other.removeGhost(avatarKey(playerId)); });
 		}
 		log::printLine(log::server, "Graal3D: link from {} closed ({}).", ipString(endpoint), reason);
 		m_sessions.erase(it);
+	}
+
+	void Service::setWorld(World world, bool packetStrings)
+	{
+		m_world = std::move(world);
+		m_packetStrings = packetStrings;
+	}
+
+	void Service::ghostWorld(PlayerID playerId, const std::string& account, Connection& connection)
+	{
+		ObjectKey key = 1;
+		for (const auto& object : m_world.objects)
+			connection.setGhost(key++, object);
+		for (const auto& [other, avatar] : m_avatars)
+			connection.setGhost(avatarKey(other), avatar);
+		connection.setControlObject(avatarKey(playerId));
+		log::printLine(log::server, "Graal3D: {} gets {} world objects and {} players.", account, m_world.objects.size(), m_avatars.size());
+	}
+
+	void Service::forEachOtherConnection(PlayerID playerId, const std::function<void(Connection&)>& fn)
+	{
+		for (auto& [endpoint, session] : m_sessions)
+		{
+			if (session.player != playerId)
+				fn(*session.connection);
+		}
+	}
+
+	void Service::handleClientState(PlayerID playerId, const ClientState& state)
+	{
+		auto it = m_avatars.find(playerId);
+		if (it == m_avatars.end())
+			return;
+
+		// The client owns its object: take what it reports, and pass it on to
+		// everyone else. Its own screen is never sent its position back.
+		auto& object = it->second.object;
+		const auto before = object;
+		object.transform.position = state.position;
+		if (state.controlling)
+		{
+			if (state.changed & GameObjectBits::Transform)
+				object.transform = state.object.transform;
+			if (state.changed & GameObjectBits::Chat)
+				object.chat = state.object.chat;
+			if (state.changed & GameObjectBits::Velocity)
+				object.velocity = state.object.velocity;
+		}
+		if (object == before)
+			return;
+		forEachOtherConnection(playerId, [&](Connection& other) { other.setGhost(avatarKey(playerId), it->second); });
 	}
 
 	void Service::onPlayerLeft(PlayerID player)
