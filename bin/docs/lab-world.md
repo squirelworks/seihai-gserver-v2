@@ -20,8 +20,8 @@ From the folder that holds `gs2emu`, start each server in its own terminal:
 ./gs2emu --server classic      # Windows: gs2emu.exe --server classic
 ```
 
-Stop a server with Ctrl+C. A one-step setup that starts both will be part of
-seihai-servertools.
+Stop a server with Ctrl+C. To start a listserver and both servers in one step,
+use seihai-servertools: `seihai-servertools lab start --world <this folder>`.
 
 macOS may block the unsigned `gs2emu` the first time. Open it once with
 right-click and Open, or clear the download flag with
