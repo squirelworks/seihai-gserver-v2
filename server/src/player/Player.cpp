@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-01, 2026-11-04, 2026-11-06, 2026-11-07: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-01, 2026-11-04, 2026-11-06, 2026-11-07, 2026-11-11: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -519,6 +519,13 @@ void Player::sendPacket(const CString& packet)
 		log::print(log::networkdump, "{:02x} ", (unsigned char)((packet.text())[i]));
 	log::print(log::networkdump, "\n\n");
 #endif
+
+	// A client in Graal 3D mode ignores flag packets on TCP; send them on its 3D link too.
+	if (m_graal3dLinked && m_server != nullptr)
+	{
+		if (auto* graal3d = m_server->getGraal3D(); graal3d != nullptr)
+			graal3d->mirrorPacket(getId(), packet);
+	}
 
 	// append buffer
 	m_fileQueue.addPacket(packet);

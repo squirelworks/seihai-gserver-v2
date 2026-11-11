@@ -297,6 +297,13 @@ localip = 127.0.0.1
 # Seihai lab default: UPnP off, so no router port is opened.
 upnp = false
 
+# Graal 3D (Seihai): a Torque UDP server on serverport + 1 for the 3.153 to 5.x clients.
+# They open it, beside the normal TCP login, when the listed server name starts with "3 ".
+# Off by default. See docs/graal3d.md for what works and what does not yet.
+graal3d = false
+# The UDP port. Unset or 0 means serverport + 1, which is the port the clients use.
+# graal3dport = 0
+
 # Sets the server into localhost mode: all logins are allowed with no listserver verification.
 # The server still registers with the list server when one is running.
 # Seihai lab default: true, so the lab world runs without a listserver.  Only safe while
