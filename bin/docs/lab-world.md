@@ -1,14 +1,15 @@
 # Seihai lab world
 
 This fork ships a ready-to-run lab world for testing clients on one machine. It
-has two server folders, both set up for loopback only:
+has three server folders, all set up for loopback only:
 
 | Folder | Generation | Clients | Address |
 |---|---|---|---|
 | `servers/default` | newmain | 2.00 to 2.31, 3.04 to 3.153 | `127.0.0.1:14802` |
 | `servers/classic` | classic | 1.33 to 1.41r1 | `127.0.0.1:14803` |
+| `servers/modern` | modern | 4.20r8 to 6.037 | `127.0.0.1:14805` |
 
-A third folder, `servers/npcdemo` (`127.0.0.1:14804`), is a sample world for the
+A fourth folder, `servers/npcdemo` (`127.0.0.1:14804`), is a sample world for the
 built-in NPC-server; see `servers/npcdemo/README.md`.
 
 ## Start it
@@ -18,6 +19,7 @@ From the folder that holds `gs2emu`, start each server in its own terminal:
 ```
 ./gs2emu --server default      # Windows: gs2emu.exe --server default
 ./gs2emu --server classic      # Windows: gs2emu.exe --server classic
+./gs2emu --server modern       # Windows: gs2emu.exe --server modern
 ```
 
 Stop a server with Ctrl+C. To start a listserver and both servers in one step,
@@ -29,7 +31,7 @@ right-click and Open, or clear the download flag with
 
 ## What the lab settings are
 
-Both folders' `config/serveroptions.txt` differ from upstream's defaults in
+All three folders' `config/serveroptions.txt` differ from upstream's defaults in
 these settings:
 
 - `serverinterface = 127.0.0.1`: the server listens on loopback only, so other
@@ -52,11 +54,20 @@ The classic folder also has `generation = classic`, port 14803,
 `sword1.gif` and `shield1.gif`, because 1.33 to 1.39 only have `.gif` versions
 of them.
 
+The modern folder is the default folder with `generation = modern`, port 14805,
+and an `allowedversions.txt` that lets in 4.20r8 to 6.037: the clients that load
+resource packages. It is the folder for `.gpak` and `.gpake` files. Put them in
+`servers/modern/world/gpaks/`, list them in `gpaks =` in its `serveroptions.txt`,
+and keep the `.gpake` keys in `servers/modern/config/gpakkeys.txt`. Build both
+with `seihai-servertools gpak pack`. A `.gpake` goes to 4.20r8 and later, a plain
+`.gpak` to 5.07 and later.
+
 ## Connecting
 
 - 1.33 to 1.39 have no server list: use "One Player Online" with `127.0.0.1`
   and port 14803.
-- Other clients: connect to `127.0.0.1:14802`, directly or through a lab
+- 4.20r8 to 6.037: connect to `127.0.0.1:14805`.
+- 2.00 to 3.153: connect to `127.0.0.1:14802`, directly or through a lab
   listserver.
 - The Seihai client: `seihai-mae --online 127.0.0.1:14802 --account test --password-env GRAAL_PW --version 2.05`
   (any password in `GRAAL_PW`).
