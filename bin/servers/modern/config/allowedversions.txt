@@ -3,7 +3,7 @@
 
 classic = GNW13110           // 1.41r1
 newmain = GNW24011:GNW28015, G3D03014:G3D28015  // 2.00 - 2.31, 3.04 - 3.153 (Seihai)
-modern = G3D20126:G3D0511C   // 4.20r8 - 6.037: the clients that load resource packages (Seihai)
+modern = G3D17026:G3D0511C   // 4.04r2 - 6.037; 4.20r8 and later load resource packages (Seihai)
 
 //newmain = GNW03014           // 2.22 (no npc-server)
 //modern = G3D22067            // 5.007 (last version to support clientside GS1)

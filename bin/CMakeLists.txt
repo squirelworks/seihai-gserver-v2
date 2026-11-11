@@ -163,7 +163,7 @@ install(FILES
 		"servers/classic/accounts/YOURACCOUNT.txt"
 		DESTINATION "./servers/classic/accounts")
 
-# Seihai: the modern lab server folder (4.20r8 to 6.037, resource packages).
+# Seihai: the modern lab server folder (4.04r2 to 6.037, resource packages).
 install(DIRECTORY "./servers/modern"
 		DESTINATION "./servers"
 		REGEX "/(logs|accounts)/[^/]*\\.txt$" EXCLUDE)
