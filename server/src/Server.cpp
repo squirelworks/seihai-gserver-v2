@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -239,6 +239,37 @@ int Server::init(const std::string_view serverip, const std::string_view serverp
 		log::printLine(log::server, "Listening on: {}:{}.", m_playerSock.getRemoteIp(), m_playerSock.getRemotePort());
 	}
 
+	// The Graal 3D side: a Torque UDP server on the listed port + 1, for the 3.153 to
+	// 5.x clients. Off unless `graal3d = true`.
+	if (m_settings.get<bool>("graal3d").value_or(false) && m_graal3d == nullptr)
+	{
+		const int tcpPort = std::atoi(m_settings.get<std::string>("serverport").value_or("14802"s).c_str());
+		int udpPort = m_settings.get<int>("graal3dport").value_or(0);
+		if (udpPort <= 0)
+			udpPort = tcpPort + 1;
+
+		m_graal3d = std::make_unique<graal3d::Service>(*this);
+
+		// The 3D world: config/graal3dworld.txt (see bin/docs/graal3d.md).
+		std::string worldText;
+		for (const auto& line : CString::loadToken(CString() << "config/graal3dworld.txt", "\n", false))
+			worldText.append(line.text(), static_cast<size_t>(line.length())).push_back('\n');
+		auto world = graal3d::parseWorld(worldText);
+		for (const auto& error : world.errors)
+			log::printLine(log::server, "** [Error] Graal3D: graal3dworld.txt {}", error);
+		m_graal3d->setWorld(std::move(world), m_settings.get<bool>("graal3dstringprefix").value_or(true));
+		if (udpPort < 65536 && m_graal3d->start(oInter, static_cast<uint16_t>(udpPort)))
+		{
+			auto indent = log::server.indent();
+			log::printLine(log::server, "Graal3D: listening on UDP port {}.", udpPort);
+		}
+		else
+		{
+			log::printLine(log::server, "** [Error] Graal3D: could not open UDP port {}.", udpPort);
+			m_graal3d.reset();
+		}
+	}
+
 	// Start a UPNP thread.  It will try to set a UPNP port forward in the background.
 #ifdef ENABLE_UPNP
 	if (m_settings.get<bool>("upnp").value_or(true) && m_upnp == nullptr)
@@ -306,6 +337,9 @@ void Server::cleanup()
 	// Save server flags.
 	saveServerFlags();
 
+	// Close the Graal 3D links before the players go.
+	m_graal3d.reset();
+
 	// Save NPC-Server NPCs.
 	if (hasNPCServer())
 		m_npcServer->saveNPCs();
@@ -353,6 +387,10 @@ bool Server::doMain()
 {
 	// Update our socket manager.
 	m_sockManager.update(0, 5000); // 5ms
+
+	// Graal 3D UDP links.
+	if (m_graal3d)
+		m_graal3d->update();
 
 	// Current time
 	const auto oldTime = m_frameStartTimeHighPrecision;
@@ -1667,6 +1705,10 @@ bool Server::deletePlayer(const PlayerPtr& player)
 {
 	if (player == nullptr)
 		return true;
+
+	// A Graal 3D link lives only as long as the TCP session.
+	if (m_graal3d)
+		m_graal3d->onPlayerLeft(player->getId());
 
 	if (player->isLoaded())
 	{

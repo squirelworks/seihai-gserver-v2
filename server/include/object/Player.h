@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-01, 2026-11-06, 2026-11-07: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-01, 2026-11-06, 2026-11-07, 2026-11-11: see CHANGES-SEIHAI.md.
 #ifndef PLAYER_H
 #define PLAYER_H
 
@@ -358,6 +358,9 @@ public:
 	bool isControlClient() const { return (m_type & PLTYPE_ANYCONTROL) != 0; }
 	bool isHiddenClientType() const { return (m_type & PLTYPE_NONITERABLE) != 0; }
 	bool isLoaded() const { return m_loaded; }
+	// Set while the player has a Graal 3D (Torque UDP) link; see graal3d/Graal3DService.h.
+	void setGraal3DLinked(bool linked) { m_graal3dLinked = linked; }
+	bool isGraal3DLinked() const { return m_graal3dLinked; }
 	bool isGuest() const { return account.loadOnly && account.communityName == "guest"; }
 	int getType() const { return m_type; }
 	void setType(const int val) { m_type = val; }
@@ -489,6 +492,7 @@ protected:
 	std::string m_serverName;
 	uint8_t m_statusMsg = 0;
 	uint8_t m_additionalFlags = 0;
+	bool m_graal3dLinked = false;
 	std::set<std::string> m_channelList;
 	clock::time_point m_lastData;
 	uint8_t m_encryptionKey = 0;

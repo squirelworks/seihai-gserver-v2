@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-11: see CHANGES-SEIHAI.md.
 #ifndef SERVER_H
 #define SERVER_H
 
@@ -31,6 +31,7 @@
 #include <UpdatePackage.h>
 #include <animation/GameAni.h>
 #include <filesystem/FileSystem.h>
+#include <graal3d/Graal3DService.h>
 #include <level/Level.h>
 #include <level/LevelItem.h>
 #include <level/LevelShoot.h>
@@ -441,6 +442,9 @@ public:
 	bool hasNPCServer() const { return m_playerList.contains(NPCServerPlayerID); }
 	std::shared_ptr<NPCServer> getNPCServer() const { return m_npcServer; }
 
+	// The Graal 3D (Torque UDP) side, or nullptr when the `graal3d` option is off.
+	graal3d::Service* getGraal3D() const { return m_graal3d.get(); }
+
 	void queueNPCEventLocal(const LevelPtr& level, ScriptEventType type, ScriptObject source, auto&&... args)
 	{
 		if (!hasNPCServer()) return;
@@ -561,6 +565,8 @@ private:
 
 	std::unique_ptr<UPNP> m_upnp;
 	std::thread m_upnpThread;
+
+	std::unique_ptr<graal3d::Service> m_graal3d;
 };
 
 inline const auto& Server::getAllowedDeathDrops() const noexcept

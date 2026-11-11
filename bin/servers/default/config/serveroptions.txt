@@ -1,4 +1,4 @@
-# Modified by the Seihai project, 2026-10-31, 2026-11-06: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-11: see CHANGES-SEIHAI.md.
 # Sets the location where new players start on the server.
 # By default, the server uses the values inside the defaultaccount.
 # These values will override defaultaccount.
@@ -298,6 +298,16 @@ serverinterface = 127.0.0.1
 localip = 127.0.0.1
 # Seihai lab default: UPnP off, so no router port is opened.
 upnp = false
+
+# Graal 3D (Seihai): a Torque UDP server on serverport + 1 for the 3.153 to 5.x clients.
+# They open it, beside the normal TCP login, when the listed server name starts with "3 ".
+# Off by default. See docs/graal3d.md for what works and what does not yet.
+graal3d = false
+# The UDP port. Unset or 0 means serverport + 1, which is the port the clients use.
+# graal3dport = 0
+# Strings in game packets start with Torque's prefix flag (see docs/graal3d.md).
+# graal3dstringprefix = true
+# The world the 3D clients are sent: config/graal3dworld.txt (see docs/graal3d.md).
 
 # Sets the server into localhost mode: all logins are allowed with no listserver verification.
 # The server still registers with the list server when one is running.
