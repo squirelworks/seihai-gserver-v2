@@ -497,6 +497,9 @@ bool PlayerClient::sendLogin()
 		if (m_server->getServerList().getConnected())
 			sendPacket(CString() >> (char)PLO_SERVERLISTCONNECTED);
 
+		// Reset the client.
+		sendPacket(CString() >> (char)PLO_RESETCLIENT);
+
 		// Send the bigmap if it was set.
 		if (m_versionId >= CLVER_2_1)
 		{
@@ -595,9 +598,6 @@ bool PlayerClient::sendLogin()
 
 	// Stage 3 - Weapons
 	{
-		// Sent to rc and client, but rc ignores it so...
-		sendPacket(CString() >> (char)PLO_CLEARWEAPONS);
-
 		// Delete the bomb and bow.  They get automagically added by the client for
 		// God knows which reason.  Bomb and Bow must be capitalized.
 		sendPacket(CString() >> (char)PLO_NPCWEAPONDEL << "Bomb");
@@ -666,6 +666,9 @@ bool PlayerClient::sendLogin()
 	// Queue up the login event.
 	if (m_server->hasNPCServer())
 	{
+		// Construct our script parameters.
+		constructScriptParameters();
+
 		auto npcServer = m_server->getNPCServer();
 		npcServer->playerLogin(shared_from_this());
 		npcServer->addEventToControlNPC(ScriptEventType::TRIGGERACTION, source::FromPlayer(m_id), "playeronline");
@@ -1180,7 +1183,7 @@ std::string PlayerClient::getLevelName() const
 
 std::shared_ptr<Level> PlayerClient::getLevel() const
 {
-	if (isHiddenClient())
+	if (isHiddenClientType())
 		return nullptr;
 
 	return m_currentLevel.lock();

@@ -60,8 +60,8 @@ baddyitems = false
 
 # Value from 0-100 that determines the percent chance the item will drop from bushes.
 # Will check in order of the bushitemtypes list, so if the sum adds up to over 100, it will eventually stop early.
-# spawnrategreenrupee = 10
-# spawnratebluerupee = 5
+# spawnrategreenrupee = 25
+# spawnratebluerupee = 2
 # spawnrateheart = 5
 # spawnratebombs = 5
 
@@ -243,6 +243,9 @@ classicstylelogs = false
 # If 0, inactive levels are not unloaded.  Levels are unloaded during maintenance cycles (every 1 minute), so this may not be exact.
 unloadinactiveleveltime = 600
 
+# Forces saving all npcs on level exit, can be disabled for optimization.
+# savenpcsonlevelcache = true
+
 # The images used for when an NPC carries an object.
 # These must be kept in the same order.
 # npccarryobjectimages = bushitem.png,signitem.png,vaseitem.png,stoneitem.png,blackstoneitem.png,bombitem.png,hotbombitem.png,superbombitem.png,joltbombitem.png,hotjoltbombitem.png,noneitem.png
@@ -372,11 +375,13 @@ flaghack_ip = false				# gr.ip
 # If true, the server will process all script events, even if the NPC doesn`t check for the event flag.
 runallscriptevents = false
 
-# Scripting
-default_scriptengine = gs1
+# Controls the default script engine for all scripts, clientside scripts, or serverside scripts.
+# Built-in options: gs1 or gs2
+# default_scriptengine = gs1
+# default_scriptengine_client =
+# default_scriptengine_server =
 
 # Diagnostics
-# warnoncroppedflags = true
 # warnonmissingfiles = false
 # warnonlargefiles = false
 # warnonfilesystemissues = true
@@ -535,9 +540,6 @@ default_scriptengine = gs1
 
 # Logs attempts of modifying read-only variables to logs/scripterrors.txt
 # scriptlogwritetoreadonly = true/false
-
-# Forces saving all npcs on level exit, can be disabled for optimization.
-# savenpcsonlevelcache = true/false
 
 # Limits how many gralats can be stacked on the ground.
 # maxgralatvalue = 0 or number

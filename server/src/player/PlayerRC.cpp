@@ -231,9 +231,9 @@ bool PlayerRC::sendLogin()
 
 	const auto& settings = m_server->getSettings();
 
-	// This packet clears the players weapons on the client, but official
-	// also sends it to the RC's so we are maintaining the same behavior
-	sendPacket(CString() >> (char)PLO_CLEARWEAPONS);
+	// This packet resets the client, but official
+	// also sends it to the RC's so we are maintaining the same behavior.
+	sendPacket(CString() >> (char)PLO_RESETCLIENT);
 
 	// If no nickname was specified, set the nickname to the account name.
 	if (account.character.nickName.empty())

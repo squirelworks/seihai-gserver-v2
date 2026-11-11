@@ -1,13 +1,20 @@
 # Seihai changes to GServer-v2
 
 This is the Seihai fork of [GServer-v2](https://github.com/xtjoeytx/GServer-v2),
-branch `beta4` at `5a90281` (2026-11-03). It is released under the same licence,
+branch `beta4` at `25396a1` (2026-11-09). It is released under the same licence,
 the GNU General Public License version 3 (see `LICENSE.md`). The original authors
 are credited in `README.md`.
 
 Every change below was checked on a private loopback lab with real Graal
 clients and with the [Seihai](https://github.com/squirelworks/seihai) client.
 Each file we changed carries a one-line notice at its top.
+
+## 2026-11-11
+
+| Change | Files | Clients it fixes |
+|---|---|---|
+| Merged upstream GServer-v2 `beta4` up to `25396a1` (48 commits after `5a90281`: GS1 engine and movement fixes, timeout event order, NPC gmap sublevels, `savenpcsonlevelcache`, `default_scriptengine_client`/`_server`, GS2 v4 bytecode, Z3-V1.02 levels, 1.x baddy drop rates, the file loading crash and the `.gupd`, UPnP and `getClientByteCode` crash fixes, and more). Every Seihai change above is kept. Where both sides fixed the same thing: the RC's load-only account save now uses upstream's `forceSaveAccount` instead of our `saveAccount(..., true)`, with our `applyRCAccountFields` (admin level and worlds kept) unchanged; the `synchronizeFlags` fix was the same line on both sides; our `deserializeAccountFlag` stays for account flags. Our packet names stay in the log tables; code that came from upstream keeps upstream's names, which are aliases of ours in seihai-gs2lib. | `server/` (merge), `server/CMakeLists.txt`, `bin/docs/npcserver.md`, `server/include/loader/IAccountLoader.h`, `server/include/loader/flatfile/FlatFileAccountLoader.h`, `server/src/loader/flatfile/FlatFileAccountLoader.cpp`, `server/src/player/packets/PlayerRCPackets.cpp` | all; no real client run yet for this merge |
+| gs2lib pin moves to seihai-gs2lib `17c03a4`: upstream gs2lib `35056f8` (the commit beta4 now pins) merged into our branch, with upstream's 2026-11-06 packet names added as aliases of ours. | `server/CMakeLists.txt` | none (build) |
 
 ## 2026-11-07
 

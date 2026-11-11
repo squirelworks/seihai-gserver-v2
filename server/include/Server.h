@@ -139,6 +139,7 @@ struct ExternalServerCachedSettings
 	SettingCache<bool> saveTileChangesToLevelFile{"levelsautosave", false};
 	SettingCache<bool> dontAddServerFlags{"dontaddserverflags", false};
 	SettingCache<uint32_t> unloadInactiveLevelTime{"unloadinactiveleveltime", 600};
+	SettingCache<bool> saveNPCsOnLevelCache{"savenpcsonlevelcache", true};
 	// flag/triggerhacks
 	SettingCache<bool> enableFlaghackMovement{"flaghack_movement", true};
 	SettingCache<bool> enableTriggerhackExecscript{"triggerhack_execscript", false};
@@ -182,7 +183,6 @@ struct ExternalServerCachedSettings
 	SettingCache<std::vector<std::string>> playerStatusList{"playerlisticons", {"Online", "Away", "DND", "Eating", "Hiding", "No PMs", "RPing", "Sparring", "PKing"}};
 	SettingCache<std::vector<std::string>> playerSwordGanis{"playerswordganis", {"sword"}};
 	// diagnostics
-	SettingCache<bool> warnOnCroppedFlags{"warnoncroppedflags", true};
 	SettingCache<bool> warnOnMissingFiles{"warnonmissingfiles", false};
 	SettingCache<bool> warnOnLargeFiles{"warnonlargefiles", false};
 	SettingCache<bool> warnOnFilesystemIssues{"warnonfilesystemissues", true};

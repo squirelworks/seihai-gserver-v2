@@ -365,6 +365,10 @@ public:
 	bool isOnNPC(const PixelRectangleArea& pixelArea) const noexcept;
 	bool isOnPlayer(const PixelPosition& position) const noexcept;
 	bool isOnPlayer(const PixelRectangleArea& pixelArea) const noexcept;
+	std::ptrdiff_t testNPC(const PixelPosition& position, std::optional<NPCID> initiator = std::nullopt) const noexcept;
+	std::ptrdiff_t testNPC(const PixelRectangleArea& pixelArea, std::optional<NPCID> initiator = std::nullopt) const noexcept;
+	std::ptrdiff_t testPlayer(const PixelPosition& position) const noexcept;
+	std::ptrdiff_t testPlayer(const PixelRectangleArea& pixelArea) const noexcept;
 	tileset::TileType getTileTypeAt(const WholeTilePosition& tilePosition) const noexcept;
 	tileset::TileType getTileTypeAt(const PixelPosition& position) const noexcept;
 
@@ -381,6 +385,8 @@ public:
 	std::generator<NPCID> findIntersectingNPCs(const PixelRectangleArea& area, bool includeInvisible = false) const noexcept;
 	std::generator<NPCID> findIntersectingNPCsForCollision(const PixelPosition& position) const noexcept;
 	std::generator<NPCID> findIntersectingNPCsForCollision(const PixelRectangleArea& area) const noexcept;
+	std::generator<NPCID> findIntersectingNPCsForEvent(const PixelPosition& position) const noexcept;
+	std::generator<NPCID> findIntersectingNPCsForEvent(const PixelRectangleArea& area) const noexcept;
 
 public:
 	std::string levelName;
