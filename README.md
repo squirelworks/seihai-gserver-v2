@@ -10,7 +10,7 @@ source. Licence: GPL-3.0, as upstream.
 The `bin` folder (and every release archive) holds a lab world that listens on
 `127.0.0.1` only, with UPnP off: `servers/default` for 2.00 to 3.153 on port
 14802, `servers/classic` for 1.33 to 1.41r1 on port 14803, and `servers/modern`
-for 4.20r8 to 6.037 (and their `.gpak` resource packages) on port 14805. Start
+for 4.04r2 to 6.037 (and the `.gpak` resource packages of 4.20r8 and later) on port 14805. Start
 one with `gs2emu --server default`, `classic` or `modern` from the `bin` folder.
 Any account logs in without a listserver. Details, and how to open a server to
 other machines: [bin/docs/lab-world.md](bin/docs/lab-world.md).

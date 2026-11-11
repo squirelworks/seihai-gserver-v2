@@ -7,7 +7,7 @@ has three server folders, all set up for loopback only:
 |---|---|---|---|
 | `servers/default` | newmain | 2.00 to 2.31, 3.04 to 3.153 | `127.0.0.1:14802` |
 | `servers/classic` | classic | 1.33 to 1.41r1 | `127.0.0.1:14803` |
-| `servers/modern` | modern | 4.20r8 to 6.037 | `127.0.0.1:14805` |
+| `servers/modern` | modern | 4.04r2 to 6.037 | `127.0.0.1:14805` |
 
 A fourth folder, `servers/npcdemo` (`127.0.0.1:14804`), is a sample world for the
 built-in NPC-server; see `servers/npcdemo/README.md`.
@@ -55,7 +55,7 @@ The classic folder also has `generation = classic`, port 14803,
 of them.
 
 The modern folder is the default folder with `generation = modern`, port 14805,
-and an `allowedversions.txt` that lets in 4.20r8 to 6.037: the clients that load
+and an `allowedversions.txt` that lets in 4.04r2 to 6.037; 4.20r8 and later load
 resource packages. It is the folder for `.gpak` and `.gpake` files. Put them in
 `servers/modern/world/gpaks/`, list them in `gpaks =` in its `serveroptions.txt`,
 and keep the `.gpake` keys in `servers/modern/config/gpakkeys.txt`. Build both
@@ -66,7 +66,7 @@ with `seihai-servertools gpak pack`. A `.gpake` goes to 4.20r8 and later, a plai
 
 - 1.33 to 1.39 have no server list: use "One Player Online" with `127.0.0.1`
   and port 14803.
-- 4.20r8 to 6.037: connect to `127.0.0.1:14805`.
+- 4.04r2 to 6.037: connect to `127.0.0.1:14805`.
 - 2.00 to 3.153: connect to `127.0.0.1:14802`, directly or through a lab
   listserver.
 - The Seihai client: `seihai-mae --online 127.0.0.1:14802 --account test --password-env GRAAL_PW --version 2.05`
