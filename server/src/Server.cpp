@@ -110,7 +110,7 @@ void ExternalServerCachedSettings::bind(Server* server)
 	settings.track(disableExplosions, enableClientsidePushPull, tileRespawnTime, enableIdleDisconnect, idleTimeoutSeconds);
 	settings.track(enablePermanentTileChanges, saveTileChangesToLevelFile);
 	settings.track(dontAddServerFlags);
-	settings.track(unloadInactiveLevelTime);
+	settings.track(unloadInactiveLevelTime, saveNPCsOnLevelCache);
 
 	// triggerhacks
 	settings.track(enableFlaghackMovement, enableTriggerhackExecscript, enableTriggerhackFiles, enableTriggerhackGroups, enableTriggerhackGuilds, enableTriggerhackLevels, enableTriggerhackProps, enableTriggerhackRC, enableTriggerhackWeapons);
@@ -128,7 +128,7 @@ void ExternalServerCachedSettings::bind(Server* server)
 	settings.track(playerProfileVariables, playerStatusList, playerSwordGanis);
 
 	// diagnostics
-	settings.track(warnOnCroppedFlags, warnOnMissingFiles, warnOnLargeFiles, warnOnFilesystemIssues, warnOnInvalidLevelSections, logCorruptPackets);
+	settings.track(warnOnMissingFiles, warnOnLargeFiles, warnOnFilesystemIssues, warnOnInvalidLevelSections, logCorruptPackets);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -180,6 +180,12 @@ int Server::init(const std::string_view serverip, const std::string_view serverp
 	// Register the server start time.
 	m_serverStartTime = std::chrono::system_clock::now();
 
+	// Save the overrides.
+	m_overrideIp = serverip;
+	m_overridePort = serverport;
+	m_overrideLocalIp = localip;
+	m_overrideInterface = serverinterface;
+
 	// Perform any migrations, if necessary.
 	performMigrations();
 
@@ -200,21 +206,6 @@ int Server::init(const std::string_view serverip, const std::string_view serverp
 	// Load the server objects.
 	ret = loadServerObjects();
 	if (ret) return ret;
-
-	// If an override serverip and serverport were specified, fix the options now.
-	if (!serverip.empty())
-		m_settings.set("serverip", serverip);
-	if (!serverport.empty())
-		m_settings.set("serverport", serverport);
-	if (!localip.empty())
-		m_settings.set("localip", localip);
-	if (!serverinterface.empty())
-		m_settings.set("serverinterface", serverinterface);
-
-	m_overrideIp = serverip;
-	m_overridePort = serverport;
-	m_overrideLocalIp = localip;
-	m_overrideInterface = serverinterface;
 
 	// Fix up the interface to work properly with CSocket.
 	std::string_view oInter = m_overrideInterface;
@@ -613,8 +604,8 @@ void Server::prepareSettings()
 	// Bush drops.
 	m_bushItemTypes.onUpdate = [this](const std::optional<std::vector<std::string>>& newValue, const std::optional<std::vector<std::string>>& oldValue)
 	{
-		// greenrupee 10, bluerupee 5, bombs 5, heart 5
-		static constexpr std::array<int, 25> defaults = {10, 5, 0, 5, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+		// greenrupee 25, bluerupee 2, bombs 5, heart 5
+		static constexpr std::array<int, 25> defaults = {25, 2, 0, 5, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 		m_bushDrops.clear();
 		for (const auto& curItem : newValue.value())
@@ -670,6 +661,16 @@ void Server::prepareSettings()
 void Server::loadSettings()
 {
 	m_settings.load("serveroptions.txt");
+
+	// Restore our overrides.
+	if (!m_overrideIp.empty())
+		m_settings.set("serverip", m_overrideIp);
+	if (!m_overridePort.empty())
+		m_settings.set("serverport", m_overridePort);
+	if (!m_overrideLocalIp.empty())
+		m_settings.set("localip", m_overrideLocalIp);
+	if (!m_overrideInterface.empty())
+		m_settings.set("serverinterface", m_overrideInterface);
 
 	// Send our ServerHQ info in case we got changed the staffonly setting.
 	if (running) getServerList().sendServerHQ();
@@ -778,7 +779,11 @@ void Server::loadWorldFileSystem()
 	{
 		if (fileData == nullptr) continue;
 		if (fileData->file.extension() == ".gupd")
-			getPackageManager().findOrAddResource(fileData->file.string())->reload(this);
+		{
+			// Look up the package by filename and skip failed loads.
+			if (auto package = getPackageManager().findOrAddResource(fs::getANSIFileName(fileData->file)); package != nullptr)
+				package->reload(this);
+		}
 	}
 }
 
@@ -1891,22 +1896,8 @@ bool Server::setFlag(std::string_view flagPair, const bool sendToPlayers)
 	return setFlag(flagName, std::string{flagValue}, sendToPlayers);
 }
 
-bool Server::setFlag(std::string_view flagName, std::optional<std::string> flagValue, const bool sendToPlayers)
+bool Server::setFlag(const std::string_view flagName, std::optional<std::string> flagValue, const bool sendToPlayers)
 {
-	// Function to crop flags.
-	auto cropFlag = [this, &flagName](std::string& value)
-	{
-		bool crop = !hasNPCServer();
-		crop = crop || flagName.starts_with("client.") || flagName.starts_with("clientr.") || flagName.starts_with("serverr.");
-		if (crop && (flagName.length() + 1 + value.length()) > 223)
-		{
-			value.erase(std::min(value.length(), static_cast<size_t>(223 - 1) - flagName.length()));
-			if (cached.warnOnCroppedFlags.getValue() == true)
-				log::printLine(log::server, "[WARNING] Flag '{}' was cropped (over 223 characters in total).", flagName);
-		}
-		return value;
-	};
-
 	// Alter the flag if it exists.
 	const auto existing = Scripting.variables.get(flagName).lock();
 	if (existing != nullptr)
@@ -1929,7 +1920,7 @@ bool Server::setFlag(std::string_view flagName, std::optional<std::string> flagV
 
 		// Alter value.
 		if (flagValue.has_value())
-			existing->assign<std::string>(cropFlag(flagValue.value()));
+			existing->assign<std::string>(std::move(flagValue.value()));
 		else existing->assign<bool>(true);
 
 		// Make the lifetime permanent.
@@ -1940,7 +1931,7 @@ bool Server::setFlag(std::string_view flagName, std::optional<std::string> flagV
 	{
 		if (!flagValue.has_value())
 			Scripting.variables.add(GameVariable{.name = std::string{flagName}, .value = GameValue{true}, .lifetime = variables::Lifetime::PERMANENT});
-		else Scripting.variables.add(GameVariable{.name = std::string{flagName}, .value = GameValue{cropFlag(flagValue.value())}, .lifetime = variables::Lifetime::PERMANENT});
+		else Scripting.variables.add(GameVariable{.name = std::string{flagName}, .value = GameValue{std::move(flagValue.value())}, .lifetime = variables::Lifetime::PERMANENT});
 	}
 
 	// And share it.
@@ -1975,7 +1966,7 @@ void Server::hitPlayer(const PlayerID playerId, const int8_t power, const float 
 	// Client ignores if PLO_DISABLECLASSICMODE was sent.
 	// Client ignores if the source wasn't within 10 tiles.
 
-	auto tilePosition = player->getTilePosition();
+	auto tilePosition = toTilePosition(player->getEventBoundingBox().center());
 	auto dx = tilePosition.x() - fromX;
 	auto dy = tilePosition.y() - fromY;
 
@@ -2411,9 +2402,7 @@ void Server::sendPacketToNearby(const CString& packet, const PixelPosition& posi
 			// Are we on the same level?
 			// Levels on a gmap are the same level and thus this would be false.
 			const bool sameLevel = level->levelName == player->getLevelName();
-
-			// TODO: Figure out when PLO_SETACTIVELEVEL was introduced.
-			if (!sameLevel && player->getVersion() < CLVER_2_17)
+			if (!sameLevel && player->getVersion() < CLVER_2_01)
 				continue;
 
 			// If we aren't allowing sends to nearby levels, abort.
@@ -2506,9 +2495,11 @@ void Server::updateWeaponForPlayers(const std::shared_ptr<Weapon>& weapon)
 // TODO(refactor): This should probably be in the NPCServer class.
 void Server::updateClassForPlayers(const std::shared_ptr<ScriptClass>& scriptClass)
 {
-	CString classPacket = scriptClass->getClassPacket();
-	if (classPacket.isEmpty())
+	const CString classPacket4 = scriptClass->getClassPacket(CLVER_4_208);
+	if (classPacket4.isEmpty())
 		return;
+
+	const CString classPacket5 = scriptClass->getClassPacket(CLVER_5_07);
 
 	// Update players.
 	for (const auto& player : m_playerList | std::views::values)
@@ -2516,7 +2507,9 @@ void Server::updateClassForPlayers(const std::shared_ptr<ScriptClass>& scriptCla
 		if (!player->isClient())
 			continue;
 
-		player->sendRawPacket(classPacket);
+		if (player->getVersion() >= CLVER_5_07)
+			player->sendRawPacket(classPacket5);
+		else player->sendRawPacket(classPacket4);
 	}
 }
 

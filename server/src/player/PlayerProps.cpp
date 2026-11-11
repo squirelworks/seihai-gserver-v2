@@ -373,13 +373,22 @@ SetResults Player::setProp(PlayerProp prop, SetBy setBy, PropertyBase* base)
 			// Serverside washit.
 			else if (m_server->hasNPCServer() && std::ranges::contains(m_server->cached.playerSwordGanis.getValue(), ganiWithoutAttr))
 			{
-				constexpr std::array hitLocX = {1,2, -1,-1, 1,2, 4,4};
-				constexpr std::array hitLocY = {-1,-1, 1,1, 4,4, 1,2};
+				// constexpr std::array hitLocX = { 1, 2, -1, -1, 1,2, 4,4};
+				// constexpr std::array hitLocY = {-1,-1,  1,  2, 4,4, 1,2};
+				// const PixelPosition p1{translatePosition(getGlobalPosition(), Level::pixelsPerTile().width() * hitLocX[account.character.direction % 4 * 2], 8 + Level::pixelsPerTile().height() * hitLocY[account.character.direction % 4 * 2])};
+				// const PixelPosition p2{translatePosition(getGlobalPosition(), Level::pixelsPerTile().width() * hitLocX[account.character.direction % 4 * 2 + 1], 8 + Level::pixelsPerTile().height() * hitLocY[account.character.direction % 4 * 2 + 1])};
 
-				const PixelPosition p1{translatePosition(getGlobalPosition(), Level::pixelsPerTile().width() * hitLocX[account.character.direction % 4 * 2], 8 + Level::pixelsPerTile().height() * hitLocY[account.character.direction % 4 * 2])};
-				const PixelPosition p2{translatePosition(getGlobalPosition(), Level::pixelsPerTile().width() * hitLocX[account.character.direction % 4 * 2 + 1], 8 + Level::pixelsPerTile().height() * hitLocY[account.character.direction % 4 * 2 + 1])};
+				// clang-format off
+				// The goal is to search for things up to 1.5 tiles away from the player.
+				// We we are slightly changing the normal in-game calculations because we are using rectangle intersections.
+				// Also, some things were slightly tweaked to make them feel better.  I gave an extra half-tile of tolerance.
+				constexpr std::array hitLocX = {   16,   32+16, /**/ -16-8, -16+24, /**/ 16,     32+16, /**/ 64-16,  64+8};
+				constexpr std::array hitLocY = { -8-8, -8-8+24, /**/    16,  32+16, /**/ 72-8, 72-8+16, /**/   16,  32+16};
+				const PixelPosition p1{translatePosition(getGlobalPosition(), hitLocX[account.character.direction % 4 * 2], hitLocY[account.character.direction % 4 * 2])};
+				const PixelPosition p2{translatePosition(getGlobalPosition(), hitLocX[account.character.direction % 4 * 2 + 1], hitLocY[account.character.direction % 4 * 2 + 1])};
+				// clang-format on
 
-				for (const auto& npcId : level->findIntersectingNPCsForCollision(PixelRectangleArea{with_positions, p1, p2}))
+				for (const auto& npcId : level->findIntersectingNPCsForEvent(PixelRectangleArea{with_positions, p1, p2}))
 				{
 					if (const auto npc = m_server->getNPC(npcId); npc != nullptr)
 						npc->scripting.events.addEvent(ScriptEventType::WASHIT, source::FromPlayer(m_id));
@@ -1253,6 +1262,19 @@ void Player::setPropsFromRCPacket(CString& packet, const Player* rc)
 	while (flagCount-- > 0)
 	{
 		CString flag = packet.readChars(packet.readGUChar());
+		if (flag.length() > 220)
+		{
+			const auto flagView = flag.toStringView().substr(0, 220);
+			const auto [flagName, flagValue] = string::extractConfigParts(flagView, '=');
+			if (auto existing = account.variables.get(flagName).lock(); existing != nullptr && existing->has<std::string>())
+			{
+				if (auto& str = existing->get<std::string>().value().get(); str.starts_with(string::trim(flagValue)))
+				{
+					values.push_back(std::format("{}={}", flagName, str));
+					continue;
+				}
+			}
+		}
 		values.push_back(flag.toString());
 	}
 	synchronizeFlags(values);
@@ -1348,7 +1370,9 @@ CString Player::getPropsForRCPacket()
 		if (auto computedFlag = account.variables.serializeModern(flag); computedFlag.has_value())
 		{
 			++flagCount;
-			flags >> (char)(std::min(static_cast<size_t>(223), computedFlag.value().length())) << computedFlag.value().substr(0, 223);
+			if (computedFlag.value().length() > 220)
+				flags >> (char)223 << computedFlag.value().substr(0, 220) << "[!]";
+			else flags >> (char)computedFlag.value().length() << computedFlag.value();
 		}
 	}
 	ret >> (short)flagCount << flags;

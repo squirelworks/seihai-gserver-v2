@@ -270,12 +270,12 @@ endif()
 # ----------------------------
 # Dependency: gs2lib.
 FetchContent_Declare(gs2lib
-	# Seihai: our mirror, branch seihai (upstream 5c36ab8 + the 3.153 token
-	# + the 5.12 gen-5 step rule + the socket wait/unregister fix
-	# + the 2026-11-06 packet names). The old UNKNOWN names stay in gs2lib
-	# as aliases, so this pin is what makes the new names available.
+	# Seihai: our mirror, branch seihai (upstream 35056f8, the commit GServer-v2
+	# beta4 25396a1 pins, + the 3.153 token + the 5.12 gen-5 step rule
+	# + the socket wait/unregister fix + the 2026-11-06 packet names, with
+	# upstream's own 2026-11-06 names kept as aliases of ours).
 	GIT_REPOSITORY https://github.com/squirelworks/seihai-gs2lib.git
-	GIT_TAG        0eaaeeca198777488d0e5a40e3b3f2b22494f726
+	GIT_TAG        417ef96783bac5988ca343425df10aad04c138f4
 )
 FetchContent_MakeAvailable(gs2lib)
 add_dependencies(${TARGET_NAME} gs2lib)
@@ -292,6 +292,16 @@ FetchContent_Declare(libtommath
 )
 FetchContent_MakeAvailable(libtommath)
 target_include_directories(${TARGET_NAME} PUBLIC "${libtommath_SOURCE_DIR}")
+
+# Map libtomcrypt configurations as it fails with MinSizeRel.
+if(TARGET libtommath)
+	set_target_properties(libtommath PROPERTIES
+		MAP_IMPORTED_CONFIG_DEBUG Release
+		MAP_IMPORTED_CONFIG_RELEASE Release
+		MAP_IMPORTED_CONFIG_MINSIZEREL Release
+		MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release
+	)
+endif()
 
 # ----------------------------
 # Dependency: libtomcrypt-preagonal.

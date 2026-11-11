@@ -344,7 +344,11 @@ HandlePacketResult PlayerRC::msgPLI_RC_SERVERFLAGSGET(CString& pPacket)
 	for (const auto& [flag, value] : m_server->Scripting.variables.store | variables::serializable)
 	{
 		if (auto serialized = m_server->Scripting.variables.serializeModern(flag); serialized.has_value())
-			ret >> (char)serialized.value().length() << serialized.value();
+		{
+			if (serialized.value().length() > 220)
+				ret >> (char)223 << serialized.value().substr(0, 220) << "[!]";
+			else ret >> (char)serialized.value().length() << serialized.value();
+		}
 	}
 
 	sendPacket(ret);
@@ -361,8 +365,14 @@ HandlePacketResult PlayerRC::msgPLI_RC_SERVERFLAGSSET(CString& pPacket)
 	}
 
 	// Open the serverflags.txt file.
-	if (const auto file = m_server->getFileSystemServer().openiForWriting(fs::FileCategory::CONFIG, "serverflags.txt", true); file && file->opened())
+	if (const auto file = m_server->getFileSystemServer().openiForWriting(fs::FileCategory::CONFIG, "serverflags.txt"); file && file->opened())
 	{
+		// Read back all the current flags.
+		// If we have flags over 220 characters long, we need to make extra sure we aren't wiping them out.
+		file->setStreamPosition(0);
+		auto serverflags = file->readAllLines() | std::ranges::to<std::vector<std::string>>();
+
+		// Clear the file.
 		file->clear();
 
 		// Read the flags and store them in the file.
@@ -370,6 +380,21 @@ HandlePacketResult PlayerRC::msgPLI_RC_SERVERFLAGSSET(CString& pPacket)
 		for (auto i = 0; i < count; ++i)
 		{
 			std::string flagPair = string::trimMutate(pPacket.readChars(pPacket.readGUChar()).toString());
+
+			// We have a max length string, so check our serverflag dump to make sure it changed.
+			// If the first 220 characters are identical, just write the old value back in.
+			if (flagPair.length() > 220)
+			{
+				std::string_view flagPairView{flagPair};
+				flagPairView = flagPairView.substr(0, 220);
+				if (auto existing = std::ranges::find_if(serverflags, [flagPairView](const std::string& flag){ return flag.starts_with(flagPairView); }); existing != std::ranges::end(serverflags))
+				{
+					file->writeLine(*existing);
+					continue;
+				}
+			}
+
+			// Write the new flag.
 			file->writeLine(flagPair);
 		}
 	}
@@ -395,8 +420,8 @@ HandlePacketResult PlayerRC::msgPLI_RC_ACCOUNTADD(CString& pPacket)
 	m_server->getAccountLoader().loadAccount(acc, newAccount);
 	// Seihai: keep everything the RC sent; the ban as before, without a separate ban right.
 	applyRCAccountFields(newAccount, fields, true);
-	// Seihai: write a load-only account too; saveAccount skipped it, so it was never created.
-	m_server->getAccountLoader().saveAccount(newAccount, true);
+	// Write a load-only account too; saveAccount skips it, so it was never created.
+	m_server->getAccountLoader().forceSaveAccount(newAccount);
 
 	log::printLine(log::rc, "{} has created a new account: {}", account.name, acc.c_str());
 	m_server->sendPacketToType(PLTYPE_ANYRC, CString() >> (char)PLO_RC_CHAT << account.name << " has created a new account: " << acc);
@@ -683,9 +708,9 @@ HandlePacketResult PlayerRC::msgPLI_RC_ACCOUNTSET(CString& pPacket)
 
 	// Set the new account stuff.
 	// Seihai: the admin level and admin worlds are kept too, and a load-only account is
-	// still written: saveAccount skipped it, so ticking Load only was never saved.
+	// still written: saveAccount skips it, so ticking Load only was never saved.
 	applyRCAccountFields(p->account, fields, account.hasRight(PLPERM_BAN));
-	m_server->getAccountLoader().saveAccount(p->account, true);
+	m_server->getAccountLoader().forceSaveAccount(p->account);
 
 	// If the account is currently on RC, reload it.
 	if (const auto pRC = m_server->getPlayer(acc, PLTYPE_ANYRC); pRC)
@@ -1556,7 +1581,7 @@ HandlePacketResult PlayerRC::msgPLI_NPCSERVERQUERY(CString& pPacket)
 	return HandlePacketResult::Handled;
 }
 
-HandlePacketResult PlayerRC::msgPLI_PING(CString& pPacket)
+HandlePacketResult PlayerRC::msgPLI_PONG(CString& pPacket)
 {
 	// RC keepalive: empty, every 60 s. Nothing in the body is read.
 	(void)pPacket;

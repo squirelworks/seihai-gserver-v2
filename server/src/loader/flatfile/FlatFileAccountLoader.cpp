@@ -596,13 +596,18 @@ bool FlatFileAccountLoader::loadAccount(const std::string_view accountName, Acco
 	return true;
 }
 
-bool FlatFileAccountLoader::saveAccount(const Account& account, const bool evenIfLoadOnly)
+bool FlatFileAccountLoader::saveAccount(const Account& account)
+{
+	// Don't save 'Load Only' or RC accounts.
+	if (account.loadOnly)
+		return false;
+
+	return forceSaveAccount(account);
+}
+
+bool FlatFileAccountLoader::forceSaveAccount(const Account& account)
 {
 	auto server = BabyDI::Get<Server>();
-
-	// Don't save 'Load Only' or RC accounts, unless an RC is editing the account itself.
-	if (account.loadOnly && !evenIfLoadOnly)
-		return false;
 
 #ifdef DEBUG
 	assert(account.level.empty() == false);

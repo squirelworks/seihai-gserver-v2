@@ -362,6 +362,7 @@ void NPC::processMoveQueue(std::chrono::milliseconds deltaTime)
 		return;
 
 	const bool hadMoveQueue = !moveQueue.empty();
+	bool terminateQueue = false;
 	while (deltaTime != 0ms && !moveQueue.empty())
 	{
 		NPCMove& move = moveQueue.front();
@@ -384,16 +385,20 @@ void NPC::processMoveQueue(std::chrono::milliseconds deltaTime)
 			}
 		}
 
+		// Temp delta.
+		// Run the move queue in 50ms increments.
+		// This will give movement more accurate to the game client.
+		const auto oneFrameDeltaTime = std::min(deltaTime, 50ms);
+		deltaTime -= oneFrameDeltaTime;
+
 		// Calculate our times.
 		auto timeRemaining = 0ms;
-		move.elapsed += deltaTime;
+		move.elapsed += oneFrameDeltaTime;
 		if (move.elapsed < move.duration)
 		{
-			// The duration was fully used up.
-			deltaTime = 0ms;
 			timeRemaining = move.duration - move.elapsed;
 		}
-		else
+		else if (move.elapsed >= move.duration)
 		{
 			// We reached the end, so some duration is still remaining.
 			deltaTime = move.elapsed - move.duration;
@@ -401,48 +406,71 @@ void NPC::processMoveQueue(std::chrono::milliseconds deltaTime)
 		}
 
 		// Determine where we will end up this frame.
-		PixelPosition currentPosition{move.getCurrentPosition()};
-
-		// If the map position changed, set that now.
-		const auto& [mapX, mapY, _] = toMapPosition(currentPosition);
-		if (storageType == NPCStorageType::LEVEL && (mapX != character.mapX || mapY != character.mapY))
-			indexInLevelFile = std::nullopt;
-		if (mapX != character.mapX)
-			setPropWith<NPCProp::GMAPLEVELX>(SetBy::SERVER, mapX);
-		if (mapY != character.mapY)
-			setPropWith<NPCProp::GMAPLEVELY>(SetBy::SERVER, mapY);
-
-		// Set the new position.
-		auto localPosition = toLocalPixelPosition(currentPosition);
-		setPropWith<NPCProp::X2>(SetBy::SERVER, localPosition.x());
-		setPropWith<NPCProp::Y2>(SetBy::SERVER, localPosition.y());
+		PixelPosition potentialPosition{move.getCurrentPosition()};
 
 		bool movementFinished = false;
 
 		// If we are testing for walls, do that now.
+		// If we would hit a wall, we do not move.
 		if (move.options.test(NPCMove::blockCheck))
 		{
 			if (auto levelPtr = getLevel(); levelPtr != nullptr)
 			{
-				// Do an onwall check at the destination.
-				// If we collide, then stop the movement.
-				auto boundingBox = getCollisionBoundingBox();
-				boundingBox.position = currentPosition;
+				// For non-character NPCs, it does a single onwall along the outer edges of the NPC shape.
+				PixelRectangleArea boundingBox;
+				if (!isCharacter())
+				{
+					boundingBox = getBoundingBox();
+					boundingBox.position = potentialPosition;
+				}
+				// For characters, the onwall is on the edges of the collision bounding box.
+				// Use the event bounding box to make sure that it is used even when the NPC is noblock.
+				else
+				{
+					boundingBox = getEventBoundingBox();
+					boundingBox.position = translatePosition(potentialPosition, 8, 16);
+				}
 
-				// Fix offsets for characters.
-				if (isCharacter() && (shape.width() == 0 || shape.height() == 0))
-					boundingBox.position.translate(8, 16);
+				// The onwall check depends on direction.
+				PixelPosition onwallPosition;
+				switch (character.direction)
+				{
+					case 0: onwallPosition = boundingBox.topcenter(); break;
+					case 1: onwallPosition = boundingBox.leftcenter(); break;
+					case 3: onwallPosition = boundingBox.rightcenter(); break;
+					default: onwallPosition = boundingBox.bottomcenter(); break;
+				}
 
-				// Check for wall collision.
-				const bool isOnWall = levelPtr->isOnWall2(boundingBox);
-				if (isOnWall)
+				// Do the check now.
+				if (levelPtr->isOnWall(onwallPosition))
+				{
 					movementFinished = true;
+					terminateQueue = true;
+				}
 			}
 		}
 
-		// Check if our movement is done.
-		if (timeRemaining <= 0ms)
-			movementFinished = true;
+		// We aren't going to hit a wall, so do the movement.
+		if (!movementFinished)
+		{
+			// If the map position changed, set that now.
+			const auto& [mapX, mapY, _] = toMapPosition(potentialPosition);
+			if (storageType == NPCStorageType::LEVEL && (mapX != character.mapX || mapY != character.mapY))
+				indexInLevelFile = std::nullopt;
+			if (mapX != character.mapX)
+				setPropWith<NPCProp::GMAPLEVELX>(SetBy::SERVER, mapX);
+			if (mapY != character.mapY)
+				setPropWith<NPCProp::GMAPLEVELY>(SetBy::SERVER, mapY);
+
+			// Set the current position.
+			auto localPosition = toLocalPixelPosition(potentialPosition);
+			setPropWith<NPCProp::X2>(SetBy::SERVER, localPosition.x());
+			setPropWith<NPCProp::Y2>(SetBy::SERVER, localPosition.y());
+
+			// Check if our movement is done.
+			if (timeRemaining <= 0ms)
+				movementFinished = true;
+		}
 
 		// If the movement is finished, terminate!
 		if (movementFinished)
@@ -455,14 +483,17 @@ void NPC::processMoveQueue(std::chrono::milliseconds deltaTime)
 			if (move.onComplete)
 				move.onComplete();
 
-			// Pop the front movement.
-			moveQueue.pop_front();
+			// Pop the movements from the queue.
+			if (terminateQueue)
+				moveQueue.clear();
+			else
+				moveQueue.pop_front();
 		}
 	}
 
 	// Still moving, so prevent position props from updating.
 	// If a client receives a position prop, the movement is ended.
-	if (hadMoveQueue && !moveQueue.empty())
+	if (hadMoveQueue && !terminateQueue && !moveQueue.empty())
 	{
 		m_savedModTime[PROPID(NPCProp::X)] = modTime[PROPID(NPCProp::X)];
 		m_savedModTime[PROPID(NPCProp::Y)] = modTime[PROPID(NPCProp::Y)];
@@ -910,8 +941,12 @@ void NPC::leaveClass(std::string_view className)
 	m_joinedClasses.erase(it);
 }
 
-void NPC::sendScriptUpdatesToLevel(const clock::time_point when) const
+void NPC::sendScriptUpdatesToLevel(const clock::time_point fromWhen) const
 {
+	// Clients will ignore any script changes if the NPC already has the script set.
+	// Because of this, we have to delete the NPC entirely and re-send the whole thing.
+	// PLO_NPCSETSCRIPT (26) could hot-swap the script, but that packet only existed between 1.31 - 2.03.
+
 	if (const auto npclevel = getLevel(); npclevel != nullptr && npclevel->loaded)
 	{
 		if (const auto levelData = npclevel->getStaticLevelDataAtPosition(character.getMapPosition()); levelData != nullptr)
@@ -919,7 +954,7 @@ void NPC::sendScriptUpdatesToLevel(const clock::time_point when) const
 			const auto& levelName = npclevel->levelName;
 
 			const CString packet = CString() >> (char)PLO_NPCDEL2 >> (char)levelName.length() << levelName >> (int)id;
-			m_server->sendPacketToLevelAndPastVisitorsAfter(levelData.get(), when, packet);
+			m_server->sendPacketToLevelAndPastVisitorsAfter(levelData.get(), fromWhen, packet);
 			m_server->sendPacketToNearby(CString() >> (char)PLO_NPCPROPS >> (int)id << getAllPropsPacket(), character.getGlobalPosition(), npclevel);
 		}
 	}
@@ -1039,11 +1074,11 @@ SetResults NPC::setProp(const NPCProp prop, const SetBy setBy, PropertyBase* bas
 
 		case NPCProp::SCRIPT:
 		{
-			auto strProp = dynamic_cast<PropertyString*>(base);
+			auto strProp = dynamic_cast<PropertyGS1Script*>(base);
 			if (strProp == nullptr || setBy != SetBy::SERVER)
 				SETPROP_RETURN_IGNORE;
 
-			setScript(strProp->value);
+			setScript(strProp->script);
 			break;
 		}
 
@@ -2052,7 +2087,7 @@ void NPC::testForLinks(SetResults& result)
 	}
 
 	// They aren't allowed to leave the level, so clamp them to the borders.
-	if (levelPtr->isGmap() || levelPtr->isOnBigMap())
+	if (!levelPtr->isGmap())
 		clampToLevel();
 
 	// If we have warp restrictions, don't process any further.
