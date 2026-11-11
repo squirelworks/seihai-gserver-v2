@@ -169,6 +169,16 @@
           }
         }
       }
+    },
+    {
+      "name": "Target macOS",
+      "hidden": true,
+      "cacheVariables": { "VCPKG_TARGET_TRIPLET": "x64-osx" }
+    },
+    {
+      "name": "macOS Release",
+      "inherits": [ "Release", "Target macOS" ],
+      "generator": "Ninja"
     }
   ]
 }
