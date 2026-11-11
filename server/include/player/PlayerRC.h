@@ -136,7 +136,7 @@ public:
 	HandlePacketResult msgPLI_RC_LARGEFILEEND(CString& pPacket);
 	HandlePacketResult msgPLI_RC_FOLDERDELETE(CString& pPacket);
 	// RC keepalive: empty body, every 60 s. Game clients use this id to answer PLO_PING.
-	HandlePacketResult msgPLI_PING(CString& pPacket);
+	HandlePacketResult msgPLI_PONG(CString& pPacket);
 
 protected:
 	bool m_isFtp = false;

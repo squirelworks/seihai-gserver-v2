@@ -1473,7 +1473,8 @@ void Level::sendNPCToPlayer(const std::shared_ptr<NPC>& npc, const std::shared_p
 	if (const auto packet = npc->getAllPropsPacket(time); !packet.isEmpty())
 	{
 		player->sendPacket(CString() >> (char)PLO_NPCPROPS >> (int)npc->id << packet);
-		if (player->getVersion() >= CLVER_4_0211 && !npc->getScript().getClientByteCode().empty())
+
+		if (m_server->Generation == ServerGeneration::MODERN && !npc->getScript().getClientByteCode().empty())
 		{
 			CString byteCodePacket = CString() >> (char)PLO_NPCBYTECODE >> (int)npc->id;
 			byteCodePacket.write(reinterpret_cast<const char*>(npc->getScript().getClientByteCode().data()), static_cast<int>(npc->getScript().getClientByteCode().size()));
@@ -1544,9 +1545,21 @@ void Level::removePlayer(const PlayerID id)
 	if (const auto player = m_server->getPlayer(id); player != nullptr)
 		m_server->queueNPCEvent(shared_from_this(), player->getGlobalPosition(), ScriptEventType::PLAYERLEAVES, source::FromPlayer(id));
 
-	// If there are no more players in the level, record the time so we can do level cleanup after a delay.
 	if (m_players.empty())
+	{
+		// If there are no more players in the level, record the time so we can do level cleanup after a delay.
 		timeSinceLastPlayerLeft = m_server->getFrameStartTime();
+
+		// If we save NPCs when nobody is left on the level, do that now.
+		if (m_server->cached.saveNPCsOnLevelCache.getValue() == true)
+		{
+			if (m_server->hasNPCServer())
+			{
+				for (const auto npcId : m_npcs)
+					m_server->getNPCServer()->saveNPC(npcId);
+			}
+		}
+	}
 }
 
 //----------------------------
@@ -2241,15 +2254,15 @@ void Level::addExplosion(const PixelPosition& position, const ScriptObject& from
 		const PixelRectangleArea vertTest = {position.translate(0, -(radius * 32)), {static_cast<uint16_t>(32), static_cast<uint16_t>((1 + (radius * 2)) * 32)}};
 		const PixelRectangleArea horzTest = {position.translate(-(radius * 32), 0), {static_cast<uint16_t>((1 + (radius * 2)) * 32), static_cast<uint16_t>(32)}};
 		const auto center = vertTest.center();
-		for (const NPCID& npcId : findIntersectingNPCsForCollision(vertTest))
+		for (const NPCID& npcId : findIntersectingNPCsForEvent(vertTest))
 		{
 			if (auto npc = m_server->getNPC(npcId); npc != nullptr)
-				npc->hurtAndPush(static_cast<int8_t>(power), center, ScriptEventType::EXPLODED, from);
+				npc->hurtAndPush(static_cast<int8_t>(power), center, ScriptEventType::EXPLODED, from, power == 3 ? CarryObjectType::JOLTBOMB : CarryObjectType::BOMB);
 		}
-		for (const NPCID& npcId : findIntersectingNPCsForCollision(horzTest))
+		for (const NPCID& npcId : findIntersectingNPCsForEvent(horzTest))
 		{
 			if (auto npc = m_server->getNPC(npcId); npc != nullptr)
-				npc->hurtAndPush(static_cast<int8_t>(power), center, ScriptEventType::EXPLODED, from);
+				npc->hurtAndPush(static_cast<int8_t>(power), center, ScriptEventType::EXPLODED, from, power == 3 ? CarryObjectType::JOLTBOMB : CarryObjectType::BOMB);
 		}
 	}
 }
@@ -2301,10 +2314,10 @@ void Level::addSpyFire(const PixelPosition& position, const ScriptObject& from, 
 		};
 
 		const auto center = translatePosition(startingPosition, 16, 16);
-		for (const NPCID& npcId : findIntersectingNPCsForCollision({testPosition, testDimension}))
+		for (const NPCID& npcId : findIntersectingNPCsForEvent({testPosition, testDimension}))
 		{
 			if (auto npc = m_server->getNPC(npcId); npc != nullptr)
-				npc->hurtAndPush(static_cast<int8_t>(power), center, ScriptEventType::EXPLODED, from);
+				npc->hurtAndPush(static_cast<int8_t>(power), center, ScriptEventType::EXPLODED, from, power == 3 ? CarryObjectType::JOLTBOMB : CarryObjectType::BOMB);
 		}
 	}
 }
@@ -2880,9 +2893,9 @@ bool Level::isOnWall(const PixelPosition& position) const noexcept
 bool Level::isOnWall2(const WholeTileRectangleArea& tileArea) const noexcept
 {
 	// TODO(optimize): Optimize this.
-	for (auto cy = tileArea.position.y(); cy < tileArea.position.y() + tileArea.size.height(); ++cy)
+	for (auto cy = tileArea.position.y(); cy < tileArea.position.y() + std::max(1_ui8, tileArea.size.height()); ++cy)
 	{
-		for (auto cx = tileArea.position.x(); cx < tileArea.position.x() + tileArea.size.width(); ++cx)
+		for (auto cx = tileArea.position.x(); cx < tileArea.position.x() + std::max(1_ui8, tileArea.size.width()); ++cx)
 		{
 			if (isOnWall(WholeTilePosition{cx, cy}))
 				return true;
@@ -2910,9 +2923,9 @@ bool Level::isOnWater(const PixelPosition& position) const noexcept
 bool Level::isOnWater2(const WholeTileRectangleArea& tileArea) const noexcept
 {
 	// TODO(optimize): Optimize this.
-	for (auto cy = tileArea.position.y(); cy < tileArea.position.y() + tileArea.size.height(); ++cy)
+	for (auto cy = tileArea.position.y(); cy < tileArea.position.y() + std::max(1_ui8, tileArea.size.height()); ++cy)
 	{
-		for (auto cx = tileArea.position.x(); cx < tileArea.position.x() + tileArea.size.width(); ++cx)
+		for (auto cx = tileArea.position.x(); cx < tileArea.position.x() + std::max(1_ui8, tileArea.size.width()); ++cx)
 		{
 			if (isOnWater(WholeTilePosition{cx, cy}))
 				return true;
@@ -2987,6 +3000,86 @@ bool Level::isOnPlayer(const PixelRectangleArea& pixelArea) const noexcept
 		}
 	}
 	return false;
+}
+
+std::ptrdiff_t Level::testNPC(const PixelPosition& position, const std::optional<NPCID> initiator) const noexcept
+{
+	std::ptrdiff_t index = 0;
+
+	// NOLINTNEXTLINE(*-use-anyofallof)
+	for (const auto id : m_npcs)
+	{
+		if (auto npc = m_server->getNPC(id); npc != nullptr)
+		{
+			if (positionInRectangle(position, npc->getCollisionBoundingBox()))
+			{
+				if (initiator.has_value() && id == initiator.value())
+					return -1;
+				return index;
+			}
+		}
+		++index;
+	}
+
+	return -2;
+}
+
+std::ptrdiff_t Level::testNPC(const PixelRectangleArea& pixelArea, const std::optional<NPCID> initiator) const noexcept
+{
+	std::ptrdiff_t index = 0;
+
+	// NOLINTNEXTLINE(*-use-anyofallof)
+	for (const auto id : m_npcs)
+	{
+		if (auto npc = m_server->getNPC(id); npc != nullptr)
+		{
+			if (rectanglesIntersect(pixelArea, npc->getCollisionBoundingBox()))
+			{
+				if (initiator.has_value() && id == initiator.value())
+					return -1;
+				return index;
+			}
+		}
+		++index;
+	}
+
+	return -2;
+}
+
+std::ptrdiff_t Level::testPlayer(const PixelPosition& position) const noexcept
+{
+	std::ptrdiff_t index = 0;
+
+	// NOLINTNEXTLINE(*-use-anyofallof)
+	for (const auto id : m_players)
+	{
+		if (auto player = m_server->getPlayer(id); player != nullptr)
+		{
+			if (positionInRectangle(position, player->getCollisionBoundingBox()))
+				return index;
+		}
+		++index;
+	}
+
+	return -1;
+}
+
+std::ptrdiff_t Level::testPlayer(const PixelRectangleArea& pixelArea) const noexcept
+{
+	std::ptrdiff_t index = 0;
+
+	// NOLINTNEXTLINE(*-use-anyofallof)
+	for (const auto id : m_players)
+	{
+		if (auto player = m_server->getPlayer(id); player != nullptr)
+		{
+			if (rectanglesIntersect(pixelArea, player->getCollisionBoundingBox()))
+				return index;
+		}
+		++index;
+	}
+
+	return -1;
 }
 
 tileset::TileType Level::getTileTypeAt(const WholeTilePosition& tilePosition) const noexcept
@@ -3441,6 +3534,30 @@ std::generator<NPCID> Level::findIntersectingNPCsForCollision(const PixelRectang
 
 			// Check if the NPC intersects with the area.
 			if (rectanglesIntersect(area, npc->getCollisionBoundingBox()))
+				co_yield npcId;
+		}
+	}
+}
+
+std::generator<NPCID> Level::findIntersectingNPCsForEvent(const PixelPosition& position) const noexcept
+{
+	for (const auto& id : findIntersectingNPCsForEvent({position, {0, 0, 48}}))
+		co_yield id;
+}
+
+std::generator<NPCID> Level::findIntersectingNPCsForEvent(const PixelRectangleArea& area) const noexcept
+{
+	const auto maxDistance = std::max(Level::pixelsPerSubLevel().width(), static_cast<uint32_t>(std::max(area.size.width(), area.size.height())));
+	for (const auto& npcId : findNPCsInRangeByDistance(area.position, maxDistance))
+	{
+		if (auto npc = m_server->getNPC(npcId); npc != nullptr)
+		{
+			// If the NPC is invisible, skip it.
+			if (!npc->isVisible())
+				continue;
+
+			// Check if the NPC intersects with the area.
+			if (rectanglesIntersect(area, npc->getEventBoundingBox()))
 				co_yield npcId;
 		}
 	}

@@ -22,8 +22,9 @@ public:
 public:
 	virtual bool loadAccount(std::string_view accountName, Account& account) = 0;
 	virtual bool loadAccount(std::string_view accountName, Player& player) = 0;
-	// Seihai: evenIfLoadOnly writes a load-only account too, for an RC that edits it.
-	virtual bool saveAccount(const Account& account, bool evenIfLoadOnly = false) = 0;
+	virtual bool saveAccount(const Account& account) = 0;
+	// Writes a load-only account too (an RC creating or editing it).
+	virtual bool forceSaveAccount(const Account& account) = 0;
 
 public:
 	[[nodiscard]] virtual bool checkSearchConditions(std::string_view account, const std::vector<std::string>& searches) const = 0;

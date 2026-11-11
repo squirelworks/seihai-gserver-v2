@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-04: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-04 and 2026-11-11: see CHANGES-SEIHAI.md.
 // New file: regression tests for account flags read from an account file, which
 // an RC's Edit Attributes dialog shows and sends back on save.
 #include "catch2/catch_all.hpp"
@@ -57,11 +57,17 @@ SCENARIO("account FLAG lines survive a load")
 		}
 	}
 
-	GIVEN("the value alone, as upstream passed it")
+	GIVEN("the value alone, as the loader passes it")
 	{
-		THEN("GameVariable::deserialize rejects it, which is why every flag was dropped")
+		// Before beta4 GameVariable::deserialize rejected a line without "FLAG ",
+		// which is why every flag was dropped. Upstream 72a6401 made it accept
+		// the bare form too; both paths must give the same flag.
+		THEN("GameVariable::deserialize reads it as the same flag")
 		{
-			REQUIRE_FALSE(GameVariable::deserialize("labflag=1").has_value());
+			auto variable = GameVariable::deserialize("labflag=1");
+			REQUIRE(variable.has_value());
+			REQUIRE(variable->name == "labflag");
+			REQUIRE(variable->serializeModern() == std::optional<std::string>{"labflag=1"});
 		}
 	}
 }
