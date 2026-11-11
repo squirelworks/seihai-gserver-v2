@@ -275,7 +275,7 @@ FetchContent_Declare(gs2lib
 	# + the socket wait/unregister fix + the 2026-11-06 packet names, with
 	# upstream's own 2026-11-06 names kept as aliases of ours).
 	GIT_REPOSITORY https://github.com/squirelworks/seihai-gs2lib.git
-	GIT_TAG        17c03a402ebc181061df030065a216d7708468d2
+	GIT_TAG        417ef96783bac5988ca343425df10aad04c138f4
 )
 FetchContent_MakeAvailable(gs2lib)
 add_dependencies(${TARGET_NAME} gs2lib)
