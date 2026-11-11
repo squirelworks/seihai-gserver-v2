@@ -9,6 +9,12 @@ Every change below was checked on a private loopback lab with real Graal
 clients and with the [Seihai](https://github.com/squirelworks/seihai) client.
 Each file we changed carries a one-line notice at its top.
 
+## 2026-11-11
+
+| Change | Files | Clients it fixes |
+|---|---|---|
+| A fourth lab server folder, `bin/servers/modern`, so the shipped lab world can use resource packages (2026-11-06). It is `servers/default` with `generation = modern`, port 14805 on `127.0.0.1`, name `Lab Modern`, and an `allowedversions.txt` that lets in 4.20r8 to 6.037 (`G3D20126:G3D0511C`), the clients that load packages. `default` (2.00 to 3.153, port 14802) and `classic` are unchanged. `world/gpaks/readme.txt` says where packages and their keys go. The release workflow's smoke test starts it with the other two and checks port 14805, and it now fails if any of the three servers logs that its `allowedversions.txt` has no range for its generation; `bin/CMakeLists.txt` installs the folder. | `bin/servers/modern/`, `bin/CMakeLists.txt`, `.github/workflows/seihai-release.yml`, `bin/docs/lab-world.md`, `README.md`, `docs/SEIHAI-BUILD.md`, `docs/releases/v4.0.0-seihai.1.md` | 4.20r8, 5.x, 6.x (lab setup). Not run with a real client in this change; the 2026-11-06 lab used `servers/default` with these settings. |
+
 ## 2026-11-07
 
 | Change | Files | Clients it fixes |

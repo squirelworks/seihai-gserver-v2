@@ -1,7 +1,7 @@
 # Seihai: build gs2emu for Linux, Windows and macOS. A tag push (v*), or a manual
 # run with a version, also makes a DRAFT GitHub release with the four archives and
 # the full source, as the GPL asks. The tag is made when the owner presses Publish.
-# Modified by the Seihai project, 2026-11-04: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-11-04, 2026-11-11: see CHANGES-SEIHAI.md.
 name: Seihai build and release
 
 on:
@@ -94,8 +94,8 @@ jobs:
           cp LICENSE.md CHANGES-SEIHAI.md README.md dist/${{ matrix.name }}/
           cd dist
           if [ "$RUNNER_OS" = Windows ]; then 7z a ${{ matrix.name }}.zip ${{ matrix.name }}; else tar czf ${{ matrix.name }}.tar.gz ${{ matrix.name }}; fi
-      # Start both packaged lab servers (after the archive is made, so the run's logs
-      # and accounts stay out of it) and check both listen on 127.0.0.1.
+      # Start the packaged default, classic and modern lab servers (after the archive is made, so the run's logs
+      # and accounts stay out of it) and check each listens on 127.0.0.1.
       # A cross-built binary cannot run here; check it is built for the right CPU.
       - name: Check the architecture
         if: matrix.cross != ''
@@ -108,17 +108,20 @@ jobs:
           exe=./gs2emu; [ "$RUNNER_OS" = Windows ] && exe=./gs2emu.exe
           "$exe" --server default > default.out 2>&1 & p1=$!
           "$exe" --server classic > classic.out 2>&1 & p2=$!
+          "$exe" --server modern > modern.out 2>&1 & p3=$!
           ok=1
-          for port in 14802 14803; do
+          for port in 14802 14803 14805; do
             up=0
             for i in $(seq 1 30); do (echo > /dev/tcp/127.0.0.1/$port) 2>/dev/null && { up=1; break; }; sleep 1; done
             [ $up = 1 ] || { echo "nothing listens on 127.0.0.1:$port"; ok=0; }
           done
           # wait returns the killed server's status (143 on Windows, where kill is TerminateProcess);
           # with bash -e that ended the step before the logs were printed.
-          kill $p1 $p2 2>/dev/null || true; wait $p1 $p2 2>/dev/null || true
+          kill $p1 $p2 $p3 2>/dev/null || true; wait $p1 $p2 $p3 2>/dev/null || true
           if [ "$RUNNER_OS" = Windows ]; then taskkill //F //IM gs2emu.exe > /dev/null 2>&1 || true; fi
-          for s in default classic; do echo "== $s"; tail -n 20 $s.out; done
+          for s in default classic modern; do echo "== $s"; tail -n 20 $s.out; done
+          # Each folder's allowedversions.txt must have a range for its generation.
+          if grep -l "Could not find generation range" default.out classic.out modern.out; then ok=0; fi
           [ $ok = 1 ]
       - uses: actions/upload-artifact@v4
         with:
@@ -197,8 +200,8 @@ jobs:
           cp LICENSE.md CHANGES-SEIHAI.md README.md dist/${{ matrix.name }}/
           cd dist
           if [ "$RUNNER_OS" = Windows ]; then 7z a ${{ matrix.name }}.zip ${{ matrix.name }}; else tar czf ${{ matrix.name }}.tar.gz ${{ matrix.name }}; fi
-      # Start both packaged lab servers (after the archive is made, so the run's logs
-      # and accounts stay out of it) and check both listen on 127.0.0.1.
+      # Start the packaged default, classic and modern lab servers (after the archive is made, so the run's logs
+      # and accounts stay out of it) and check each listens on 127.0.0.1.
       # A cross-built binary cannot run here; check it is built for the right CPU.
       - name: Check the architecture
         if: matrix.cross != ''
@@ -211,17 +214,20 @@ jobs:
           exe=./gs2emu; [ "$RUNNER_OS" = Windows ] && exe=./gs2emu.exe
           "$exe" --server default > default.out 2>&1 & p1=$!
           "$exe" --server classic > classic.out 2>&1 & p2=$!
+          "$exe" --server modern > modern.out 2>&1 & p3=$!
           ok=1
-          for port in 14802 14803; do
+          for port in 14802 14803 14805; do
             up=0
             for i in $(seq 1 30); do (echo > /dev/tcp/127.0.0.1/$port) 2>/dev/null && { up=1; break; }; sleep 1; done
             [ $up = 1 ] || { echo "nothing listens on 127.0.0.1:$port"; ok=0; }
           done
           # wait returns the killed server's status (143 on Windows, where kill is TerminateProcess);
           # with bash -e that ended the step before the logs were printed.
-          kill $p1 $p2 2>/dev/null || true; wait $p1 $p2 2>/dev/null || true
+          kill $p1 $p2 $p3 2>/dev/null || true; wait $p1 $p2 $p3 2>/dev/null || true
           if [ "$RUNNER_OS" = Windows ]; then taskkill //F //IM gs2emu.exe > /dev/null 2>&1 || true; fi
-          for s in default classic; do echo "== $s"; tail -n 20 $s.out; done
+          for s in default classic modern; do echo "== $s"; tail -n 20 $s.out; done
+          # Each folder's allowedversions.txt must have a range for its generation.
+          if grep -l "Could not find generation range" default.out classic.out modern.out; then ok=0; fi
           [ $ok = 1 ]
       - uses: actions/upload-artifact@v4
         with:

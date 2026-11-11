@@ -1,0 +1,32 @@
+# ---[ CONFORMANCE ]------------------------------------------------------------
+
+# Enable strict conformance.
+# If set to true, all other options will be disabled.
+strict=false
+
+# Enable the use of scoped variables.
+# Some variables, like client.var, are not scoped to the client by default.
+always-scope-variables=true
+
+# Enable the implicit use of translated strings.
+# If set to true, all strings will be translated by default.
+# If set to false, only strings wrapped in #U(...) will be translated.
+always-translate-strings=true
+
+# ---[ NON-STANDARD COMMANDS ]--------------------------------------------------
+
+# Enables the enabledamagereactions and disabledamagereactions commands.
+damagereactions=true
+
+# Enables the following commands for manipulating player groups:
+#   setgroup name;              - Sets the group of the player to the specified name.
+#   getgroup flag;              - Assigns the group of the player to the specified string flag.
+#   getplayersingroup(name);    - Gets a list of players in the specified group, for use with 'allplayers[]'.
+group-commands=true
+
+# Enables the 'shootball dir;' command that accepts a direction argument.
+shootball=true
+
+# Fixes spelling errors in events/variables by adding alternatives.
+# Currently adds: playertouchesme and playertouchesother.
+fix-spelling=true

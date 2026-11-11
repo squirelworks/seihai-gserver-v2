@@ -32,8 +32,9 @@ workflow takes the current `brew install llvm`.
    with `-DTESTS=ON` and run (`Catch_tests/RC` and `Catch_tests/Gpak`; the
    other test folders are upstream's and are not built).
 5. `bin/` plus `LICENSE.md`, `CHANGES-SEIHAI.md` and `README.md` are packed.
-   The packed `default` and `classic` lab servers are then started and must
-   listen on `127.0.0.1:14802` and `14803`. The cross-built arm64 binary cannot
+   The packed `default`, `classic` and `modern` lab servers are then started and
+   must listen on `127.0.0.1:14802`, `14803` and `14805`, with no
+   "Could not find generation range" error in their output. The cross-built arm64 binary cannot
    run on the Intel runner, so it gets an architecture check instead.
 6. A `v*` tag, or a manual run with a version, attaches the Linux and Windows
    archives and a `-source.tar.gz` from `git archive` to a draft release, with

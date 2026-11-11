@@ -1,4 +1,4 @@
-# Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-10-31, 2026-11-11: see CHANGES-SEIHAI.md.
 #
 #  bin/CMakeLists.txt
 #
@@ -162,3 +162,13 @@ install(FILES
 		"servers/classic/accounts/(npcserver).txt"
 		"servers/classic/accounts/YOURACCOUNT.txt"
 		DESTINATION "./servers/classic/accounts")
+
+# Seihai: the modern lab server folder (4.20r8 to 6.037, resource packages).
+install(DIRECTORY "./servers/modern"
+		DESTINATION "./servers"
+		REGEX "/(logs|accounts)/[^/]*\\.txt$" EXCLUDE)
+install(FILES
+		"servers/modern/accounts/(defaultaccount).txt"
+		"servers/modern/accounts/(npcserver).txt"
+		"servers/modern/accounts/YOURACCOUNT.txt"
+		DESTINATION "./servers/modern/accounts")
