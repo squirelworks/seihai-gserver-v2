@@ -341,7 +341,7 @@ public:
 	void sendPacket(const CString& packet);
 	void sendRawPacket(const CString& packet);
 	std::pair<bool, bool> sendFile(const std::filesystem::path& file);
-	// For an encrypted package (.gpake), sends its key (PLO_FILEKEY) from
+	// For an encrypted package (.gpake), sends its key (PLO_FILEDECRYPTKEY) from
 	// config/gpakkeys.txt. raw puts it in the file queue, so it goes out before a file
 	// queued after it. Returns false when the package has no key; true for other files.
 	bool sendGpakKey(std::string_view filename, bool raw);
@@ -436,7 +436,7 @@ public:
 	//HandlePacketResult msgPLI_NPCDEL(CString& pPacket);
 	//HandlePacketResult msgPLI_WANTFILE(CString& pPacket);
 	//HandlePacketResult msgPLI_SHOWIMGPLAYER(CString& pPacket);
-	// PLI_WEAPONUPLOAD
+	// PLI_TOWEAPON
 	//HandlePacketResult msgPLI_HURTPLAYER(CString& pPacket);
 	//HandlePacketResult msgPLI_EXPLOSION(CString& pPacket);
 	HandlePacketResult msgPLI_PRIVATEMESSAGE(CString& pPacket);

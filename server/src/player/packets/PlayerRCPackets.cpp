@@ -1581,7 +1581,7 @@ HandlePacketResult PlayerRC::msgPLI_NPCSERVERQUERY(CString& pPacket)
 	return HandlePacketResult::Handled;
 }
 
-HandlePacketResult PlayerRC::msgPLI_PING(CString& pPacket)
+HandlePacketResult PlayerRC::msgPLI_PONG(CString& pPacket)
 {
 	// RC keepalive: empty, every 60 s. Nothing in the body is read.
 	(void)pPacket;

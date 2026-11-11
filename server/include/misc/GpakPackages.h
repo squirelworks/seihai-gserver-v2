@@ -1,5 +1,5 @@
 // Modified by the Seihai project, 2026-11-06, 2026-11-07: see CHANGES-SEIHAI.md.
-// New file: resource packages (.gpak, .gpake) and the PLO_FILEKEY key packet that
+// New file: resource packages (.gpak, .gpake) and the PLO_FILEDECRYPTKEY key packet that
 // lets a client open an encrypted one. Kept apart from Player so it can be tested on
 // its own.
 //
@@ -7,7 +7,7 @@
 // - A package is a plain ZIP. The client saves it under levels/gpaks/ and finds every
 //   file in it by its bare name, as if the file lay loose in the levels folder.
 // - In a .gpake every entry is DES-encrypted. The client opens it only with the key the
-//   server sent in PLO_FILEKEY *before* the file (PLO_FILE, or PLO_LARGEFILESTART ...
+//   server sent in PLO_FILEDECRYPTKEY *before* the file (PLO_FILE, or PLO_LARGEFILESTART ...
 //   PLO_LARGEFILEEND) or before PLO_FILEUPTODATE for that name.
 // - 6.03r7 loads .gpak and .gpake. 4.20r8 loads .gpake, but saves a plain .gpak without
 //   ever loading it. 4.04r2 loads no packages; clients before 4.x have none.
@@ -140,7 +140,7 @@ namespace preagonal
 		return std::nullopt;
 	}
 
-	/// @brief PLO_FILEKEY for a package: {GSTRING name}{GCHAR 1}{GINT5 lo}{GINT5 hi}.
+	/// @brief PLO_FILEDECRYPTKEY for a package: {GSTRING name}{GCHAR 1}{GINT5 lo}{GINT5 hi}.
 	/// name is the package's file name in lower case with no folder; lo and hi are key bytes
 	/// 0-3 and 4-7, each read as a little-endian 32-bit value. The client looks the key up by
 	/// that name when the package arrives. The 1 is what 6.03r7 needs for a loose .enc file;
@@ -161,7 +161,7 @@ namespace preagonal
 		};
 
 		CString packet;
-		packet >> (char)PLO_FILEKEY >> (char)name.length() << name >> (char)1;
+		packet >> (char)PLO_FILEDECRYPTKEY >> (char)name.length() << name >> (char)1;
 		packet.writeGInt5(half(0));
 		packet.writeGInt5(half(4));
 		return packet;

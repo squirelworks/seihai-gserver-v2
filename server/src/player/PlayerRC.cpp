@@ -84,7 +84,7 @@ static PacketHandleArray GeneratePacketHandlers()
 	handlers[PLI_RC_LARGEFILESTART] = &PlayerRC::msgPLI_RC_LARGEFILESTART;
 	handlers[PLI_RC_LARGEFILEEND] = &PlayerRC::msgPLI_RC_LARGEFILEEND;
 	handlers[PLI_RC_FOLDERDELETE] = &PlayerRC::msgPLI_RC_FOLDERDELETE;
-	handlers[PLI_PING] = &PlayerRC::msgPLI_PING;
+	handlers[PLI_PONG] = &PlayerRC::msgPLI_PONG;
 
 	return handlers;
 }

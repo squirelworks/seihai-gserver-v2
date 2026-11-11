@@ -15,7 +15,7 @@ namespace
 	constexpr GpakKey sampleKey{ 0x13, 0x34, 0x57, 0x79, 0x9B, 0xBC, 0xDF, 0xF1 };
 }
 
-SCENARIO("gpakKeyPacket matches the PLO_FILEKEY the real clients took")
+SCENARIO("gpakKeyPacket matches the PLO_FILEDECRYPTKEY the real clients took")
 {
 	GIVEN("sample.gpake and its key")
 	{
