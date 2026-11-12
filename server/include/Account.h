@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-04: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-04, 2026-11-12: see CHANGES-SEIHAI.md.
 #ifndef ACCOUNT_H
 #define ACCOUNT_H
 
@@ -98,6 +98,20 @@ struct Account
 	std::string lastFolderAccessed;
 
 	[[a::inline]] bool hasRight(uint32_t right) const;
+
+	/// @brief Whether a client may log in with this account name.
+	/// Seihai: in localhost mode no listserver vets the name, and it goes straight into accounts/<name>.txt and into
+	/// comma-separated lists (staff, RC lists, flags). lab run 2026-11-12: a 1.39 logged in as
+	/// "seihaitest,lab420,fresh2x139". Refused: an empty name, a comma, a path separator, "..", and control characters.
+	[[nodiscard]] [[a::inline]] static bool isLoginNameAllowed(std::string_view name) noexcept;
+
+	/// @brief The platform as the account file writes it.
+	/// Seihai: 2.19 to 2.31 clients send OSTYPE "wind" for Windows, while 4.x and later clients say "win" in their login
+	/// tokens, so the file's PLATFORM flipped with whichever client saved last (lab run 2026-11-12: an RC Edit
+	/// Account apply with a 2.22 online turned "win" into "wind"). The file now writes "win" for both; the live prop
+	/// keeps what the client sent.
+	[[nodiscard]] [[a::inline]] static std::string_view filePlatformName(std::string_view platform) noexcept;
+
 	[[a::inline]] bool hasChest(std::string_view levelName, const LocalWholeTilePosition& position) const;
 	[[a::inline]] bool hasWeapon(std::string_view weapon) const;
 };
@@ -105,6 +119,21 @@ struct Account
 inline bool Account::hasRight(const uint32_t right) const
 {
 	return (adminRights & right);
+}
+
+inline bool Account::isLoginNameAllowed(const std::string_view name) noexcept
+{
+	if (name.empty() || name.find("..") != std::string_view::npos)
+		return false;
+	return std::ranges::none_of(name, [](const char c)
+	{
+		return c == ',' || c == '/' || c == '\\' || static_cast<unsigned char>(c) < 0x20 || c == 0x7F;
+	});
+}
+
+inline std::string_view Account::filePlatformName(const std::string_view platform) noexcept
+{
+	return platform == "wind" ? std::string_view{"win"} : platform;
 }
 
 inline bool Account::hasChest(const std::string_view levelName, const LocalWholeTilePosition& position) const

@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-04: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-04, 2026-11-12: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <format>
 #include <limits>
+#include <random>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -160,7 +161,7 @@ bool FlatFileAccountLoader::loadAccount(const std::string_view accountName, Acco
 			// Some clients, like RC, will send the nickname props immediately and not wait until the go-ahead to login.
 			if (account.character.nickName.empty())
 			{
-				account.character.nickName = val.substr(0, 223);
+				account.character.nickName = val.substr(0, MAX_LENGTH_BEFORE_OVERFLOW);
 				updateModTime(PlayerProp::NICKNAME);
 			}
 		}
@@ -530,15 +531,17 @@ bool FlatFileAccountLoader::loadAccount(const std::string_view accountName, Acco
 	if (string::equalsi(accountName, "guest"sv))
 	{
 		account.loadOnly = true;
-		srand(static_cast<unsigned int>(time(nullptr)));
-
-		// Try to create a unique account number.
+		// Seihai: the number came from rand() * rand(), which overflows int, so guests got names such as
+		// "pc:-4187584" (lab run 2026-11-12, a 6.03r7 guest), and the free-name check looked up only the
+		// first six characters, not the name it then gave. Draw 0 to 9999998 and check the name that is used.
+		static std::mt19937 guestNumbers{std::random_device{}()};
+		std::uniform_int_distribution<uint32_t> number(0, 9999998);
 		while (true)
 		{
-			int v = (rand() * rand()) % 9999999;
-			if (server->getPlayer("pc:" + CString(v).subString(0, 6), PLTYPE_ANYPLAYER) == nullptr)
+			auto name = std::format("pc:{}", number(guestNumbers));
+			if (server->getPlayer(CString(name), PLTYPE_ANYPLAYER) == nullptr)
 			{
-				account.name = std::format("pc:{:6}", v);
+				account.name = std::move(name);
 				break;
 			}
 		}
@@ -678,7 +681,7 @@ bool FlatFileAccountLoader::forceSaveAccount(const Account& account)
 	writeLine(newFile, "LASTSPARTIME", clock::to_time_t(account.lastSparTime), static_cast<time_t>(0));
 	writeLine(newFile, "IP", account.ipAddress);
 	writeLine(newFile, "LANGUAGE", account.language, "English"sv); // TODO: Also accept "en" and other two-character language codes.
-	writeLine(newFile, "PLATFORM", account.platform);
+	writeLine(newFile, "PLATFORM", Account::filePlatformName(account.platform));
 	writeLine(newFile, "CODEPAGE", account.codePage);
 
 	// Attributes
