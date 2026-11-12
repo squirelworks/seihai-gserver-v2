@@ -29,8 +29,9 @@ workflow takes the current `brew install llvm`.
    vcpkg toolchain and the triplet from the matrix. On macOS `CC`/`CXX` point at
    Homebrew clang and Homebrew bison/flex go first on `PATH`.
 4. `cmake --build build`. On Linux the Seihai regression tests are then built
-   with `-DTESTS=ON` and run (`Catch_tests/RC` and `Catch_tests/Gpak`; the
-   other test folders are upstream's and are not built).
+   with `-DTESTS=ON` and run (`Catch_tests/RC`, `Gpak`, `Graal3D`,
+   `NPCServerGS1` and `ScriptCache`; the other test folders are upstream's and
+   are not built).
 5. `bin/` plus `LICENSE.md`, `CHANGES-SEIHAI.md` and `README.md` are packed.
    The packed `default`, `classic` and `modern` lab servers are then started and
    must listen on `127.0.0.1:14802`, `14803` and `14805`, with no
