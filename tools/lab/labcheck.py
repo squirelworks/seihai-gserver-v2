@@ -153,7 +153,7 @@ class Logs:
             key = (p.account, p.player_id)
             s = by_key.get(key)
             relogged = s is not None and s.packets and any(
-                l.account == p.account and s.packets[-1].time < l.time <= p.time for l in self.logins)
+                login_account_matches(l.account, p.account) and s.packets[-1].time < l.time <= p.time for l in self.logins)
             if s is None or relogged or (s.packets and (p.time - s.packets[-1].time).total_seconds() > 300):
                 s = Session(p.account, p.player_id)
                 by_key[key] = s
@@ -162,9 +162,20 @@ class Logs:
         # Each session takes the latest login of its account at or before its first packet.
         for s in order:
             first = s.packets[0].time
-            cands = [l for l in self.logins if l.account == s.account and l.time <= first]
-            s.login = cands[-1] if cands else next((l for l in self.logins if l.account == s.account), None)
+            cands = [l for l in self.logins if login_account_matches(l.account, s.account) and l.time <= first]
+            s.login = cands[-1] if cands else next((l for l in self.logins if login_account_matches(l.account, s.account)), None)
         return order
+
+
+def is_guest_account(account: str) -> bool:
+    """A guest logs in as "guest" and plays as "pc:<number>", the name the server gives it."""
+    return account == "guest" or account.startswith("pc:")
+
+
+def login_account_matches(login_account: str, session_account: str) -> bool:
+    if login_account == session_account:
+        return True
+    return login_account == "guest" and session_account.startswith("pc:")
 
 
 def gshort(data: bytes) -> int:
@@ -209,7 +220,12 @@ def load(serverdir: Path, since: datetime | None, accounts: set[str] | None) -> 
     unknown = [l for l in read_lines(serverdir / "console.log") if "Unknown Player Packet" in l]
 
     def keep(t: datetime, account: str) -> bool:
-        return (since is None or t >= since) and (accounts is None or account in accounts)
+        if since is not None and t < since:
+            return False
+        if accounts is None or account in accounts:
+            return True
+        # "guest" on the command line also picks its pc:<number> session, and the other way round.
+        return is_guest_account(account) and any(is_guest_account(a) for a in accounts)
 
     return Logs(
         [p for p in packets if keep(p.time, p.account)],

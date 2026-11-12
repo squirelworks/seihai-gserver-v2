@@ -126,6 +126,18 @@ class SyntheticTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("sec (2.31, SEI00001) logged in", report)
 
+    def test_guest_session_takes_the_guest_login(self):
+        # GwenTea2 lab 2026-11-12: a 6.03r7 guest logs in as "guest" and plays as "pc:<number>".
+        t = "2026-11-12 03:00:00"
+        dump = out_packet(t, "pc:-4187584", 2, 25, gchar(25) + gchar(73))
+        log = f"[{t}] :: New login: guest [New Client (2.22+)] [G3D0311C (6.037)]\n"
+        self.write(dump, log)
+        code, report = run("matrix", self.dir)
+        self.assertEqual(code, 0, report)
+        self.assertIn("pc:-4187584 (6.037) logged in", report)
+        code, report = run("matrix", self.dir, "--accounts", "guest")
+        self.assertIn("pc:-4187584 (6.037)", report)
+
     def test_relogin_splits_sessions(self):
         t1, t2 = "2026-11-12 03:00:00", "2026-11-12 03:00:30"
         name = b"-Wbow"
