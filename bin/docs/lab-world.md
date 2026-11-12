@@ -43,9 +43,10 @@ these settings:
   the world runs on its own. This is only safe while the server listens on
   loopback.
 - `listip = 127.0.0.1`, port 14900: a listserver on the same machine, for
-  example the Seihai lab listserver. With one running, 2.22 and 2.31 can pick
-  the server from their server list. Without one, the server keeps trying to
-  reach it and otherwise runs normally.
+  example the Seihai lab listserver. In localhost mode the server does not
+  dial it (since 2026-11-12). To have 2.22 and 2.31 pick the server from a lab
+  listserver's list, set `localhostlist = true`; the server then registers
+  there, and keeps retrying while no listserver runs.
 - `url` is empty.
 
 The classic folder also has `generation = classic`, port 14803,

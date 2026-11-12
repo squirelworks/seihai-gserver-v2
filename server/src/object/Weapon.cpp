@@ -370,7 +370,9 @@ void Weapon::calculateHeaderChecksum()
 	m_header = string::toCSV(headerParts);
 
 	// Header with CRC32.
-	const CString crc32{static_cast<long long>(m_checksum)};
+	// Seihai: the CRC is a GINT5, like the key fields, the class header's CRC (ScriptClass) and PLO_WEAPONHASH.
+	// CString's long long constructor writes decimal text ("847531159"), which no GINT5 reader decodes to the CRC.
+	const CString crc32 = CString() >> static_cast<long long>(m_checksum);
 	headerParts.push_back(crc32.toString());
 	m_headerWithCRC = string::toCSV(headerParts);
 }

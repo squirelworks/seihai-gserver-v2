@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
 // ReSharper disable CppParameterMayBeConstPtrOrRef
 #include <algorithm>
 #include <any>
@@ -1547,8 +1548,21 @@ void fn_hurt(GS1Visitor* visitor, const std::vector<GS1ScriptValue*>& arguments)
 		const auto server = BabyDI::Get<Server>();
 		if (const auto player = server->getNPCServer()->getPlayer(source.value().first); player != nullptr)
 		{
+			// Seihai: the player is knocked away from the NPC's centre, as on the original client; before this the hit
+			// came from the player's own centre, a zero vector. Without an NPC the player's centre is still used.
 			auto tilePos = toTilePosition(player->account.character.getLocalPosition());
-			server->hitPlayer(player->getId(), halfhearts, tilePos.x() + 1.5f, tilePos.y() + 2, server->getNPC(npcId));
+			float fromX = tilePos.x() + 1.5f;
+			float fromY = tilePos.y() + 2;
+			const auto npc = server->getNPC(npcId);
+			if (npc != nullptr)
+			{
+				const auto npcPos = toTilePosition(npc->getGlobalPosition());
+				const auto halfWidth = npc->isCharacter() ? 1.5f : static_cast<float>(npc->shape.width()) / 32.0f;
+				const auto halfHeight = npc->isCharacter() ? 2.0f : static_cast<float>(npc->shape.height()) / 32.0f;
+				fromX = npcPos.x() + halfWidth;
+				fromY = npcPos.y() + halfHeight;
+			}
+			server->hitPlayer(player->getId(), halfhearts, fromX, fromY, npc);
 		}
 	}
 }
@@ -3028,8 +3042,19 @@ void fn_shootarrow(GS1Visitor* visitor, const std::vector<GS1ScriptValue*>& argu
 	}
 }
 
+// Seihai: the direction (0 up, 1 left, 2 down, 3 right) of the dominant axis from one tile position to another.
+static uint8_t directionTowards(const TilePosition& from, const TilePosition& to)
+{
+	const auto dx = to.x() - from.x();
+	const auto dy = to.y() - from.y();
+	if (std::abs(dx) > std::abs(dy))
+		return dx < 0 ? 1 : 3;
+	return dy < 0 ? 0 : 2;
+}
+
 // shootball;
 // (gr) shootball dir;
+// Seihai: the bare form shoots the way the NPC faces.
 void fn_shootball(GS1Visitor* visitor, const std::vector<GS1ScriptValue*>& arguments)
 {
 	// Conformance.
@@ -3037,14 +3062,42 @@ void fn_shootball(GS1Visitor* visitor, const std::vector<GS1ScriptValue*>& argum
 	if (config.strictMode.getValue() || config.shootball.getValue() == false)
 		throw std::logic_error("shootball is clientside only.");
 
-	if (arguments.size() != 1)
-		throw std::invalid_argument("invalid arguments: shootball dir");
+	if (arguments.size() > 1)
+		throw std::invalid_argument("invalid arguments: shootball [dir]");
 
 	if (const auto level = visitor->findCurrentLevel(); level != nullptr)
 	{
-		const auto dir = DoubleAsIntegralFloor<uint8_t>(GS1Visitor::getScriptValueAsCopy<double>(*arguments[0]).value_or(0.0));
-
 		const auto& source = visitor->getOriginalSource();
+
+		// Seihai: 1.x levels use the bare form, shootball;  The documented original shoots at the player. The
+		// server's balls fly in one of four directions, so a bare shootball takes the direction (dominant axis)
+		// from the NPC to the event's player, or the way the NPC faces when there is no player.
+		uint8_t dir = 0;
+		if (arguments.size() == 1)
+			dir = DoubleAsIntegralFloor<uint8_t>(GS1Visitor::getScriptValueAsCopy<double>(*arguments[0]).value_or(0.0));
+		else if (source.second == ScriptObjectType::NPC)
+		{
+			const auto server = BabyDI::Get<Server>();
+			if (const auto npc = server->getNPC(source.first); npc != nullptr)
+			{
+				dir = npc->character.direction % 4;
+				if (const auto playerSource = visitor->findNearestScriptObjectSourceFromStack(ScriptObjectType::PLAYER); playerSource.has_value())
+				{
+					if (const auto player = server->getNPCServer()->getPlayer(playerSource.value().first); player != nullptr && !player->isNPCServer())
+					{
+						auto npcCentre = npc->character.getTilePosition();
+						if (npc->isCharacter())
+							npcCentre.translate(1.5f, 2.0f);
+						else
+							npcCentre.translate(static_cast<float>(npc->shape.width()) / 32.0f, static_cast<float>(npc->shape.height()) / 32.0f);
+						auto playerCentre = player->account.character.getTilePosition();
+						playerCentre.translate(1.5f, 2.0f);
+						dir = directionTowards(npcCentre, playerCentre);
+					}
+				}
+			}
+		}
+
 		const PixelPosition speed = {(dir == 0 || dir == 2) ? 0 : (dir == 1 ? -16 : 16), (dir == 1 || dir == 3) ? 0 : (dir == 0 ? -16 : 16)};
 
 		const auto sourcePosition = getPositionForArrow(source, dir);
