@@ -47,10 +47,10 @@ jobs:
           java-version: '21'
       - name: Linux tools
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y gcc-14 g++-14 ninja-build autoconf automake libtool bison flex
+        run: sudo apt-get update && sudo apt-get install -y gcc-14 g++-14 ninja-build autoconf autoconf-archive automake libtool bison flex
       - name: macOS tools
         if: runner.os == 'macOS'
-        run: brew install ninja llvm lld autoconf automake libtool bison flex
+        run: brew install ninja llvm lld autoconf autoconf-archive automake libtool bison flex
       - uses: ilammy/msvc-dev-cmd@v1
         if: runner.os == 'Windows'
       - name: vcpkg
@@ -82,13 +82,14 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cmake -S . -B build -DTESTS=ON
-          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache
+          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin
           timeout 60 bin/RC
           timeout 60 bin/Gpak
           timeout 60 bin/Graal3D
           timeout 60 bin/NPCServerGS1
           timeout 60 bin/ScriptCache
-          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache
+          timeout 60 bin/SecureLogin
+          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin
           python3 -m unittest tools/lab/test_labcheck.py
       - name: Package
         shell: bash
@@ -157,10 +158,10 @@ jobs:
           java-version: '21'
       - name: Linux tools
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y gcc-14 g++-14 ninja-build autoconf automake libtool bison flex
+        run: sudo apt-get update && sudo apt-get install -y gcc-14 g++-14 ninja-build autoconf autoconf-archive automake libtool bison flex
       - name: macOS tools
         if: runner.os == 'macOS'
-        run: brew install ninja llvm lld autoconf automake libtool bison flex
+        run: brew install ninja llvm lld autoconf autoconf-archive automake libtool bison flex
       - uses: ilammy/msvc-dev-cmd@v1
         if: runner.os == 'Windows'
       - name: vcpkg
@@ -192,13 +193,14 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cmake -S . -B build -DTESTS=ON
-          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache
+          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin
           timeout 60 bin/RC
           timeout 60 bin/Gpak
           timeout 60 bin/Graal3D
           timeout 60 bin/NPCServerGS1
           timeout 60 bin/ScriptCache
-          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache
+          timeout 60 bin/SecureLogin
+          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin
           python3 -m unittest tools/lab/test_labcheck.py
       - name: Package
         shell: bash
