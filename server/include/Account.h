@@ -101,7 +101,7 @@ struct Account
 
 	/// @brief The platform as the account file writes it.
 	/// Seihai: 2.19 to 2.31 clients send OSTYPE "wind" for Windows, while 4.x and later clients say "win" in their login
-	/// tokens, so the file's PLATFORM flipped with whichever client saved last (GwenTea2 lab 2026-11-12: an RC Edit
+	/// tokens, so the file's PLATFORM flipped with whichever client saved last (lab run 2026-11-12: an RC Edit
 	/// Account apply with a 2.22 online turned "win" into "wind"). The file now writes "win" for both; the live prop
 	/// keeps what the client sent.
 	[[nodiscard]] [[a::inline]] static std::string_view filePlatformName(std::string_view platform) noexcept;

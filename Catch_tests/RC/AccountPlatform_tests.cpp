@@ -1,5 +1,5 @@
 // Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
-// New file: the account file's PLATFORM spelling (GwenTea2 lab 2026-11-12, "win" became "wind").
+// New file: the account file's PLATFORM spelling (lab run 2026-11-12, "win" became "wind").
 #include "catch2/catch_all.hpp"
 
 #include <Account.h>
