@@ -311,6 +311,15 @@ graal3d = false
 # with PLI_PONG (162); the round trip goes to the server log. 0 = off. Other builds are never sent it.
 clientping = 0
 
+# Seihai secure login (SEI00001): the Seihai client can send the account and password
+# sealed (X25519, Ed25519, ChaCha20-Poly1305) instead of in the clear. Real Graal clients
+# cannot; their logins work as before. See docs/secure-login.md.
+# secure_login = true
+# The server's Ed25519 key, made on first start (back it up: a new key alarms every player).
+# secure_login_key = config/seihai-login.key
+# Refuse every classic login. This locks out every real Graal client.
+# require_secure_login = false
+
 # Sets the server into localhost mode: all logins are allowed with no listserver verification.
 # In localhost mode the server does not dial the list server (localhostlist below changes that).
 # Seihai lab default: true, so the lab world runs without a listserver.  Only safe while
