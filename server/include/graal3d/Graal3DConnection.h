@@ -230,6 +230,9 @@ namespace graal3d
 		bool m_controlDelivered = false;
 		std::optional<ObjectKey> m_cameraKey;
 		bool m_cameraNamed = false;
+		// Lab diagnostics: each logged once per connection.
+		bool m_warnedWindow = false;
+		bool m_warnedAckAhead = false;
 
 		// The client's own control object, as its echoes describe it.
 		GameObjectState m_clientObject;

@@ -736,17 +736,48 @@ SCENARIO("Ghosting a world and handing the client its control object")
 		REQUIRE(readSunUpdate(ps.r) == sun.sun);
 	}
 
-	WHEN("the client acks that packet")
+	WHEN("the client acks that packet but has not finished the mission start")
 	{
 		h.sent.clear();
 		h.conn.receive(clientDataPacket(profile, 2, 1, 1, {}, 0), h.now);
 		h.tick(60);
+		h.tick(1000);
 
-		THEN("the ghosts are in and the control object follows, as 13 empty sections")
+		THEN("the ghosts are in, and the control object waits")
 		{
 			REQUIRE(h.conn.ghostDelivered(3));
 			REQUIRE_FALSE(h.sent.empty());
+			for (const auto& data : h.sent)
+				REQUIRE_FALSE(readServerPacket(data).control);
+		}
+	}
+
+	WHEN("the client acks that packet and answers both mission phases")
+	{
+		std::vector<OutEvent> phase1;
+		phase1.push_back({"RemoteCommandEvent", remoteCommandEvent({CommandArg{false, 0, "MissionStartPhase1Ack"}})});
+		h.sent.clear();
+		h.conn.receive(clientDataPacket(profile, 2, 1, 1, phase1, 0), h.now);
+		h.tick(60);
+
+		REQUIRE(h.sent.size() == 1);
+		const auto phase2 = readServerPacket(h.sent.back());
+		REQUIRE(h.mission.back() == MissionState::Phase2Sent);
+		REQUIRE_FALSE(phase2.control); // MissionStartPhase2 would undo login step 5
+
+		std::vector<OutEvent> phase2Ack;
+		phase2Ack.push_back({"RemoteCommandEvent", remoteCommandEvent({CommandArg{false, 0, "MissionStartPhase2Ack"}})});
+		h.sent.clear();
+		h.conn.receive(clientDataPacket(profile, 3, 2, 3, phase2Ack, 1), h.now);
+		h.tick(60);
+
+		THEN("the control object follows the mission start, as 13 empty sections")
+		{
+			REQUIRE(h.mission.back() == MissionState::Done);
+			REQUIRE(h.conn.ghostDelivered(3));
+			REQUIRE_FALSE(h.sent.empty());
 			const auto pkt = readServerPacket(h.sent.back());
+			REQUIRE(pkt.header.sequence == 3);
 			REQUIRE(pkt.control);
 			REQUIRE(pkt.controlIndex == *h.conn.ghostIndex(3));
 			REQUIRE(pkt.controlMask == 0);
@@ -755,7 +786,7 @@ SCENARIO("Ghosting a world and handing the client its control object")
 
 		AND_WHEN("that is acked and the client reports a move and a chat on its object")
 		{
-			h.conn.receive(clientDataPacket(profile, 3, 2, 1, {}, 0), h.now);
+			h.conn.receive(clientDataPacket(profile, 4, 3, 7, {}, 0), h.now);
 			REQUIRE(h.conn.controlObjectDelivered());
 
 			GameObjectState moved = me.object;
@@ -766,8 +797,8 @@ SCENARIO("Ghosting a world and handing the client its control object")
 			writeGameObjectUpdate(echo, moved, GameObjectBits::Transform | GameObjectBits::Chat);
 			ClientControl control{{11.0f, 20.0f, 1.0f}, *h.conn.ghostIndex(3), &echo};
 			std::vector<OutEvent> evs;
-			evs.push_back({"RemoteCommandEvent", remoteCommandEvent({CommandArg{false, 0, "MissionStartPhase1Ack"}})});
-			h.conn.receive(clientDataPacket(profile, 4, 2, 1, evs, 0, &control), h.now);
+			evs.push_back({"RemoteCommandEvent", remoteCommandEvent({CommandArg{false, 0, "Hello"}})});
+			h.conn.receive(clientDataPacket(profile, 5, 3, 7, evs, 2, &control), h.now);
 
 			THEN("the server sees the new position and chat, and the events after them still read")
 			{
@@ -778,8 +809,10 @@ SCENARIO("Ghosting a world and handing the client its control object")
 				REQUIRE(st.changed == (GameObjectBits::Transform | GameObjectBits::Chat));
 				REQUIRE(st.object.chat == "hello");
 				REQUIRE(st.object.shape == "player.dts");
-				REQUIRE(h.mission.back() == MissionState::Phase2Sent);
-				REQUIRE(h.logs.empty()); // every event filled its length
+				REQUIRE_FALSE(h.logs.empty());
+				REQUIRE(h.logs.back() == "remote command ignored: Hello"); // the event after the echo read whole
+				for (const auto& line : h.logs)
+					REQUIRE(line.find("does not fill its length") == std::string::npos);
 			}
 		}
 

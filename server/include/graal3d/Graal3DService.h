@@ -61,6 +61,8 @@ namespace graal3d
 
 		// Opens the UDP port. `interfaceIp` empty means every interface.
 		bool start(std::string_view interfaceIp, uint16_t port);
+		// A client build with a Torque 3D side: 3.153 to 5.x.
+		static bool clientHasGraal3D(int version);
 
 		// The objects every client is sent. `packetStrings`: see TorqueBitStream.h
 		// (the option graal3dstringprefix). Call before start().

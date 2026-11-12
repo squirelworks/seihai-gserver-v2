@@ -72,13 +72,14 @@ namespace graal3d
 			return ip;
 		}
 
-		// A client build with a Torque 3D side: 3.153 to 5.x. (3.04 speaks the stock
-		// TGE demo protocol and is refused by the game string check.)
-		bool hasGraal3D(int version)
-		{
-			return version >= CLVER_3_153 && version < CLVER_6_015;
-		}
+		bool hasGraal3D(int version) { return Service::clientHasGraal3D(version); }
 	} // namespace
+
+	// 3.04 speaks the stock TGE demo protocol and is refused by the game string check.
+	bool Service::clientHasGraal3D(int version)
+	{
+		return version >= CLVER_3_153 && version < CLVER_6_015;
+	}
 
 	Service::Service(Server& server)
 		: m_server(server)

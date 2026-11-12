@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-06: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-12: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -1458,19 +1458,25 @@ HandlePacketResult PlayerClient::msgPLI_VERIFYWANTSEND(CString& pPacket)
 	{
 		const auto info = m_server->getFileSystem().infoi(fs::FileCategory::ALL, fileName.toStringView());
 		if (info == nullptr)
-			return HandlePacketResult::Handled;
-
-		CString fileData;
-		fileData.load(info->file.string());
-
-		if (!fileData.isEmpty())
 		{
-			if (calculateCrc32Checksum(fileData) == fileChecksum)
-			{
-				// A cached encrypted package opens only with its key, which must come first.
-				sendGpakKey(fileName.toStringView(), false);
-				sendPacket(CString() >> (char)PLO_FILEUPTODATE << fileName);
+			// A 3D client's login waits on this answer: sendFile tells it the file is missing.
+			if (!answersMissingFilesFor3D())
 				return HandlePacketResult::Handled;
+		}
+		else
+		{
+			CString fileData;
+			fileData.load(info->file.string());
+
+			if (!fileData.isEmpty())
+			{
+				if (calculateCrc32Checksum(fileData) == fileChecksum)
+				{
+					// A cached encrypted package opens only with its key, which must come first.
+					sendGpakKey(fileName.toStringView(), false);
+					sendPacket(CString() >> (char)PLO_FILEUPTODATE << fileName);
+					return HandlePacketResult::Handled;
+				}
 			}
 		}
 	}
