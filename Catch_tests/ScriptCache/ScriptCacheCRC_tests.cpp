@@ -167,3 +167,24 @@ TEST_CASE_METHOD(ModernServer, "a class's checksum is the CRC32 of the bytecode 
 	const auto body = packet.readChars(packet.bytesLeft());
 	CHECK(static_cast<size_t>(body.length()) == bytecode.size());
 }
+
+TEST_CASE_METHOD(ModernServer, "PLO_WEAPONHASH carries the CRC32 of the bytecode that PLO_WEAPONBYTECODE sends", "[issue26]")
+{
+	// 4.04r2 to 4.20r8 write the bytes after the name in 132 to weblevels/weapons/<name>.code, and on 193 compare
+	// the zlib CRC32 of that file with the GINT5 (Graal_analysis protocol/unknown-ids-2026-11-06.md).
+	const Weapon weapon{"CacheTest"sv, "block.png"sv, script};
+	const auto& bytecode = weapon.getScript().getClientByteCode();
+	REQUIRE_FALSE(bytecode.empty());
+
+	auto packet = weapon.getWeaponHashPacket();
+	REQUIRE(packet.length() > 6);
+	CHECK(packet.readGUChar() == PLO_WEAPONHASH);
+	const auto crc = static_cast<uint32_t>(packet.readGInt5());
+	CHECK(packet.readChars(packet.bytesLeft()).toString() == "CacheTest");
+	CHECK(crc == crcOf(bytecode));
+
+	// Not the GRESCR01 CRC that 5.07 and later get in PLO_LOADSCRIPT.
+	const auto parts = string::fromCSV(weapon.getHeaderWithCRC());
+	REQUIRE(parts.size() == 5);
+	CHECK(crc != readGInt5(parts[4]));
+}

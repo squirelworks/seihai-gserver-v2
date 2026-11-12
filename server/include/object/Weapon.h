@@ -65,6 +65,8 @@ public:
 	[[a::inline]] const Script& getScript() const noexcept;
 	// Seihai: the PLO_LOADSCRIPT header (type,name,cacheflag,key,crc), for tests.
 	[[nodiscard]] const std::string& getHeaderWithCRC() const noexcept { return m_headerWithCRC; }
+	// Seihai (#26): PLO_WEAPONHASH (193) for 4.04r2 to 4.20r8: GINT5 CRC32 of the plain bytecode, then the name.
+	[[nodiscard]] CString getWeaponHashPacket() const;
 
 public:
 	const std::string name;
@@ -82,6 +84,7 @@ protected:
 	LevelItemType m_weaponDefault;
 	Script m_script;
 	uint32_t m_checksum = 0;
+	uint32_t m_plainChecksum = 0;	// Seihai (#26): CRC32 of the bytecode as sent in PLO_WEAPONBYTECODE (132).
 	std::string m_desKey;
 	std::string m_header;
 	std::string m_headerWithCRC;

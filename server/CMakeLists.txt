@@ -304,9 +304,10 @@ FetchContent_Declare(gs2lib
 	# Seihai: our mirror, branch seihai (upstream e269a79, the commit GServer-v2
 	# beta4 fe72da9 pins, + the 3.153 token + the 5.12 gen-5 step rule
 	# + the socket wait/unregister fix + the 2026-11-06 packet names, with
-	# upstream's own 2026-11-06 names kept as aliases of ours).
+	# upstream's own 2026-11-06 names kept as aliases of ours, + the 5.007
+	# label for 5.00r7).
 	GIT_REPOSITORY https://github.com/squirelworks/seihai-gs2lib.git
-	GIT_TAG        f94f22dd85c3ffea187da944e6bbbdded899ef43
+	GIT_TAG        12d8e20183c1098d178ab9f4bba96dbff4c1c9a6
 )
 FetchContent_MakeAvailable(gs2lib)
 add_dependencies(${TARGET_NAME} gs2lib)
