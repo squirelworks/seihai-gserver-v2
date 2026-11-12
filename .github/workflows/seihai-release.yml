@@ -1,7 +1,7 @@
 # Seihai: build gs2emu for Linux, Windows and macOS. A tag push (v*), or a manual
 # run with a version, also makes a DRAFT GitHub release with the four archives and
 # the full source, as the GPL asks. The tag is made when the owner presses Publish.
-# Modified by the Seihai project, 2026-11-04, 2026-11-11: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-11-04, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
 name: Seihai build and release
 
 on:
@@ -47,10 +47,10 @@ jobs:
           java-version: '21'
       - name: Linux tools
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y gcc-14 g++-14 ninja-build autoconf automake libtool bison flex
+        run: sudo apt-get update && sudo apt-get install -y gcc-14 g++-14 ninja-build autoconf autoconf-archive automake libtool bison flex
       - name: macOS tools
         if: runner.os == 'macOS'
-        run: brew install ninja llvm lld autoconf automake libtool bison flex
+        run: brew install ninja llvm lld autoconf autoconf-archive automake libtool bison flex
       - uses: ilammy/msvc-dev-cmd@v1
         if: runner.os == 'Windows'
       - name: vcpkg
@@ -82,13 +82,14 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cmake -S . -B build -DTESTS=ON
-          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache
+          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin
           timeout 60 bin/RC
           timeout 60 bin/Gpak
           timeout 60 bin/Graal3D
           timeout 60 bin/NPCServerGS1
           timeout 60 bin/ScriptCache
-          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache
+          timeout 60 bin/SecureLogin
+          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin
       - name: Package
         shell: bash
         run: |
@@ -156,10 +157,10 @@ jobs:
           java-version: '21'
       - name: Linux tools
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y gcc-14 g++-14 ninja-build autoconf automake libtool bison flex
+        run: sudo apt-get update && sudo apt-get install -y gcc-14 g++-14 ninja-build autoconf autoconf-archive automake libtool bison flex
       - name: macOS tools
         if: runner.os == 'macOS'
-        run: brew install ninja llvm lld autoconf automake libtool bison flex
+        run: brew install ninja llvm lld autoconf autoconf-archive automake libtool bison flex
       - uses: ilammy/msvc-dev-cmd@v1
         if: runner.os == 'Windows'
       - name: vcpkg
@@ -191,13 +192,14 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cmake -S . -B build -DTESTS=ON
-          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache
+          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin
           timeout 60 bin/RC
           timeout 60 bin/Gpak
           timeout 60 bin/Graal3D
           timeout 60 bin/NPCServerGS1
           timeout 60 bin/ScriptCache
-          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache
+          timeout 60 bin/SecureLogin
+          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin
       - name: Package
         shell: bash
         run: |
