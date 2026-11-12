@@ -8,9 +8,14 @@
 #include <IEnums.h>
 #include <IUtil.h>
 
+#include <atomic>
+
 #include <player/PlayerClient.h>
 
 using namespace preagonal;
+
+// Server.cpp refers to it; a Debug link keeps the reference (main.cpp, which defines it, is not in the test).
+std::atomic_bool shutdownProgram{false};
 
 TEST_CASE("PLO_PING goes only to the builds that answer it", "[ping]")
 {

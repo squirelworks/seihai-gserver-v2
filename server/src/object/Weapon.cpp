@@ -202,7 +202,11 @@ void Weapon::registerWeaponWithPlayer(const std::shared_ptr<Player>& player) con
 		{
 			if (player->getVersion() >= CLVER_5_07)
 				player->sendPacket(CString() >> (char)PLO_LOADSCRIPT << m_headerWithCRC);
-			else player->sendPacket(CString() >> (char)PLO_WEAPONHASH >> (long long)m_checksum << name);
+			// Seihai (#26): 193 carries the CRC of the plain bytecode, not the GRESCR01 one, and only 4.04r2 and later
+			// handle it. Older builds get the bytecode itself (132), as they would after a cache miss.
+			else if (player->getVersion() >= CLVER_4_042)
+				player->sendPacket(getWeaponHashPacket());
+			else sendByteCodeToPlayer(player);
 		}
 	}
 }
@@ -369,6 +373,12 @@ void Weapon::calculateHeaderChecksum()
 	m_checksum = crc32(0L, Z_NULL, 0);
 	m_checksum = crc32(m_checksum, stored.data(), static_cast<uInt>(stored.size()));
 
+	// Seihai (#26): 4.04r2 to 4.20r8 cache a weapon as the raw bytes of its PLO_WEAPONBYTECODE (132), in
+	// weblevels/weapons/<name>.code, and 193 compares the zlib CRC32 of that file with its GINT5
+	// (Graal_analysis protocol/unknown-ids-2026-11-06.md, PLO 132 and PLO 193).
+	m_plainChecksum = crc32(0L, Z_NULL, 0);
+	m_plainChecksum = crc32(m_plainChecksum, bytecode.data(), static_cast<uInt>(bytecode.size()));
+
 	// Create the header.
 	// [GBYTE2 length_header_and_bytecode]
 	// [STRING type,name,[0/1 save_to_disk],[GBYTE[10] desKey]]
@@ -387,6 +397,11 @@ void Weapon::calculateHeaderChecksum()
 	const CString crc32 = CString() >> static_cast<long long>(m_checksum);
 	headerParts.push_back(crc32.toString());
 	m_headerWithCRC = string::toCSV(headerParts);
+}
+
+CString Weapon::getWeaponHashPacket() const
+{
+	return CString() >> (char)PLO_WEAPONHASH >> (long long)m_plainChecksum << name;
 }
 
 void Weapon::updateScriptClass(ScriptClass* scriptClass) const
