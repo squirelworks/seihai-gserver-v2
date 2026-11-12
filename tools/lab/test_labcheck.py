@@ -100,11 +100,22 @@ class SyntheticTests(unittest.TestCase):
         t = "2026-11-12 03:00:00"
         dump = (out_packet(t, "six", 2, 108, gchar(108) + gchar(0) + gshort(7))
                 + in_packet(t, "six", 2, 162, gchar(162) + b"!" + gshort(7)))
-        log = f"[{t}] :: New login: six [New Client (2.22+)] [G3D0311C (6.037)]\n[{t}] [Ping] six: 12 ms (6.037)\n"
+        log = f"[{t}] :: New login: six [New Client (2.22+)] [G3D0311C (6.037)]\n[{t}] :: [Ping] six: 12 ms (6.037)\n"
         self.write(dump, log)
         code, report = run("ping", self.dir)
         self.assertEqual(code, 0, report)
         self.assertIn("12 to 12 ms", row(report, "round trips"))
+
+    def test_ping_round_trips_from_the_console(self):
+        # Lab run 2026-11-12: the round trips were only in the saved console, and the row said "0 logged".
+        t = "2026-11-12 03:00:00"
+        dump = (out_packet(t, "six", 2, 108, gchar(108) + gchar(0) + gshort(7))
+                + in_packet(t, "six", 2, 162, gchar(162) + b"!" + gshort(7)))
+        log = f"[{t}] :: New login: six [New Client (2.22+)] [G3D20126 (4.208)]\n"
+        self.write(dump, log, ":: [Ping] six: 2 ms (4.208)\n[Ping] six: 1 ms (4.208)\n")
+        code, report = run("ping", self.dir)
+        self.assertEqual(code, 0, report)
+        self.assertIn("1 to 2 ms", row(report, "round trips"))
 
     def test_ping_wrong_echo_and_unknown_packet(self):
         t = "2026-11-12 03:00:00"

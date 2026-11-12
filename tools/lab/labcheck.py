@@ -79,7 +79,8 @@ HEXLINE = re.compile(TS + r" ((?:[0-9a-f]{2} )+)\s*$")
 LOGIN = re.compile(TS + r" :: New login: (\S+) \[([^\]]*)\] \[(.*)\]\s*$")
 LOGIN_VERSION = re.compile(r"^(?:SEI00001 \(inner (\S+)\)|(\S+)) \((.*)\)$")
 DISCONNECT = re.compile(TS + r" \*\* \[Disconnect\] '?([^':]+)'?: (.*)$")
-PINGLOG = re.compile(TS + r" \[Ping\] (\S+): (\d+) ms")
+# serverlog.txt writes "[time] :: [Ping] ..."; the console copy may have no time.
+PINGLOG = re.compile(r"^(?:" + TS + r" )?(?::: )?\[Ping\] (\S+): (\d+) ms")
 
 
 def parse_time(text: str) -> datetime:
@@ -216,8 +217,16 @@ def load(serverdir: Path, since: datetime | None, accounts: set[str] | None) -> 
         elif m := DISCONNECT.match(line):
             disconnects.append((parse_time(m.group(1)), m.group(2), m.group(3)))
         elif m := PINGLOG.match(line):
-            pings.append((parse_time(m.group(1)), m.group(2), int(m.group(3))))
-    unknown = [l for l in read_lines(serverdir / "console.log") if "Unknown Player Packet" in l]
+            if m.group(1):
+                pings.append((parse_time(m.group(1)), m.group(2), int(m.group(3))))
+    console = read_lines(serverdir / "console.log")
+    unknown = [l for l in console if "Unknown Player Packet" in l]
+    if not pings:
+        # No server log lines: take the console's. Without a time they cannot be cut by --since.
+        for line in console:
+            if m := PINGLOG.match(line):
+                when = parse_time(m.group(1)) if m.group(1) else (since or datetime.min)
+                pings.append((when, m.group(2), int(m.group(3))))
 
     def keep(t: datetime, account: str) -> bool:
         if since is not None and t < since:
