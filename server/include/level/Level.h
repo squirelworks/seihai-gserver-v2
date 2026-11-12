@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-04: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-04, 2026-11-12: see CHANGES-SEIHAI.md.
 #ifndef LEVEL_H
 #define LEVEL_H
 
@@ -176,6 +176,7 @@ public:
 	std::optional<uint16_t> getMapTileAtPosition(const TilePosition& position) const noexcept;
 	uint16_t* getMapTileForEditing(const TilePosition& position) const noexcept;
 	[[a::inline]] std::string_view getLevelNameAtPosition(const PixelPosition& position) const noexcept;
+	[[a::inline]] std::string_view getLevelNameAtPosition(const MapPosition& position) const noexcept;
 
 public:
 	[[a::inline]] std::optional<size_t> getSubLevelIndex(std::string_view levelPart) const noexcept;
@@ -193,6 +194,7 @@ public:
 	[[a::inline]] PixelPosition convertToMapPosition(std::string_view levelPart, const LocalWholeTilePosition& position) const noexcept;
 	[[a::inline]] PixelPosition convertToMapPosition(const MapPosition& mapPosition, const LocalPixelPosition& position) const noexcept;
 	[[a::inline]] PixelPosition convertToMapPosition(const MapPosition& mapPosition, const LocalWholeTilePosition& position) const noexcept;
+	[[a::inline]] MapPosition clampMapPosition(const MapPosition& mapPosition) const noexcept;
 	std::generator<SubLevelPtr> getSubLevelsInRectangle(const PixelRectangleArea& area) const noexcept;
 	std::generator<SubLevelPtr> getSubLevelsInRectangle(const WholeTileRectangleArea& area) const noexcept;
 	std::generator<SubLevelPtr> getNearbySubLevels(const PixelPosition& position, uint32_t tileDistance = 64) const noexcept;
@@ -500,6 +502,20 @@ inline std::string_view Level::getLevelNameAtPosition(const PixelPosition& posit
 	return levelName;
 }
 
+inline std::string_view Level::getLevelNameAtPosition(const MapPosition& position) const noexcept
+{
+	if (!isGmap())
+		return levelName;
+
+	if (const auto subLevel = getSubLevelAtPosition(position); subLevel != nullptr)
+	{
+		if (const auto staticData = subLevel->staticData.lock(); staticData != nullptr)
+			return staticData->levelName;
+	}
+
+	return levelName;
+}
+
 //----------------------------
 
 inline std::optional<size_t> Level::getSubLevelIndex(const std::string_view levelPart) const noexcept
@@ -651,7 +667,8 @@ inline PixelPosition Level::convertToMapPosition(const MapPosition& mapPosition,
 	if (isGmap())
 	{
 		auto pixelPerPart = pixelsPerSubLevel();
-		return { static_cast<int32_t>(position.x()) + (mapPosition.x() * static_cast<int32_t>(pixelPerPart.width())), static_cast<int32_t>(position.y()) + (mapPosition.y() * static_cast<int32_t>(pixelPerPart.height())), static_cast<int32_t>(position.z()) };
+		auto correctMapPosition = clampMapPosition(mapPosition);
+		return { static_cast<int32_t>(position.x()) + (correctMapPosition.x() * static_cast<int32_t>(pixelPerPart.width())), static_cast<int32_t>(position.y()) + (correctMapPosition.y() * static_cast<int32_t>(pixelPerPart.height())), static_cast<int32_t>(position.z()) };
 	}
 	return { static_cast<int32_t>(position.x()), static_cast<int32_t>(position.y()), static_cast<int32_t>(position.z()) };
 }
@@ -663,9 +680,18 @@ inline PixelPosition Level::convertToMapPosition(const MapPosition& mapPosition,
 	if (isGmap())
 	{
 		auto pixelPerPart = pixelsPerSubLevel();
-		return { (static_cast<int32_t>(position.x()) * static_cast<int32_t>(pixelPerTile.width())) + (mapPosition.x() * static_cast<int32_t>(pixelPerPart.width())), (static_cast<int32_t>(position.y()) * static_cast<int32_t>(pixelPerTile.height())) + (mapPosition.y() * static_cast<int32_t>(pixelPerPart.height())), static_cast<int32_t>(position.z()) * static_cast<int32_t>(pixelPerTile.length()) };
+		auto correctMapPosition = clampMapPosition(mapPosition);
+		return { (static_cast<int32_t>(position.x()) * static_cast<int32_t>(pixelPerTile.width())) + (correctMapPosition.x() * static_cast<int32_t>(pixelPerPart.width())), (static_cast<int32_t>(position.y()) * static_cast<int32_t>(pixelPerTile.height())) + (correctMapPosition.y() * static_cast<int32_t>(pixelPerPart.height())), static_cast<int32_t>(position.z()) * static_cast<int32_t>(pixelPerTile.length()) };
 	}
 	return { static_cast<int32_t>(position.x() * pixelPerTile.width()), static_cast<int32_t>(position.y() * pixelPerTile.height()), static_cast<int32_t>(position.z() * pixelPerTile.length()) };
+}
+
+inline MapPosition Level::clampMapPosition(const MapPosition& mapPosition) const noexcept
+{
+	if (!isGmap() || m_map->size.width() == 0 || m_map->size.height() == 0)
+		return {0, 0};
+
+	return {std::min(mapPosition.x(), static_cast<uint8_t>(m_map->size.width() - 1)), std::min(mapPosition.y(), static_cast<uint8_t>(m_map->size.height() - 1))};
 }
 
 //----------------------------
