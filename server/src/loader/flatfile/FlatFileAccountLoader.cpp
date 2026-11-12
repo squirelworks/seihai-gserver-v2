@@ -161,7 +161,7 @@ bool FlatFileAccountLoader::loadAccount(const std::string_view accountName, Acco
 			// Some clients, like RC, will send the nickname props immediately and not wait until the go-ahead to login.
 			if (account.character.nickName.empty())
 			{
-				account.character.nickName = val.substr(0, 223);
+				account.character.nickName = val.substr(0, MAX_LENGTH_BEFORE_OVERFLOW);
 				updateModTime(PlayerProp::NICKNAME);
 			}
 		}
@@ -681,7 +681,7 @@ bool FlatFileAccountLoader::forceSaveAccount(const Account& account)
 	writeLine(newFile, "LASTSPARTIME", clock::to_time_t(account.lastSparTime), static_cast<time_t>(0));
 	writeLine(newFile, "IP", account.ipAddress);
 	writeLine(newFile, "LANGUAGE", account.language, "English"sv); // TODO: Also accept "en" and other two-character language codes.
-	writeLine(newFile, "PLATFORM", account.platform);
+	writeLine(newFile, "PLATFORM", Account::filePlatformName(account.platform));
 	writeLine(newFile, "CODEPAGE", account.codePage);
 
 	// Attributes
