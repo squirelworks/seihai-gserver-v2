@@ -35,8 +35,8 @@ start in `npcdemo_start.nw` at 30,40.
 | 4 | block, 30,50 | `setlevel2` to `npcdemo_room.nw` |
 | 5 | block, 45,45 | `addweapon`, `hasweapon` (gives the Demo Wand) |
 | 6 | Listener, 15,45 | `playerchats`, `strequals`, `timevar`: say `hello` or `time` |
-| 7 | block, 50,30 | `triggeraction` from the client: `if (actiondemo)` |
-| 8 | block, 10,30 | a split script: server half on touch, client half after `//#CLIENTSIDE` |
+| 7 | block, 50,30 | `triggeraction` from the client: touch it and its client half sends `demo,touched`; the server half answers "Got demo with touched" (`if (actiondemo)`, `#p(0)`) |
+| 8 | block, 10,30 | a split script: server half on touch, client half after `//#CLIENTSIDE` shows "The client half ran" under the block |
 | 9 | block, 50,45 | `putnpc2` with a script that destroys itself after 5 s |
 | 10 | Walker, 30,20 | `move` with the `movementfinished` option |
 | 11 | block, 20,50 | `hide`, `show`, `visible` |
