@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-01, 2026-11-04, 2026-11-06, 2026-11-07, 2026-11-11: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-01, 2026-11-04, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -576,6 +576,11 @@ bool Player::sendGpakKey(std::string_view filename, bool raw)
 	return true;
 }
 
+bool Player::answersMissingFilesFor3D() const
+{
+	return isClient() && m_server->getGraal3D() != nullptr && graal3d::Service::clientHasGraal3D(m_versionId);
+}
+
 std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file)
 {
 	// Add the filename to the list of known files so we can resend the file
@@ -615,6 +620,8 @@ std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file)
 		{
 			if (m_server->cached.warnOnMissingFiles.getValue() == true)
 				return {sendFailure("File not found when trying to send to player"), false};
+			if (answersMissingFilesFor3D())
+				return {sendFailure("Graal3D: file not found, told the client"), false};
 			return {false, false};
 		}
 

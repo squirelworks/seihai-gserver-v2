@@ -60,6 +60,8 @@ namespace
 		PacketHeader header;
 		bool control = false;
 		uint32_t controlIndex = 0;
+		bool camera = false;
+		uint32_t cameraIndex = 0;
 		uint32_t controlMask = 0;
 		std::vector<ClientEvent> events;
 		uint32_t ghostIdBits = 0;
@@ -102,7 +104,12 @@ namespace
 			std::string moveType;
 			out.controlMask = readGameObjectUpdate(r, state, moveType);
 		}
-		REQUIRE_FALSE(r.readFlag()); // camera
+		if (r.readFlag())
+		{
+			out.camera = true;
+			out.cameraIndex = r.readInt(12);
+			REQUIRE_FALSE(r.readFlag()); // no camera packet data
+		}
 		REQUIRE_FALSE(r.readFlag()); // fov
 		REQUIRE_FALSE(r.readFlag()); // no unguaranteed events
 		int32_t prev = -2;
@@ -729,17 +736,48 @@ SCENARIO("Ghosting a world and handing the client its control object")
 		REQUIRE(readSunUpdate(ps.r) == sun.sun);
 	}
 
-	WHEN("the client acks that packet")
+	WHEN("the client acks that packet but has not finished the mission start")
 	{
 		h.sent.clear();
 		h.conn.receive(clientDataPacket(profile, 2, 1, 1, {}, 0), h.now);
 		h.tick(60);
+		h.tick(1000);
 
-		THEN("the ghosts are in and the control object follows, as 13 empty sections")
+		THEN("the ghosts are in, and the control object waits")
 		{
 			REQUIRE(h.conn.ghostDelivered(3));
 			REQUIRE_FALSE(h.sent.empty());
+			for (const auto& data : h.sent)
+				REQUIRE_FALSE(readServerPacket(data).control);
+		}
+	}
+
+	WHEN("the client acks that packet and answers both mission phases")
+	{
+		std::vector<OutEvent> phase1;
+		phase1.push_back({"RemoteCommandEvent", remoteCommandEvent({CommandArg{false, 0, "MissionStartPhase1Ack"}})});
+		h.sent.clear();
+		h.conn.receive(clientDataPacket(profile, 2, 1, 1, phase1, 0), h.now);
+		h.tick(60);
+
+		REQUIRE(h.sent.size() == 1);
+		const auto phase2 = readServerPacket(h.sent.back());
+		REQUIRE(h.mission.back() == MissionState::Phase2Sent);
+		REQUIRE_FALSE(phase2.control); // MissionStartPhase2 would undo login step 5
+
+		std::vector<OutEvent> phase2Ack;
+		phase2Ack.push_back({"RemoteCommandEvent", remoteCommandEvent({CommandArg{false, 0, "MissionStartPhase2Ack"}})});
+		h.sent.clear();
+		h.conn.receive(clientDataPacket(profile, 3, 2, 3, phase2Ack, 1), h.now);
+		h.tick(60);
+
+		THEN("the control object follows the mission start, as 13 empty sections")
+		{
+			REQUIRE(h.mission.back() == MissionState::Done);
+			REQUIRE(h.conn.ghostDelivered(3));
+			REQUIRE_FALSE(h.sent.empty());
 			const auto pkt = readServerPacket(h.sent.back());
+			REQUIRE(pkt.header.sequence == 3);
 			REQUIRE(pkt.control);
 			REQUIRE(pkt.controlIndex == *h.conn.ghostIndex(3));
 			REQUIRE(pkt.controlMask == 0);
@@ -748,7 +786,7 @@ SCENARIO("Ghosting a world and handing the client its control object")
 
 		AND_WHEN("that is acked and the client reports a move and a chat on its object")
 		{
-			h.conn.receive(clientDataPacket(profile, 3, 2, 1, {}, 0), h.now);
+			h.conn.receive(clientDataPacket(profile, 4, 3, 7, {}, 0), h.now);
 			REQUIRE(h.conn.controlObjectDelivered());
 
 			GameObjectState moved = me.object;
@@ -759,8 +797,8 @@ SCENARIO("Ghosting a world and handing the client its control object")
 			writeGameObjectUpdate(echo, moved, GameObjectBits::Transform | GameObjectBits::Chat);
 			ClientControl control{{11.0f, 20.0f, 1.0f}, *h.conn.ghostIndex(3), &echo};
 			std::vector<OutEvent> evs;
-			evs.push_back({"RemoteCommandEvent", remoteCommandEvent({CommandArg{false, 0, "MissionStartPhase1Ack"}})});
-			h.conn.receive(clientDataPacket(profile, 4, 2, 1, evs, 0, &control), h.now);
+			evs.push_back({"RemoteCommandEvent", remoteCommandEvent({CommandArg{false, 0, "Hello"}})});
+			h.conn.receive(clientDataPacket(profile, 5, 3, 7, evs, 2, &control), h.now);
 
 			THEN("the server sees the new position and chat, and the events after them still read")
 			{
@@ -771,8 +809,10 @@ SCENARIO("Ghosting a world and handing the client its control object")
 				REQUIRE(st.changed == (GameObjectBits::Transform | GameObjectBits::Chat));
 				REQUIRE(st.object.chat == "hello");
 				REQUIRE(st.object.shape == "player.dts");
-				REQUIRE(h.mission.back() == MissionState::Phase2Sent);
-				REQUIRE(h.logs.empty()); // every event filled its length
+				REQUIRE_FALSE(h.logs.empty());
+				REQUIRE(h.logs.back() == "remote command ignored: Hello"); // the event after the echo read whole
+				for (const auto& line : h.logs)
+					REQUIRE(line.find("does not fill its length") == std::string::npos);
 			}
 		}
 
@@ -839,5 +879,70 @@ SCENARIO("The world file")
 		REQUIRE(world.spawn.position[1] == 2.0f);
 		REQUIRE(world.errors.size() == 1);
 		REQUIRE(world.errors[0].starts_with("line 7"));
+	}
+}
+
+SCENARIO("A Camera ghost becomes the client's camera once it is in")
+{
+	Harness h;
+	const auto& profile = h.profile;
+
+	GhostObject camera;
+	camera.kind = GhostObject::Kind::Camera;
+	camera.object.name = "G3DCamera_guest";
+	camera.object.transform.position = {0.0f, -3.0f, 2.0f};
+	h.conn.setGhost(7, camera);
+	h.conn.setCameraObject(7);
+	h.conn.receive(kFirstData, h.now);
+	h.tick(60);
+
+	const auto first = readServerPacket(h.sent.back());
+	THEN("it is created as a Camera, and not named before the client has it")
+	{
+		REQUIRE_FALSE(first.camera);
+		REQUIRE(first.ghosts.size() == 1);
+		REQUIRE(first.ghosts[0].classId == *objectClassId(profile, "Camera"));
+		PayloadReader p(first.ghosts[0].payload);
+		GameObjectState got;
+		std::string moveType;
+		readGameObjectUpdate(p.r, got, moveType);
+		REQUIRE(got == camera.object);
+		REQUIRE_FALSE(p.r.readFlag()); // camera mode
+		REQUIRE_FALSE(p.r.readFlag()); // followed object
+		REQUIRE(p.r.bitPosition() == first.ghosts[0].bits);
+	}
+
+	WHEN("the create is acked")
+	{
+		h.conn.receive(clientDataPacket(profile, 2, 1, 1, {}, 0), h.now);
+		h.tick(60);
+		h.tick(1000);
+		THEN("every packet names it as the camera")
+		{
+			const auto pkt = readServerPacket(h.sent.back());
+			REQUIRE(pkt.camera);
+			REQUIRE(pkt.cameraIndex == *h.conn.ghostIndex(7));
+		}
+
+		AND_WHEN("it is removed")
+		{
+			h.conn.removeGhost(7);
+			h.tick(1000);
+			THEN("the packet with its delete no longer names it")
+			{
+				const auto pkt = readServerPacket(h.sent.back());
+				REQUIRE_FALSE(pkt.camera);
+				REQUIRE(pkt.ghosts.size() == 1);
+				REQUIRE(pkt.ghosts[0].deleted);
+			}
+		}
+	}
+
+	THEN("the world file's camera line sets the offset")
+	{
+		const auto world = parseWorld("camera 0 -3 2\n");
+		REQUIRE(world.errors.empty());
+		REQUIRE(world.cameraOffset);
+		REQUIRE((*world.cameraOffset)[1] == -3.0f);
 	}
 }

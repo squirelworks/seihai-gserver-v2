@@ -72,13 +72,14 @@ namespace graal3d
 			return ip;
 		}
 
-		// A client build with a Torque 3D side: 3.153 to 5.x. (3.04 speaks the stock
-		// TGE demo protocol and is refused by the game string check.)
-		bool hasGraal3D(int version)
-		{
-			return version >= CLVER_3_153 && version < CLVER_6_015;
-		}
+		bool hasGraal3D(int version) { return Service::clientHasGraal3D(version); }
 	} // namespace
+
+	// 3.04 speaks the stock TGE demo protocol and is refused by the game string check.
+	bool Service::clientHasGraal3D(int version)
+	{
+		return version >= CLVER_3_153 && version < CLVER_6_015;
+	}
 
 	Service::Service(Server& server)
 		: m_server(server)
@@ -381,6 +382,20 @@ namespace graal3d
 		for (const auto& [other, avatar] : m_avatars)
 			connection.setGhost(avatarKey(other), avatar);
 		connection.setControlObject(avatarKey(playerId));
+
+		// A Camera of its own, placed off the spawn point, when the world asks
+		// for one. The client's scripts move it (cameramode, position).
+		if (m_world.cameraOffset)
+		{
+			GhostObject camera;
+			camera.kind = GhostObject::Kind::Camera;
+			camera.object.name = "G3DCamera_" + account;
+			camera.object.transform = m_world.spawn;
+			for (size_t i = 0; i < 3; ++i)
+				camera.object.transform.position[i] += (*m_world.cameraOffset)[i];
+			connection.setGhost(cameraKey(playerId), camera);
+			connection.setCameraObject(cameraKey(playerId));
+		}
 		log::printLine(log::server, "Graal3D: {} gets {} world objects and {} players.", account, m_world.objects.size(), m_avatars.size());
 	}
 

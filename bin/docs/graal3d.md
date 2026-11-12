@@ -54,7 +54,17 @@ sun 0.57 0.57 -0.57  0.8 0.8 0.8 1  0.3 0.3 0.35 1
 # the shape of every player's own object, and where it starts
 playershape player.dts
 spawn 0 0 1
+
+# optional: give each client a Camera, this far from the spawn point
+camera 0 -3 2
 ```
+
+With a `camera` line each client also gets its own `Camera` ghost
+(`G3DCamera_<account>`), and the server names it as the client's camera
+(`ServerConnection.camera` in the client's scripts) once the client has it. The
+server sets no camera mode and no followed object: the client's scripts set
+`cameramode`, `position` and `eulerrotation` themselves. Without the line no camera
+is sent, which login steps 5 and 6 do not need.
 
 A shape is a file name the client loads: `.dts`, `.dif`, `.3ds` or `.ft`. A client
 asks the gserver over TCP for any file it does not have, and stays at login step 5
@@ -79,12 +89,27 @@ too. The server never sends a player's position back to that player.
 | Flags | sent at link time as one `events` text (`s name=value` lines), then every flag change as `set` / `unset`. |
 | From the client: `events` text | `s name=value` sets a flag or client variable (as `PLI_FLAGSET`), `w name` gives a weapon, `t weapon,name,params` runs a serverside triggeraction on that weapon. |
 | Ghosting (4.20r6, 5.x) | done. Objects are created, updated (only what changed) and deleted in the ghost section of each packet, and what a lost packet carried is sent again. `GameObject` (name, shape, skin, position and rotation, velocity, chat, `attr[1..8]`, nickname and colour, the solid/shadow/collision flags) and `Sun`. |
-| Control object (4.20r6, 5.x) | done. Once the client has its player object, the server makes it the control object, which is login step 5. Step 6 follows once the client's TCP file downloads are done. |
+| Control object (4.20r6, 5.x) | done. Once the client has its player object and has acked both mission phases, the server makes that object the control object, which is login step 5. It must come after the mission start, because `MissionStartPhase2` sets the 5.x client's login step back to 3 and step 5 is only set by the first control object. Step 6 follows once every TCP file request is answered. With `graal3d` on, a missing file gets `PLO_FILESENDFAILED` for these clients, so it does not hold the login up. |
 | From the client: its own object | read in every packet: the position, and the client's changes to the object (moves, chat, shape). Other players see them. |
-| `Sky`, `TerrainBlock`, `Camera`, `movetype` | **not sent.** None is needed for login steps 5 and 6. Terrain and sky layouts are only partly known. |
+| Camera | with a `camera` line in the world file: one `Camera` per client, named as its camera in every packet once its ghost is in |
+| `Sky`, `TerrainBlock`, `movetype` | **not sent.** None is needed for login steps 5 and 6. Terrain and sky layouts are only partly known. |
 | 3.153 and 4.04r2 game packets | **not done.** They use Torque's older game packet (moves, datablocks). Those clients get the handshake and keep-alive only. |
 
 The server log shows each link: `Graal3D: <account> linked from <ip> (protocol 24, 5.x ...)`.
+
+## Which client each finding comes from
+
+The 3D clients are not one protocol. Each layout here was read from one build, and
+nothing says the others match.
+
+| Client | Protocol | What is known |
+| --- | --- | --- |
+| 3.153, 4.04r2 (the first Graal 3D) | 19 | Handshake and keep-alive only. It is stock TGE underneath: datablocks, moves and TGE object classes, with no `GameObject` and no mission phases. Its events were read from the 4.04r2 `Graal3DEngine.dll`. Nothing in the ghosting, control-object or camera work applies to it. |
+| 4.20r6 | 21 | Its class table (read from 4.20r6) has `GameObject`, `Camera` and `Sun`, so the server ghosts to it. The layouts of those classes were not read from 4.20r6: they are assumed to match 5.00r7. |
+| 5.00r7, 5.12 | 24 | The `GameObject`, `Camera`, `Sun`, control-object and ghost layouts were read from the 5.00r7 dll. The handshake was checked against a real 5.12 client. |
+
+The camera is off unless the world file has a `camera` line, so a client whose
+`Camera` layout differs is only affected when it is turned on.
 
 ## Not checked with a real client yet
 
