@@ -242,9 +242,16 @@ namespace graal3d
 	void GhostObject::writeUpdate(BitWriter& w, uint32_t mask) const
 	{
 		if (kind == Kind::Sun)
+		{
 			writeSunUpdate(w, sun);
-		else
-			writeGameObjectUpdate(w, object, mask);
+			return;
+		}
+		writeGameObjectUpdate(w, object, mask);
+		if (kind == Kind::Camera)
+		{
+			w.writeFlag(false); // camera mode: left to the client
+			w.writeFlag(false); // followed object: none
+		}
 	}
 
 	uint32_t GhostObject::changesFrom(const GhostObject& before) const
@@ -339,6 +346,13 @@ namespace graal3d
 			}
 			else if (w[0] == "spawn" && w.size() == 4)
 				ok = toFloats(w, 1, world.spawn.position.data(), 3);
+			else if (w[0] == "camera" && w.size() == 4)
+			{
+				std::array<float, 3> offset{};
+				ok = toFloats(w, 1, offset.data(), 3);
+				if (ok)
+					world.cameraOffset = offset;
+			}
 
 			if (!ok)
 				world.errors.push_back("line " + std::to_string(lineNo) + ": " + std::string(line));
