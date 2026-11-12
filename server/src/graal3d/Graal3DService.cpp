@@ -4,7 +4,10 @@
 #include <graal3d/Graal3DService.h>
 
 #include <chrono>
+#include <cmath>
 #include <cstring>
+#include <format>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -384,6 +387,7 @@ namespace graal3d
 			if (auto player = m_server.getPlayer(playerId))
 				player->setGraal3DLinked(false);
 			m_avatars.erase(playerId);
+			m_movedUntil.erase(playerId);
 			forEachOtherConnection(playerId, [&](Connection& other) { other.removeGhost(avatarKey(playerId)); });
 		}
 		log::printLine(log::server, "Graal3D: link from {} closed ({}).", ipString(endpoint), reason);
@@ -440,10 +444,13 @@ namespace graal3d
 		// everyone else. Its own screen is never sent its position back.
 		auto& object = it->second.object;
 		const auto before = object;
-		object.transform.position = state.position;
+		const auto moved = m_movedUntil.find(playerId);
+		const bool serverMoved = moved != m_movedUntil.end() && nowMs() < moved->second;
+		if (!serverMoved)
+			object.transform.position = state.position;
 		if (state.controlling)
 		{
-			if (state.changed & GameObjectBits::Transform)
+			if ((state.changed & GameObjectBits::Transform) && !serverMoved)
 				object.transform = state.object.transform;
 			if (state.changed & GameObjectBits::Chat)
 				object.chat = state.object.chat;
@@ -453,6 +460,33 @@ namespace graal3d
 		if (object == before)
 			return;
 		forEachOtherConnection(playerId, [&](Connection& other) { other.setGhost(avatarKey(playerId), it->second); });
+	}
+
+	bool Service::moveAvatar(PlayerID playerId, std::string_view position)
+	{
+		auto it = m_avatars.find(playerId);
+		if (it == m_avatars.end())
+			return false;
+
+		std::array<float, 3> to{};
+		std::string text{position};
+		std::istringstream in{text};
+		for (auto& v : to)
+		{
+			if (!(in >> v) || !std::isfinite(v))
+				return false;
+		}
+
+		auto& object = it->second.object;
+		if (object.transform.position == to)
+			return true;
+		object.transform.position = to;
+		m_movedUntil[playerId] = nowMs() + 2000;
+
+		const auto key = avatarKey(playerId);
+		for (auto& [endpoint, session] : m_sessions)
+			session.connection->setGhost(key, it->second);
+		return true;
 	}
 
 	void Service::onPlayerLeft(PlayerID player)
@@ -501,6 +535,13 @@ namespace graal3d
 			if (npcServer && !flag.starts_with("serverr.")) continue;
 			if (auto serialized = m_server.Scripting.variables.serializeModern(flag); serialized.has_value())
 				lines += "s " + *serialized + "\n";
+		}
+		// Where the player's 3D object starts, for a script that moves it with
+		// client.g3dpos (see moveAvatar).
+		if (auto avatar = m_avatars.find(playerId); avatar != m_avatars.end())
+		{
+			const auto& p = avatar->second.object.transform.position;
+			lines += std::format("s client.g3dpos={} {} {}\n", p[0], p[1], p[2]);
 		}
 		if (!lines.empty())
 			connection.sendText(TextMessage{"", "events", "", lines});
