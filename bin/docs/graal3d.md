@@ -58,9 +58,9 @@ spawn 0 0 1
 # optional: give each client a Camera, this far from the spawn point
 camera 0 -3 2
 
-# optional: a Sky. The material list is a .dml of sky-box textures the client
-# downloads like a shape ("-" for none), then the visible distance and fog colour.
-sky sky.dml 500 0.5 0.6 0.8
+# optional: a Sky: six sky-box textures (front, right, back, left, top, bottom),
+# comma separated ("-" for none), then the visible distance and fog colour
+sky sky_fr,sky_rt,sky_bk,sky_lf,sky_up,sky_dn 500 0.5 0.6 0.8
 # the Sky's three unnamed bools and its solid colour (see below)
 skyoptions 1 0 0 0.4 0.6 0.9
 
@@ -84,13 +84,15 @@ The `Sky` layout is read from the 5.12 client (`Sky::packUpdate`). The client's
 GS2 property names for Sky include `useskytextures`, `renderbottomtexture`,
 `norenderbans` and `skysolidcolor`, but the read does not tie the three bools and
 the colour in the update to those names, so `skyoptions` sets them by position.
-The material list is plain text, one texture name per line, no header: entries 1
-to 6 are the sky box. The 5.12 client asks the gserver for it without its
-extension (`sky.dml` is requested as `sky`), so put a copy under that name too,
-and loads it only when it unpacks the Sky. The server therefore sends the Sky
-whole again once the mission start is done, when the list has arrived. In the lab
-the client never asked for the textures themselves; how it finds them is still
-open.
+The 5.12 client splits the Sky's texture field on commas and loads one texture
+per entry, the first six as the sky box. It asks the gserver for each one without
+an extension (`sky_fr`), so for these clients the gserver also tries `.png`,
+`.jpg`, `.jpeg`, `.bmp`, `.gif` and `.dds` when a requested name has none. The
+client stores them under `levels3d/images/sky/`, and loads the textures only when
+it unpacks the Sky, so the server sends the Sky whole again once the mission
+start is done, by when the downloads are in. A real 5.12 client drew the sky box
+this way in the lab. `skyoptions 1 0 0` and `1 1 1` gave a light box fading into
+the fog; `0 0 0` a more saturated one.
 
 With a `camera` line each client also gets its own `Camera` ghost
 (`G3DCamera_<account>`), and the server names it as the client's camera

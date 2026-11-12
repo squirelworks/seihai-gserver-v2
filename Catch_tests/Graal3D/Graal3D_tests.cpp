@@ -951,13 +951,13 @@ SCENARIO("A Sky follows the 5.12 Sky::packUpdate layout")
 {
 	GIVEN("a world file with a sky and its options")
 	{
-		const auto world = parseWorld("sky lab.dml 800 0.1 0.2 0.3\nskyoptions 0 1 0 0.5 0.5 1\nskyoptions 1 1 1 0 0 0 0\n");
+		const auto world = parseWorld("sky a,b,c,d,e,f 800 0.1 0.2 0.3\nskyoptions 0 1 0 0.5 0.5 1\nskyoptions 1 1 1 0 0 0 0\n");
 		REQUIRE(world.errors.size() == 1); // the second skyoptions line has a word too many
 		REQUIRE(world.objects.size() == 1);
 		const auto& sky = world.objects[0];
 		REQUIRE(sky.kind == GhostObject::Kind::Sky);
 		REQUIRE(sky.className() == "Sky");
-		REQUIRE(sky.sky.materialList == "lab.dml");
+		REQUIRE(sky.sky.materialList == "a,b,c,d,e,f");
 		REQUIRE(sky.sky.visibleDistance == 800.0f);
 		REQUIRE(sky.sky.fogColor[2] == 0.3f);
 		REQUIRE(sky.sky.bools == std::array<uint8_t, 3>{0, 1, 0});

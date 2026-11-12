@@ -615,7 +615,19 @@ std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file)
 	}
 	else
 	{
-		const auto info = filesystem.infoi(fs::FileCategory::ALL, file.filename());
+		auto info = filesystem.infoi(fs::FileCategory::ALL, file.filename());
+
+		// The 5.x 3D client asks for Torque textures (a Sky's, for one) without an
+		// extension, and stores what it gets under the name it asked for.
+		if (info == nullptr && isGraal3DClient() && !file.has_extension())
+		{
+			for (const auto* ext : {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".dds"})
+			{
+				if ((info = filesystem.infoi(fs::FileCategory::ALL, file.filename().string() + ext)) != nullptr)
+					break;
+			}
+		}
+
 		if (info == nullptr)
 		{
 			if (m_server->cached.warnOnMissingFiles.getValue() == true)

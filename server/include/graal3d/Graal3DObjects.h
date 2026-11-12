@@ -136,7 +136,7 @@ namespace graal3d
 	struct SkyState
 	{
 		std::string name = "Sky";
-		std::string materialList;        // a .dml naming the sky-box textures (the client downloads it)
+		std::string materialList;        // the sky-box textures, comma separated: front, right, back, left, top, bottom
 		float visibleDistance = 500.0f;   // the float sent with the material list (guess: visible distance)
 		std::array<float, 3> fogColor{0.5f, 0.6f, 0.8f};
 		std::array<uint8_t, 3> bools{1, 0, 0}; // +0xeb1, +0xeb2, +0xea7 (guess: useskytextures, renderbottomtexture, norenderbans)
@@ -189,9 +189,9 @@ namespace graal3d
 	//   spawn <x> <y> <z>         where a player's object starts
 	//   camera <x> <y> <z>        give each client a Camera, placed this far from
 	//                             the spawn point (off without this line)
-	//   sky <materiallist> [<visible distance> [<fog r> <g> <b>]]
-	//                             a Sky; the material list is a .dml of sky-box
-	//                             textures the client downloads ("-" for none)
+	//   sky <textures> [<visible distance> [<fog r> <g> <b>]]
+	//                             a Sky; the textures are six names, comma
+	//                             separated and without spaces ("-" for none)
 	//   skyoptions <b1> <b2> <b3> <solid r> <g> <b>
 	//                             the Sky's three unnamed bools (0/1) and solid colour
 	//   weapon3d <name> [<file>]  a script the client runs in 3D mode, sent over the
