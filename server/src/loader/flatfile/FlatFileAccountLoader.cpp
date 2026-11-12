@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-04: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-04, 2026-11-12: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <format>
 #include <limits>
+#include <random>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -530,15 +531,17 @@ bool FlatFileAccountLoader::loadAccount(const std::string_view accountName, Acco
 	if (string::equalsi(accountName, "guest"sv))
 	{
 		account.loadOnly = true;
-		srand(static_cast<unsigned int>(time(nullptr)));
-
-		// Try to create a unique account number.
+		// Seihai: the number came from rand() * rand(), which overflows int, so guests got names such as
+		// "pc:-4187584" (GwenTea2 lab 2026-11-12, a 6.03r7 guest), and the free-name check looked up only the
+		// first six characters, not the name it then gave. Draw 0 to 9999998 and check the name that is used.
+		static std::mt19937 guestNumbers{std::random_device{}()};
+		std::uniform_int_distribution<uint32_t> number(0, 9999998);
 		while (true)
 		{
-			int v = (rand() * rand()) % 9999999;
-			if (server->getPlayer("pc:" + CString(v).subString(0, 6), PLTYPE_ANYPLAYER) == nullptr)
+			auto name = std::format("pc:{}", number(guestNumbers));
+			if (server->getPlayer(CString(name), PLTYPE_ANYPLAYER) == nullptr)
 			{
-				account.name = std::format("pc:{:6}", v);
+				account.name = std::move(name);
 				break;
 			}
 		}
