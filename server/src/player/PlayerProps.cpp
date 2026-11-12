@@ -915,13 +915,14 @@ SetResults Player::setProp(PlayerProp prop, SetBy setBy, PropertyBase* base)
 			if (auto subLevel = level->getSubLevelAtPosition(getMapPosition()); subLevel != nullptr)
 				leaveSubLevel(subLevel);
 
-			account.character.mapX = numProp->value;
-
-			if (auto levelData = level->getStaticLevelDataAtPosition(getMapPosition()); levelData != nullptr)
+			auto mapPosition = level->clampMapPosition({numProp->value, account.character.mapY});
+			if (auto levelData = level->getStaticLevelDataAtPosition(mapPosition); levelData != nullptr)
 			{
+				account.character.mapX = mapPosition.x();
 				auto lastEnteredTime = player->getLevelLastEnteredTimeForWarping(levelData.get());
 				sendDynamicLevelData(level, lastEnteredTime);
 			}
+			else SETPROP_RETURN_REVERT;
 
 			for (int j = -1; j <= 1; ++j)
 			{
@@ -947,13 +948,14 @@ SetResults Player::setProp(PlayerProp prop, SetBy setBy, PropertyBase* base)
 			if (auto subLevel = level->getSubLevelAtPosition(getMapPosition()); subLevel != nullptr)
 				leaveSubLevel(subLevel);
 
-			account.character.mapY = numProp->value;
-
-			if (auto levelData = level->getStaticLevelDataAtPosition(getMapPosition()); levelData != nullptr)
+			auto mapPosition = level->clampMapPosition({account.character.mapX, numProp->value});
+			if (auto levelData = level->getStaticLevelDataAtPosition(mapPosition); levelData != nullptr)
 			{
+				account.character.mapY = mapPosition.y();
 				auto lastEnteredTime = player->getLevelLastEnteredTimeForWarping(levelData.get());
 				sendDynamicLevelData(level, lastEnteredTime);
 			}
+			else SETPROP_RETURN_REVERT;
 
 			for (int j = -1; j <= 1; ++j)
 			{
@@ -1369,9 +1371,10 @@ CString Player::getPropsForRCPacket()
 	{
 		if (auto computedFlag = account.variables.serializeModern(flag); computedFlag.has_value())
 		{
+			constexpr auto maxLength = MAX_LENGTH_BEFORE_OVERFLOW - 3;
 			++flagCount;
-			if (computedFlag.value().length() > 220)
-				flags >> (char)223 << computedFlag.value().substr(0, 220) << "[!]";
+			if (computedFlag.value().length() > maxLength)
+				flags >> (char)MAX_LENGTH_BEFORE_OVERFLOW << computedFlag.value().substr(0, maxLength) << "[!]";
 			else flags >> (char)computedFlag.value().length() << computedFlag.value();
 		}
 	}
