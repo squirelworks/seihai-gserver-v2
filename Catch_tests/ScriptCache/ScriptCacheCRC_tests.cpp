@@ -1,9 +1,12 @@
 // Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
 // New file: issue #24. The CRC the server announces for a cached weapon or class must be
-// the CRC32 of the body the client caches (the bytecode it was sent), or the client's cache
-// check never matches and every login downloads every script again.
+// the CRC32 of the body the client caches, or the client's cache check never matches and every
+// login downloads every script again. For a weapon that body is the bytecode DES-encrypted with
+// the header's key (the GRESCR01 file a real 6.03r7 wrote in the 2026-11-12 lab run).
 #include <catch2/catch_all.hpp>
 
+#include <algorithm>
+#include <array>
 #include <atomic>
 #include <memory>
 #include <string>
@@ -19,6 +22,7 @@
 #include <object/Weapon.h>
 #include <scripting/ScriptClass.h>
 #include <utilities/Log.h>
+#include <utilities/ScriptCacheDes.h>
 #include <utilities/StringUtils.h>
 #include <utilities/manager/ITranslationManager.h>
 #include <utilities/manager/TranslationManagerClassic.h>
@@ -67,6 +71,29 @@ namespace
 		return static_cast<uint32_t>(value.readGInt5());
 	}
 
+	// The header's key field: two GINT5 words, as the 8 key bytes (each word little-endian).
+	std::array<uint8_t, 8> keyOf(const std::string& field)
+	{
+		CString value{field};
+		const auto k0 = static_cast<uint32_t>(value.readGInt5());
+		const auto k1 = static_cast<uint32_t>(value.readGInt5());
+		std::array<uint8_t, 8> key{};
+		for (size_t i = 0; i < 4; ++i)
+		{
+			key[i] = static_cast<uint8_t>(k0 >> (8 * i));
+			key[4 + i] = static_cast<uint8_t>(k1 >> (8 * i));
+		}
+		return key;
+	}
+
+	std::vector<uint8_t> fromHex(std::string_view hex)
+	{
+		std::vector<uint8_t> out;
+		for (size_t i = 0; i + 1 < hex.size(); i += 2)
+			out.push_back(static_cast<uint8_t>(std::stoi(std::string{hex.substr(i, 2)}, nullptr, 16)));
+		return out;
+	}
+
 	constexpr std::string_view script = R"(function onCreated() {
   this.y = 2;
 }
@@ -78,7 +105,31 @@ function onCreated() {
 )";
 } // namespace
 
-TEST_CASE_METHOD(ModernServer, "a weapon's PLO_LOADSCRIPT CRC is the CRC32 of the bytecode PLO_WEAPONBYTECODE2 carries", "[issue24]")
+TEST_CASE("the script cache DES matches the standard and a real 6.03r7 cache file", "[issue24]")
+{
+	// FIPS 46 vector (key 133457799BBCDFF1): the client takes each key byte bit-reversed, so pass it reversed.
+	const std::array<uint8_t, 8> fipsKey{0xC8, 0x2C, 0xEA, 0x9E, 0xD9, 0x3D, 0xFB, 0x8F};
+	const auto fipsPlain = fromHex("0123456789ABCDEF");
+	const auto fips = seihai::scriptCacheEncrypt(std::string_view{reinterpret_cast<const char*>(fipsPlain.data()), fipsPlain.size()}, fipsKey);
+	CHECK(fips == fromHex("85E813540F0AB405"));
+
+	// Lab run 2026-11-12: a weapon's bytecode, the key words 0xce36ece6 / 0x036d6a2d from its 197, and the CRC32
+	// of the GRESCR01 body the real Linux 6.03r7 then stored (bytes after the magic).
+	const auto bytecode = fromHex(
+		"0000000100000004000000000000000200000020000000016f6e437265617465"
+		"64000000000c6f6e506c61796572436861747300000000030000001c6c616263"
+		"6f756e740063686174006c616267733200677332206f6b000000000400000036"
+		"01f4001d17330ab416f0002314f3013214f3000701f4001d17330ab616f00123"
+		"15f0024604f4001ab616f0012315f0033214f30007070a");
+	REQUIRE(bytecode.size() == 151);
+	const std::array<uint8_t, 8> key{0xe6, 0xec, 0x36, 0xce, 0x2d, 0x6a, 0x6d, 0x03};
+	const auto stored = seihai::scriptCacheEncrypt(std::string_view{reinterpret_cast<const char*>(bytecode.data()), bytecode.size()}, key);
+	CHECK(stored.size() == 151);
+	CHECK(std::equal(stored.end() - 7, stored.end(), bytecode.end() - 7)); // the 7-byte tail is not encrypted
+	CHECK(crcOf(stored) == 0x4e195a69u);
+}
+
+TEST_CASE_METHOD(ModernServer, "a weapon's PLO_LOADSCRIPT CRC is the CRC32 of the stored (encrypted) bytecode", "[issue24]")
 {
 	const Weapon weapon{"CacheTest"sv, "block.png"sv, script};
 	const auto& bytecode = weapon.getScript().getClientByteCode();
@@ -91,7 +142,9 @@ TEST_CASE_METHOD(ModernServer, "a weapon's PLO_LOADSCRIPT CRC is the CRC32 of th
 	CHECK(parts[1] == "CacheTest");
 	CHECK(parts[2] == "1");
 	CHECK(parts[3].size() == 10);
-	CHECK(readGInt5(parts[4]) == crcOf(bytecode));
+	const auto stored = seihai::scriptCacheEncrypt(std::string_view{reinterpret_cast<const char*>(bytecode.data()), bytecode.size()}, keyOf(parts[3]));
+	CHECK(readGInt5(parts[4]) == crcOf(stored));
+	CHECK(readGInt5(parts[4]) != crcOf(bytecode));
 }
 
 TEST_CASE_METHOD(ModernServer, "a class's checksum is the CRC32 of the bytecode its class packet carries", "[issue24]")
