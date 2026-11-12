@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-04: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-04, 2026-11-12: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -678,7 +678,7 @@ bool FlatFileAccountLoader::forceSaveAccount(const Account& account)
 	writeLine(newFile, "LASTSPARTIME", clock::to_time_t(account.lastSparTime), static_cast<time_t>(0));
 	writeLine(newFile, "IP", account.ipAddress);
 	writeLine(newFile, "LANGUAGE", account.language, "English"sv); // TODO: Also accept "en" and other two-character language codes.
-	writeLine(newFile, "PLATFORM", account.platform);
+	writeLine(newFile, "PLATFORM", Account::filePlatformName(account.platform));
 	writeLine(newFile, "CODEPAGE", account.codePage);
 
 	// Attributes
