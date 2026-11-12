@@ -135,9 +135,14 @@ if (playerchats && strequals(#c,time)) {
 NPCEND
 NPC block.png 50 30
 // 7. Trigger target: triggeraction from the client, #p().
+// Touch it: its client half sends triggeraction ...,demo,touched to this spot, and the server half answers.
 if (created) setshape 1,32,32;
 if (actiondemo) {
   message Got demo with #p(0);
+}
+//#CLIENTSIDE
+if (playertouchsme) {
+  triggeraction 51,31,demo,touched;
 }
 NPCEND
 NPC block.png 10 30
@@ -148,7 +153,8 @@ if (playertouchsme) {
 }
 //#CLIENTSIDE
 if (playerenters) {
-  showtext 200,20,Arial,b,The client half ran;
+  // showtext index,x,y,font,style,text: index 200 is seen by this player only; x,y are level tiles, under the NPC.
+  showtext 200,9,32.5,Arial,b,The client half ran;
 }
 NPCEND
 NPC block.png 50 45
