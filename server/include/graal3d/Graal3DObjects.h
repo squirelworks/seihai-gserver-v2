@@ -127,12 +127,12 @@ namespace graal3d
 	void writeSunUpdate(BitWriter& writer, const SunState& sun);
 	SunState readSunUpdate(BitReader& reader);
 
-	// Sky, from the 5.12 Sky::packUpdate (0x100aacf0). The server sends it whole:
+	// Sky, in the layout the 5.12 client reads a Sky update in. The server sends it whole:
 	// the init part (mask 1) and the material list (mask 0x80); the later
 	// sections (storm, wind and fog changes) are left clear. Floats are raw 32-bit
 	// values, the bools whole bytes. Field names come from the GS2 properties the
-	// client registers for Sky; where the dump does not tie a value to a name, the
-	// name here is a guess and the comment says so.
+	// client registers for Sky; where the client's behaviour does not tie a value to
+	// a name, the name here is a guess and the comment says so.
 	struct SkyState
 	{
 		std::string name = "Sky";
