@@ -16,6 +16,10 @@
 //   6 movetype    string (interpolate, list, rigid)
 //   7 movement data, no length: present only while a movement object exists
 //
+// A Camera update is a GameObject update followed by two more flags: camera mode
+// (flag -> int1) and the object it follows (flag -> flag -> int12 ghost index).
+// The server sends neither, so the client's scripts choose the mode.
+//
 // The control object's packet data (GameConnection read/writePacket) is the same
 // update, with no length prefix. The client sends its own control object's update
 // back in every packet, so the server must be able to read one.
@@ -130,13 +134,17 @@ namespace graal3d
 		{
 			GameObject,
 			Sun,
+			Camera, // `object` holds its name and transform
 		};
 
 		Kind kind = Kind::GameObject;
 		GameObjectState object;
 		SunState sun;
 
-		[[nodiscard]] std::string_view className() const { return kind == Kind::Sun ? "Sun" : "GameObject"; }
+		[[nodiscard]] std::string_view className() const
+		{
+			return kind == Kind::Sun ? "Sun" : kind == Kind::Camera ? "Camera" : "GameObject";
+		}
 		// The update for `mask` (ignored for Sun, which is always sent whole).
 		void writeUpdate(BitWriter& writer, uint32_t mask) const;
 		[[nodiscard]] uint32_t fullMask() const { return kind == Kind::Sun ? 1u : gameObjectFullMask(object); }
@@ -150,11 +158,14 @@ namespace graal3d
 	//   sun <dir x> <dir y> <dir z> <r> <g> <b> <a> <ambient r> <g> <b> <a>
 	//   playershape <shape>       the shape of every player's own object
 	//   spawn <x> <y> <z>         where a player's object starts
+	//   camera <x> <y> <z>        give each client a Camera, placed this far from
+	//                             the spawn point (off without this line)
 	struct World
 	{
 		std::vector<GhostObject> objects; // the sun, if any, is one of them
 		std::string playerShape;
 		Transform spawn;
+		std::optional<std::array<float, 3>> cameraOffset;
 		std::vector<std::string> errors;  // one per line that was not understood
 	};
 
