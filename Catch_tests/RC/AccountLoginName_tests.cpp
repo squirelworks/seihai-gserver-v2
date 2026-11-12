@@ -1,5 +1,5 @@
 // Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
-// New file: account names a client may log in with (GwenTea2 lab 2026-11-12, a 1.39 logged in with commas).
+// New file: account names a client may log in with (lab run 2026-11-12, a 1.39 logged in with commas).
 #include "catch2/catch_all.hpp"
 
 #include <string>

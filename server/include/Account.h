@@ -101,7 +101,7 @@ struct Account
 
 	/// @brief Whether a client may log in with this account name.
 	/// Seihai: in localhost mode no listserver vets the name, and it goes straight into accounts/<name>.txt and into
-	/// comma-separated lists (staff, RC lists, flags). GwenTea2 lab 2026-11-12: a 1.39 logged in as
+	/// comma-separated lists (staff, RC lists, flags). lab run 2026-11-12: a 1.39 logged in as
 	/// "seihaitest,lab420,fresh2x139". Refused: an empty name, a comma, a path separator, "..", and control characters.
 	[[nodiscard]] [[a::inline]] static bool isLoginNameAllowed(std::string_view name) noexcept;
 	[[a::inline]] bool hasChest(std::string_view levelName, const LocalWholeTilePosition& position) const;
