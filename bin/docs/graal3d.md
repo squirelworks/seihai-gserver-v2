@@ -73,8 +73,10 @@ weapon3d -System
 `weaponscript`) when the mission starts: the text of the named file, or, without
 a file, the server weapon of that name (its client bytecode, or its clientside
 source when it has none). A file is compiled to GS2 bytecode when the NPC-server
-is on (`serverside = true`): in the lab the 5.12 client took source text this way
-but never ran it. The 5.x client does not move its player by itself: in 3D mode
+is on (`serverside = true`), as GS2 unless the file starts with its own `//#`
+engine line: in the lab the 5.12 client took source text this way but never ran it.
+A server weapon (`weapon3d <name>` with no file) needs a `//#GS2` line after
+`//#CLIENTSIDE` to get bytecode. The 5.x client does not move its player by itself: in 3D mode
 its key bindings call `moveForward2`, `moveBackward2`, `moveLeft2`, `moveRight2`
 and `jump`, which only such a script defines.
 

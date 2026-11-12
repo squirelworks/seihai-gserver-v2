@@ -518,7 +518,12 @@ namespace graal3d
 			const auto eol = source.find('\n', mark);
 			source = eol == std::string_view::npos ? std::string_view{} : source.substr(eol + 1);
 		}
-		const auto compiled = npcServer->scripting.getCompiledClientScript(name, source);
+		// Only GS2 compiles to bytecode, and a script without an engine line goes to
+		// the default clientside engine, so ask for GS2 unless the file names one.
+		std::string text{string::trim(source)};
+		if (!text.starts_with("//#"))
+			text = "//#GS2\n" + text;
+		const auto compiled = npcServer->scripting.getCompiledClientScript(name, text);
 		if (compiled == nullptr || compiled->script == nullptr || !compiled->script->has_value())
 			return {};
 		const auto* bytecode = std::any_cast<ScriptByteCode>(compiled->script.get());
