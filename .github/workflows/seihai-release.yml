@@ -1,7 +1,7 @@
 # Seihai: build gs2emu for Linux, Windows and macOS. A tag push (v*), or a manual
 # run with a version, also makes a DRAFT GitHub release with the four archives and
 # the full source, as the GPL asks. The tag is made when the owner presses Publish.
-# Modified by the Seihai project, 2026-11-04, 2026-11-11: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-11-04, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
 name: Seihai build and release
 
 on:
@@ -82,11 +82,12 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cmake -S . -B build -DTESTS=ON
-          cmake --build build --target RC Gpak Graal3D
+          cmake --build build --target RC Gpak Graal3D ClientPing
           timeout 60 bin/RC
           timeout 60 bin/Gpak
           timeout 60 bin/Graal3D
-          rm -f bin/RC bin/Gpak bin/Graal3D
+          timeout 60 bin/ClientPing
+          rm -f bin/RC bin/Gpak bin/Graal3D bin/ClientPing
       - name: Package
         shell: bash
         run: |
@@ -189,11 +190,12 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cmake -S . -B build -DTESTS=ON
-          cmake --build build --target RC Gpak Graal3D
+          cmake --build build --target RC Gpak Graal3D ClientPing
           timeout 60 bin/RC
           timeout 60 bin/Gpak
           timeout 60 bin/Graal3D
-          rm -f bin/RC bin/Gpak bin/Graal3D
+          timeout 60 bin/ClientPing
+          rm -f bin/RC bin/Gpak bin/Graal3D bin/ClientPing
       - name: Package
         shell: bash
         run: |
