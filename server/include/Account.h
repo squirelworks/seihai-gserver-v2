@@ -104,6 +104,7 @@ struct Account
 	/// comma-separated lists (staff, RC lists, flags). lab run 2026-11-12: a 1.39 logged in as
 	/// "seihaitest,lab420,fresh2x139". Refused: an empty name, a comma, a path separator, "..", and control characters.
 	[[nodiscard]] [[a::inline]] static bool isLoginNameAllowed(std::string_view name) noexcept;
+
 	/// @brief The platform as the account file writes it.
 	/// Seihai: 2.19 to 2.31 clients send OSTYPE "wind" for Windows, while 4.x and later clients say "win" in their login
 	/// tokens, so the file's PLATFORM flipped with whichever client saved last (lab run 2026-11-12: an RC Edit
@@ -128,6 +129,8 @@ inline bool Account::isLoginNameAllowed(const std::string_view name) noexcept
 	{
 		return c == ',' || c == '/' || c == '\\' || static_cast<unsigned char>(c) < 0x20 || c == 0x7F;
 	});
+}
+
 inline std::string_view Account::filePlatformName(const std::string_view platform) noexcept
 {
 	return platform == "wind" ? std::string_view{"win"} : platform;
