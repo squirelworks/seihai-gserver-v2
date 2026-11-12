@@ -219,7 +219,9 @@ the lists above has a current status. Cloud loopback, no real client.
   of the sweep's server errors can happen.
 - Sweep steps: generated with `tools/lab/graalnpcs.py`: warp into each of the
   449 levels with NPC scripts, wait 2 s, walk onto every NPC with
-  `playertouchsme`. Two passes in one run, no crash.
+  `playertouchsme`. One pass each, no crash. The "after" binary was built
+  before the bare `shootball` aim change (it shot the way the NPC faces); the
+  sweep counts errors only, so that does not change its numbers.
 
 ### Sweep results
 
