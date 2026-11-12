@@ -422,6 +422,14 @@ bool PlayerClient::handleLogin(CString& pPacket)
 		return false;
 	}
 
+	// Seihai: refuse names a listserver would never hand out (see Account::isLoginNameAllowed).
+	if (!Account::isLoginNameAllowed(account.name))
+	{
+		log::printLine(log::rc, "** [Disconnect] '{}': Account name not allowed.", account.name);
+		sendPacket(CString() >> (char)PLO_DISCMESSAGE << "That account name is not allowed.");
+		return false;
+	}
+
 	// Check for available slots on the server.
 	if (m_server->getPlayerList().size() >= m_server->cached.maxPlayers.getValue())
 	{
