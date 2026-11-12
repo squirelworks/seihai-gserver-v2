@@ -57,7 +57,42 @@ spawn 0 0 1
 
 # optional: give each client a Camera, this far from the spawn point
 camera 0 -3 2
+
+# optional: a Sky: six sky-box textures (front, right, back, left, top, bottom),
+# comma separated ("-" for none), then the visible distance and fog colour
+sky sky_fr,sky_rt,sky_bk,sky_lf,sky_up,sky_dn 500 0.5 0.6 0.8
+# the Sky's three unnamed bools and its solid colour (see below)
+skyoptions 1 0 0 0.4 0.6 0.9
+
+# optional: scripts the client runs in 3D mode
+weapon3d -Move3D config/move3d.gs2
+weapon3d -System
 ```
+
+`weapon3d` sends a script over the 3D text channel (`addweapon`, then
+`weaponscript`) when the mission starts: the text of the named file, or, without
+a file, the server weapon of that name (its client bytecode, or its clientside
+source when it has none). A file is compiled to GS2 bytecode when the NPC-server
+is on (`serverside = true`), as GS2 unless the file starts with its own `//#`
+engine line: in the lab the 5.12 client took source text this way but never ran it.
+A server weapon (`weapon3d <name>` with no file) needs a `//#GS2` line after
+`//#CLIENTSIDE` to get bytecode. The 5.x client does not move its player by itself: in 3D mode
+its key bindings call `moveForward2`, `moveBackward2`, `moveLeft2`, `moveRight2`
+and `jump`, which only such a script defines.
+
+The `Sky` layout is read from the 5.12 client (`Sky::packUpdate`). The client's
+GS2 property names for Sky include `useskytextures`, `renderbottomtexture`,
+`norenderbans` and `skysolidcolor`, but the read does not tie the three bools and
+the colour in the update to those names, so `skyoptions` sets them by position.
+The 5.12 client splits the Sky's texture field on commas and loads one texture
+per entry, the first six as the sky box. It asks the gserver for each one without
+an extension (`sky_fr`), so for these clients the gserver also tries `.png`,
+`.jpg`, `.jpeg`, `.bmp`, `.gif` and `.dds` when a requested name has none. The
+client stores them under `levels3d/images/sky/`, and loads the textures only when
+it unpacks the Sky, so the server sends the Sky whole again once the mission
+start is done, by when the downloads are in. A real 5.12 client drew the sky box
+this way in the lab. `skyoptions 1 0 0` and `1 1 1` gave a light box fading into
+the fog; `0 0 0` a more saturated one.
 
 With a `camera` line each client also gets its own `Camera` ghost
 (`G3DCamera_<account>`), and the server names it as the client's camera
@@ -91,8 +126,11 @@ too. The server never sends a player's position back to that player.
 | Ghosting (4.20r6, 5.x) | done. Objects are created, updated (only what changed) and deleted in the ghost section of each packet, and what a lost packet carried is sent again. `GameObject` (name, shape, skin, position and rotation, velocity, chat, `attr[1..8]`, nickname and colour, the solid/shadow/collision flags) and `Sun`. |
 | Control object (4.20r6, 5.x) | done. Once the client has its player object and has acked both mission phases, the server makes that object the control object, which is login step 5. It must come after the mission start, because `MissionStartPhase2` sets the 5.x client's login step back to 3 and step 5 is only set by the first control object. Step 6 follows once every TCP file request is answered. With `graal3d` on, a missing file gets `PLO_FILESENDFAILED` for these clients, so it does not hold the login up. |
 | From the client: its own object | read in every packet: the position, and the client's changes to the object (moves, chat, shape). Other players see them. |
+| "Connecting..." window | The 5.x client builds its 3D view itself (`GUIContainer`, `GraalControl3D`, from GS2 built into the client) and shows it at login step 6. Its "Connecting..." window stays on top until the TCP side sends `PLO_SERVERLISTCONNECTED`, so with `graal3d` on, every 3.153 to 5.x client gets that packet at login, with or without a listserver. |
 | Camera | with a `camera` line in the world file: one `Camera` per client, named as its camera in every packet once its ghost is in |
-| `Sky`, `TerrainBlock`, `movetype` | **not sent.** None is needed for login steps 5 and 6. Terrain and sky layouts are only partly known. |
+| `Sky` | with a `sky` line: init and material list, the later sections (storm, wind, fog changes) left clear. Layout from the 5.12 client; not yet run with a real client. |
+| Scripts in 3D mode | with `weapon3d` lines: `addweapon` and `weaponscript` over the 3D text channel. Not yet run with a real client. |
+| `TerrainBlock`, `movetype` | **not sent.** |
 | 3.153 and 4.04r2 game packets | **not done.** They use Torque's older game packet (moves, datablocks). Those clients get the handshake and keep-alive only. |
 
 The server log shows each link: `Graal3D: <account> linked from <ip> (protocol 24, 5.x ...)`.

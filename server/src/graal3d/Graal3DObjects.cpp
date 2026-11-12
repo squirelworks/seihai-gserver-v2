@@ -239,11 +239,111 @@ namespace graal3d
 		return sun;
 	}
 
+	void writeSkyUpdate(BitWriter& w, const SkyState& sky)
+	{
+		w.writeFlag(true); // init
+		w.writeString(sky.name);
+		w.writeFlag(true); // material list
+		w.writeF32(sky.visibleDistance);
+		w.writeString(sky.materialList);
+
+		// The init part.
+		writeFloats(w, sky.fogColor.data(), 3);
+		w.writeU32(0); // no fog volumes
+		w.writeInt(sky.bools[0], 8);
+		w.writeInt(sky.bools[1], 8);
+		writeFloats(w, sky.solidColor.data(), 3);
+		w.writeInt(sky.bools[2], 8);
+		w.writeFlag(false);
+		for (size_t i = 0; i < 3; ++i)
+		{
+			w.writeString(""); // the client's own writer never sends a cloud texture
+			w.writeF32(sky.cloudHeight[i]);
+			w.writeF32(sky.cloudSpeed[i]);
+		}
+		writeFloats(w, sky.windVelocity.data(), 3);
+		w.writeU32(0);
+		w.writeFlag(false); // no storm fog running
+
+		w.writeFlag(false); // mask 0x20
+		w.writeFlag(false); // mask 0x40 (not with init)
+		w.writeFlag(true);  // the writer repeats the init state here
+		w.writeFlag(false); // mask 0x2
+		w.writeFlag(false); // mask 0x4 (not with init)
+		w.writeFlag(false); // mask 0x8
+		w.writeFlag(false); // mask 0x10
+	}
+
+	SkyState readSkyUpdate(BitReader& r)
+	{
+		SkyState sky;
+		const bool init = r.readFlag();
+		if (init)
+			sky.name = r.readString();
+		if (r.readFlag())
+		{
+			sky.visibleDistance = r.readF32();
+			sky.materialList = r.readString();
+		}
+		if (init)
+		{
+			readFloats(r, sky.fogColor.data(), 3);
+			const uint32_t volumes = r.readU32();
+			sky.bools[0] = static_cast<uint8_t>(r.readInt(8));
+			sky.bools[1] = static_cast<uint8_t>(r.readInt(8));
+			readFloats(r, sky.solidColor.data(), 3);
+			sky.bools[2] = static_cast<uint8_t>(r.readInt(8));
+			r.readFlag();
+			for (uint32_t i = 0; i < volumes && i < 64 && !r.overrun(); ++i)
+			{
+				for (int f = 0; f < 6; ++f)
+					r.readF32();
+				r.readInt(8);
+			}
+			for (size_t i = 0; i < 3; ++i)
+			{
+				r.readString();
+				sky.cloudHeight[i] = r.readF32();
+				sky.cloudSpeed[i] = r.readF32();
+			}
+			readFloats(r, sky.windVelocity.data(), 3);
+			r.readU32();
+			if (r.readFlag())
+				for (int i = 0; i < 5; ++i)
+					r.readU32();
+		}
+		if (r.readFlag())
+			r.readInt(8);
+		if (r.readFlag())
+			r.readInt(8);
+		r.readFlag();
+		if (r.readFlag())
+		{
+			r.readU32();
+			r.readU32();
+		}
+		if (r.readFlag())
+			for (int i = 0; i < 3; ++i)
+				r.readU32();
+		if (r.readFlag())
+			for (int i = 0; i < 4; ++i)
+				r.readU32();
+		if (r.readFlag())
+			for (int i = 0; i < 3; ++i)
+				r.readU32();
+		return sky;
+	}
+
 	void GhostObject::writeUpdate(BitWriter& w, uint32_t mask) const
 	{
 		if (kind == Kind::Sun)
 		{
 			writeSunUpdate(w, sun);
+			return;
+		}
+		if (kind == Kind::Sky)
+		{
+			writeSkyUpdate(w, sky);
 			return;
 		}
 		writeGameObjectUpdate(w, object, mask);
@@ -260,6 +360,8 @@ namespace graal3d
 			return fullMask();
 		if (kind == Kind::Sun)
 			return sun == before.sun ? 0u : 1u;
+		if (kind == Kind::Sky)
+			return sky == before.sky ? 0u : 1u;
 		return gameObjectChanges(before.object, object);
 	}
 
@@ -338,6 +440,42 @@ namespace graal3d
 					 toFloats(w, 8, sun.sun.ambient.data(), 4);
 				if (ok)
 					world.objects.push_back(std::move(sun));
+			}
+			else if (w[0] == "sky" && (w.size() == 2 || w.size() == 3 || w.size() == 6))
+			{
+				GhostObject sky;
+				sky.kind = GhostObject::Kind::Sky;
+				if (w[1] != "-")
+					sky.sky.materialList = w[1];
+				ok = true;
+				if (w.size() >= 3)
+					ok = toFloats(w, 2, &sky.sky.visibleDistance, 1);
+				if (ok && w.size() == 6)
+					ok = toFloats(w, 3, sky.sky.fogColor.data(), 3);
+				if (ok)
+					world.objects.push_back(std::move(sky));
+			}
+			else if (w[0] == "skyoptions" && w.size() == 7)
+			{
+				std::array<float, 3> b{};
+				std::array<float, 3> solid{};
+				ok = toFloats(w, 1, b.data(), 3) && toFloats(w, 4, solid.data(), 3);
+				GhostObject* sky = nullptr;
+				for (auto& o : world.objects)
+					if (o.kind == GhostObject::Kind::Sky)
+						sky = &o;
+				ok = ok && sky != nullptr; // after the sky line
+				if (ok)
+				{
+					for (size_t i = 0; i < 3; ++i)
+						sky->sky.bools[i] = b[i] != 0.0f ? 1 : 0;
+					sky->sky.solidColor = solid;
+				}
+			}
+			else if (w[0] == "weapon3d" && (w.size() == 2 || w.size() == 3))
+			{
+				world.weapons.push_back({std::string(w[1]), w.size() == 3 ? std::string(w[2]) : std::string{}});
+				ok = true;
 			}
 			else if (w[0] == "playershape" && w.size() == 2)
 			{

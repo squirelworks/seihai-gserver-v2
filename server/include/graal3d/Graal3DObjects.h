@@ -127,6 +127,30 @@ namespace graal3d
 	void writeSunUpdate(BitWriter& writer, const SunState& sun);
 	SunState readSunUpdate(BitReader& reader);
 
+	// Sky, in the layout the 5.12 client reads a Sky update in. The server sends it whole:
+	// the init part (mask 1) and the material list (mask 0x80); the later
+	// sections (storm, wind and fog changes) are left clear. Floats are raw 32-bit
+	// values, the bools whole bytes. Field names come from the GS2 properties the
+	// client registers for Sky; where the client's behaviour does not tie a value to
+	// a name, the name here is a guess and the comment says so.
+	struct SkyState
+	{
+		std::string name = "Sky";
+		std::string materialList;        // the sky-box textures, comma separated: front, right, back, left, top, bottom
+		float visibleDistance = 500.0f;   // the float sent with the material list (guess: visible distance)
+		std::array<float, 3> fogColor{0.5f, 0.6f, 0.8f};
+		std::array<uint8_t, 3> bools{1, 0, 0}; // +0xeb1, +0xeb2, +0xea7 (guess: useskytextures, renderbottomtexture, norenderbans)
+		std::array<float, 3> solidColor{0.4f, 0.6f, 0.9f}; // guess: skysolidcolor
+		std::array<float, 3> cloudHeight{};
+		std::array<float, 3> cloudSpeed{};
+		std::array<float, 3> windVelocity{};
+
+		bool operator==(const SkyState&) const = default;
+	};
+
+	void writeSkyUpdate(BitWriter& writer, const SkyState& sky);
+	SkyState readSkyUpdate(BitReader& reader);
+
 	// One object the server ghosts: its class and state.
 	struct GhostObject
 	{
@@ -135,19 +159,24 @@ namespace graal3d
 			GameObject,
 			Sun,
 			Camera, // `object` holds its name and transform
+			Sky,
 		};
 
 		Kind kind = Kind::GameObject;
 		GameObjectState object;
 		SunState sun;
+		SkyState sky;
 
 		[[nodiscard]] std::string_view className() const
 		{
-			return kind == Kind::Sun ? "Sun" : kind == Kind::Camera ? "Camera" : "GameObject";
+			return kind == Kind::Sun ? "Sun" : kind == Kind::Camera ? "Camera" : kind == Kind::Sky ? "Sky" : "GameObject";
 		}
-		// The update for `mask` (ignored for Sun, which is always sent whole).
+		// The update for `mask` (ignored for Sun and Sky, which are always sent whole).
 		void writeUpdate(BitWriter& writer, uint32_t mask) const;
-		[[nodiscard]] uint32_t fullMask() const { return kind == Kind::Sun ? 1u : gameObjectFullMask(object); }
+		[[nodiscard]] uint32_t fullMask() const
+		{
+			return kind == Kind::Sun || kind == Kind::Sky ? 1u : gameObjectFullMask(object);
+		}
 		[[nodiscard]] uint32_t changesFrom(const GhostObject& before) const;
 	};
 
@@ -160,12 +189,31 @@ namespace graal3d
 	//   spawn <x> <y> <z>         where a player's object starts
 	//   camera <x> <y> <z>        give each client a Camera, placed this far from
 	//                             the spawn point (off without this line)
+	//   sky <textures> [<visible distance> [<fog r> <g> <b>]]
+	//                             a Sky; the textures are six names, comma
+	//                             separated and without spaces ("-" for none)
+	//   skyoptions <b1> <b2> <b3> <solid r> <g> <b>
+	//                             the Sky's three unnamed bools (0/1) and solid colour
+	//   weapon3d <name> [<file>]  a script the client runs in 3D mode, sent over the
+	//                             3D text channel (addweapon, weaponscript): the
+	//                             file's text, or without a file the server's
+	//                             weapon <name> (its client bytecode, else its
+	//                             clientside source). The 5.x client's 3D key
+	//                             bindings call moveForward2, moveBackward2,
+	//                             moveLeft2, moveRight2 and jump, which only a
+	//                             script like this defines.
 	struct World
 	{
 		std::vector<GhostObject> objects; // the sun, if any, is one of them
 		std::string playerShape;
 		Transform spawn;
 		std::optional<std::array<float, 3>> cameraOffset;
+		struct Weapon3D
+		{
+			std::string name;
+			std::string file; // empty: the server's weapon of that name
+		};
+		std::vector<Weapon3D> weapons;
 		std::vector<std::string> errors;  // one per line that was not understood
 	};
 

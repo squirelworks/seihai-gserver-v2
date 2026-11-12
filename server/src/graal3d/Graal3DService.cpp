@@ -23,6 +23,8 @@
 
 #include <Server.h>
 #include <object/Player.h>
+#include <npcserver/NPCServer.h>
+#include <object/Weapon.h>
 #include <player/PlayerClient.h>
 #include <scripting/ScriptContainers.h>
 #include <utilities/Log.h>
@@ -284,11 +286,31 @@ namespace graal3d
 				if (auto it = m_byPlayer.find(playerId); it != m_byPlayer.end())
 				{
 					if (auto s = m_sessions.find(it->second); s != m_sessions.end())
+					{
 						sendInitialFlags(playerId, *s->second.connection);
+						sendWorldWeapons(*s->second.connection);
+					}
 				}
 			}
 			else if (state == MissionState::Done)
+			{
 				log::printLine(log::server, "Graal3D: {} finished the mission start.", account);
+				// The client loads a Sky's material list only when it unpacks the Sky,
+				// and the list arrives over TCP after the first unpack: send it again.
+				if (auto it = m_byPlayer.find(playerId); it != m_byPlayer.end())
+				{
+					if (auto s = m_sessions.find(it->second); s != m_sessions.end())
+					{
+						ObjectKey key = 1;
+						for (const auto& object : m_world.objects)
+						{
+							if (object.kind == GhostObject::Kind::Sky)
+								s->second.connection->resendGhost(key);
+							++key;
+						}
+					}
+				}
+			}
 		};
 
 		cb.onClientState = [this, playerId](const ClientState& state) { handleClientState(playerId, state); };
@@ -482,6 +504,72 @@ namespace graal3d
 		}
 		if (!lines.empty())
 			connection.sendText(TextMessage{"", "events", "", lines});
+	}
+
+	std::string Service::compileClientScript(const std::string& name, std::string_view source)
+	{
+		const auto npcServer = m_server.getNPCServer();
+		if (npcServer == nullptr)
+			return {};
+
+		// The file holds clientside code; drop a //#CLIENTSIDE line if it has one.
+		if (const auto mark = source.find("//#CLIENTSIDE"); mark != std::string_view::npos)
+		{
+			const auto eol = source.find('\n', mark);
+			source = eol == std::string_view::npos ? std::string_view{} : source.substr(eol + 1);
+		}
+		// Only GS2 compiles to bytecode, and a script without an engine line goes to
+		// the default clientside engine, so ask for GS2 unless the file names one.
+		std::string text{string::trim(source)};
+		if (!text.starts_with("//#"))
+			text = "//#GS2\n" + text;
+		const auto compiled = npcServer->scripting.getCompiledClientScript(name, text);
+		if (compiled == nullptr || compiled->script == nullptr || !compiled->script->has_value())
+			return {};
+		const auto* bytecode = std::any_cast<ScriptByteCode>(compiled->script.get());
+		if (bytecode == nullptr)
+			return {};
+		return std::string(reinterpret_cast<const char*>(bytecode->data()), bytecode->size());
+	}
+
+	void Service::sendWorldWeapons(Connection& connection)
+	{
+		for (const auto& weapon : m_world.weapons)
+		{
+			std::string script;
+			if (!weapon.file.empty())
+			{
+				CString text;
+				if (text.load(CString() << weapon.file.c_str()))
+					script.assign(text.text(), static_cast<size_t>(text.length()));
+				// The 5.12 client runs only compiled GS2 here (lab: source text was
+				// taken but never ran), so compile it when the NPC-server can.
+				if (!script.empty())
+				{
+					if (auto bytecode = compileClientScript(weapon.name, script); !bytecode.empty())
+						script = std::move(bytecode);
+					else
+						log::printLine(log::server, "** [Warning] Graal3D: weapon3d {}: not compiled (needs serverside = true, or a compile error); sending the source", weapon.name);
+				}
+			}
+			else if (const auto w = m_server.getWeapon(weapon.name); w != nullptr)
+			{
+				if (const auto& bytecode = w->getScript().getClientByteCode(); !bytecode.empty())
+					script.assign(reinterpret_cast<const char*>(bytecode.data()), bytecode.size());
+				else
+					script = std::string(w->getScript().getClientSide());
+			}
+			if (script.empty())
+			{
+				log::printLine(log::server, "** [Error] Graal3D: weapon3d {}: no script ({})", weapon.name,
+							   weapon.file.empty() ? "no server weapon of that name" : "cannot read " + weapon.file);
+				continue;
+			}
+			// The client reads characters 1 to 5 of addweapon's data as a five-GCHAR
+			// number; all spaces read as 0 however they are counted.
+			connection.sendText(TextMessage{"", "addweapon", weapon.name, std::string(6, ' ')});
+			connection.sendText(TextMessage{"", "weaponscript", weapon.name, script});
+		}
 	}
 
 	void Service::handleText(PlayerID playerId, const TextMessage& message)
