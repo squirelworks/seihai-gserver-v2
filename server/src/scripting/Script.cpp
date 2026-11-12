@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <any>
 #include <array>
@@ -413,7 +414,8 @@ std::string Script::minify(const std::string& src) noexcept
 		if (const auto commentStart = line.find("/*"); commentStart != std::string_view::npos)
 		{
 			line = line.substr(0, commentStart);
-			nextLine = std::string_view::npos;
+			// A comment that is never closed runs to the end of the script.
+			nextLine = srcView.size();
 			if (const auto commentEnd = srcView.find("*/", commentStart + 2); commentEnd != std::string_view::npos)
 			{
 				nextLine = commentEnd + 2;
