@@ -82,14 +82,15 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cmake -S . -B build -DTESTS=ON
-          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin
+          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin ClientPing
           timeout 60 bin/RC
           timeout 60 bin/Gpak
           timeout 60 bin/Graal3D
           timeout 60 bin/NPCServerGS1
           timeout 60 bin/ScriptCache
           timeout 60 bin/SecureLogin
-          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin
+          timeout 60 bin/ClientPing
+          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin bin/ClientPing
           python3 -m unittest tools/lab/test_labcheck.py
       - name: Package
         shell: bash
@@ -133,13 +134,16 @@ jobs:
           name: ${{ matrix.name }}
           path: dist/${{ matrix.name }}.*
 
-  # macOS, best effort and in parallel with the rest. Both build on the Intel runner;
+  # macOS is built and tested on the lab Sequoia VM, not on GitHub runners (README.md, "macOS builds").
+  # These jobs run only for a release draft (a v* tag or a manual run with a version), so the
+  # draft can still carry macOS archives; pushes and pull requests build Linux and Windows only.
+  # Both build on the Intel runner;
   # the Apple Silicon build is cross-compiled (cross: arm64), because GitHub's arm64
   # runners are often out of capacity and drop queued jobs. add-macos puts the
   # archives on the draft if and when they are built. skip_macos (manual runs only)
   # leaves them out.
   build-macos:
-    if: ${{ !inputs.skip_macos }}
+    if: ${{ (startsWith(github.ref, 'refs/tags/v') || inputs.version != '') && !inputs.skip_macos }}
     strategy:
       fail-fast: false
       matrix:
@@ -193,14 +197,15 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cmake -S . -B build -DTESTS=ON
-          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin
+          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin ClientPing
           timeout 60 bin/RC
           timeout 60 bin/Gpak
           timeout 60 bin/Graal3D
           timeout 60 bin/NPCServerGS1
           timeout 60 bin/ScriptCache
           timeout 60 bin/SecureLogin
-          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin
+          timeout 60 bin/ClientPing
+          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin bin/ClientPing
           python3 -m unittest tools/lab/test_labcheck.py
       - name: Package
         shell: bash

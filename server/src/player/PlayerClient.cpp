@@ -108,6 +108,7 @@ static PacketHandleArray GeneratePacketHandlers()
 	handlers[PLI_UPDATEGANI] = &PlayerClient::msgPLI_UPDATEGANI;
 	handlers[PLI_UPDATESCRIPT] = &PlayerClient::msgPLI_UPDATESCRIPT;
 	handlers[PLI_UPDATEPACKAGEREQUESTFILE] = &PlayerClient::msgPLI_UPDATEPACKAGEREQUESTFILE;
+	handlers[PLI_PONG] = &PlayerClient::msgPLI_PONG;
 	handlers[PLI_UPDATECLASS] = &PlayerClient::msgPLI_UPDATECLASS;
 
 	return handlers;
@@ -218,6 +219,16 @@ bool PlayerClient::doTimedEvents()
 
 	// Increase online time.
 	++account.onlineSeconds;
+
+	// Seihai: optional PLO_PING to the builds that answer it (clientping = seconds, 0 = off).
+	if (const int pingEvery = m_server->getSettings().get<int>("clientping").value_or(0); pingEvery > 0 && handlesPing(m_versionId)
+		&& timeDifference(currTime, m_lastPingSent) >= std::chrono::seconds{pingEvery})
+	{
+		m_pingValue = static_cast<uint16_t>(m_pingValue % MAX_PING_VALUE + 1);
+		m_lastPingSent = currTime;
+		m_pingSentAt = clock::now();
+		sendPacket(pingPacket(m_pingValue));
+	}
 
 	// Disconnect if no data has been sent or received in 5 minutes.
 	if (timeDifference(currTime, m_lastData) > 300s)
@@ -2362,4 +2373,48 @@ void PlayerClient::addItem(inform_client_t, const LevelItemType itemType, const 
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+} // end namespace preagonal
+
+///////////////////////////////////////////////////////////////////////////////
+// Seihai: PLO_PING (108) and the game client's PLI_PONG (162).
+namespace preagonal
+{
+
+bool PlayerClient::handlesPing(const int versionId) noexcept
+{
+	// 4.20r8 is the only 4.20 build in the version table; 6.015 (6.01r1) to 6.037 cover 6.x.
+	return versionId == CLVER_4_208 || (versionId >= CLVER_6_015 && versionId <= CLVER_6_037_LINUX);
+}
+
+CString PlayerClient::pingPacket(const uint16_t value)
+{
+	return CString() >> (char)PLO_PING >> (char)0 >> (short)std::min(value, MAX_PING_VALUE);
+}
+
+std::optional<uint16_t> PlayerClient::readPong(CString& packet)
+{
+	if (packet.bytesLeft() != 3 || packet.readGUChar() != 1)	// '!' is GChar 1.
+		return std::nullopt;
+	return packet.readGUShort();
+}
+
+HandlePacketResult PlayerClient::msgPLI_PONG(CString& pPacket)
+{
+	const auto value = readPong(pPacket);
+	if (!value)
+	{
+		// Empty, as an RC's keepalive: nothing to read.
+		return HandlePacketResult::Handled;
+	}
+
+	if (m_pingSentAt && *value == m_pingValue)
+	{
+		const auto roundTrip = std::chrono::duration_cast<std::chrono::milliseconds>(clock::now() - *m_pingSentAt);
+		log::printLine(log::server, "[Ping] {}: {} ms ({})", account.name, roundTrip.count(), getVersionString(m_version, m_type));
+		m_pingSentAt.reset();
+	}
+	else log::printLine(log::server, "[Ping] {}: answer {} does not match the last ping ({}).", account.name, *value, m_pingValue);
+	return HandlePacketResult::Handled;
+}
+
 } // end namespace preagonal
