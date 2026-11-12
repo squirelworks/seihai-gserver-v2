@@ -23,6 +23,7 @@
 
 #include <Server.h>
 #include <object/Player.h>
+#include <object/Weapon.h>
 #include <player/PlayerClient.h>
 #include <scripting/ScriptContainers.h>
 #include <utilities/Log.h>
@@ -284,7 +285,10 @@ namespace graal3d
 				if (auto it = m_byPlayer.find(playerId); it != m_byPlayer.end())
 				{
 					if (auto s = m_sessions.find(it->second); s != m_sessions.end())
+					{
 						sendInitialFlags(playerId, *s->second.connection);
+						sendWorldWeapons(*s->second.connection);
+					}
 				}
 			}
 			else if (state == MissionState::Done)
@@ -482,6 +486,37 @@ namespace graal3d
 		}
 		if (!lines.empty())
 			connection.sendText(TextMessage{"", "events", "", lines});
+	}
+
+	void Service::sendWorldWeapons(Connection& connection)
+	{
+		for (const auto& weapon : m_world.weapons)
+		{
+			std::string script;
+			if (!weapon.file.empty())
+			{
+				CString text;
+				if (text.load(CString() << weapon.file.c_str()))
+					script.assign(text.text(), static_cast<size_t>(text.length()));
+			}
+			else if (const auto w = m_server.getWeapon(weapon.name); w != nullptr)
+			{
+				if (const auto& bytecode = w->getScript().getClientByteCode(); !bytecode.empty())
+					script.assign(reinterpret_cast<const char*>(bytecode.data()), bytecode.size());
+				else
+					script = std::string(w->getScript().getClientSide());
+			}
+			if (script.empty())
+			{
+				log::printLine(log::server, "** [Error] Graal3D: weapon3d {}: no script ({})", weapon.name,
+							   weapon.file.empty() ? "no server weapon of that name" : "cannot read " + weapon.file);
+				continue;
+			}
+			// The client reads characters 1 to 5 of addweapon's data as a five-GCHAR
+			// number; all spaces read as 0 however they are counted.
+			connection.sendText(TextMessage{"", "addweapon", weapon.name, std::string(6, ' ')});
+			connection.sendText(TextMessage{"", "weaponscript", weapon.name, script});
+		}
 	}
 
 	void Service::handleText(PlayerID playerId, const TextMessage& message)

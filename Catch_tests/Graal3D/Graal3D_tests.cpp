@@ -946,3 +946,51 @@ SCENARIO("A Camera ghost becomes the client's camera once it is in")
 		REQUIRE((*world.cameraOffset)[1] == -3.0f);
 	}
 }
+
+SCENARIO("A Sky follows the 5.12 Sky::packUpdate layout")
+{
+	GIVEN("a world file with a sky and its options")
+	{
+		const auto world = parseWorld("sky lab.dml 800 0.1 0.2 0.3\nskyoptions 0 1 0 0.5 0.5 1\nskyoptions 1 1 1 0 0 0 0\n");
+		REQUIRE(world.errors.size() == 1); // the second skyoptions line has a word too many
+		REQUIRE(world.objects.size() == 1);
+		const auto& sky = world.objects[0];
+		REQUIRE(sky.kind == GhostObject::Kind::Sky);
+		REQUIRE(sky.className() == "Sky");
+		REQUIRE(sky.sky.materialList == "lab.dml");
+		REQUIRE(sky.sky.visibleDistance == 800.0f);
+		REQUIRE(sky.sky.fogColor[2] == 0.3f);
+		REQUIRE(sky.sky.bools == std::array<uint8_t, 3>{0, 1, 0});
+		REQUIRE(sky.sky.solidColor[2] == 1.0f);
+
+		THEN("its update reads back field for field, to the last bit")
+		{
+			BitWriter w;
+			w.setPacketStrings(true);
+			sky.writeUpdate(w, sky.fullMask());
+
+			std::string buffer;
+			const auto data = w.toString();
+			BitReader r(data);
+			r.setStringBuffer(&buffer);
+			REQUIRE(readSkyUpdate(r) == sky.sky);
+			REQUIRE(r.bitPosition() == w.bitPosition());
+		}
+	}
+
+	THEN("weapon3d lines name a file or a server weapon")
+	{
+		const auto world = parseWorld("weapon3d -move3d config/move3d.gs2\nweapon3d -System\nweapon3d\n");
+		REQUIRE(world.errors.size() == 1);
+		REQUIRE(world.weapons.size() == 2);
+		REQUIRE(world.weapons[0].name == "-move3d");
+		REQUIRE(world.weapons[0].file == "config/move3d.gs2");
+		REQUIRE(world.weapons[1].file.empty());
+	}
+
+	THEN("protocol 21 and 24 both have a Sky class")
+	{
+		REQUIRE(objectClassId(*profileForProtocol(24), "Sky"));
+		REQUIRE(objectClassId(*profileForProtocol(21), "Sky"));
+	}
+}
