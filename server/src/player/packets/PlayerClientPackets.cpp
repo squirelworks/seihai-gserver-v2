@@ -595,13 +595,6 @@ HandlePacketResult PlayerClient::msgPLI_FLAGSET(CString& pPacket)
 		}
 	}
 
-	// A Graal 3D client's script moving its own 3D object (see graal3d::Service::moveAvatar).
-	if (flagName == "client.g3dpos" && isGraal3DClient())
-	{
-		m_server->getGraal3D()->moveAvatar(getId(), flagValue.toStringView());
-		return HandlePacketResult::Handled;
-	}
-
 	// Add a little hack for our special gr.strings.
 	if (flagName.find("gr.") != -1)
 	{

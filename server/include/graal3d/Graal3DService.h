@@ -78,11 +78,12 @@ namespace graal3d
 		// A TCP packet is about to go to a player who has a 3D link.
 		void mirrorPacket(PlayerID player, const CString& packet);
 
-		// A script on the player's client asked for its own object to be moved
-		// (the flag client.g3dpos = "x y z"). The 5.x client's scripts cannot
-		// reach the object, so the server moves it and ghosts it to everyone,
-		// the player's own screen included. Returns false if the player has no
-		// 3D link or the value is not three numbers.
+		// A script on the player's client asked for its own object to be moved, with
+		// triggerserver(<kind>, <weapon>, "g3dpos", x, y, z), which a 5.12 client in 3D
+		// mode sends over the 3D text channel. Its scripts cannot reach the object,
+		// so the server moves it and ghosts it to everyone, the player's own screen
+		// included. `position` is "x y z". Returns false if the player has no 3D
+		// link or the value is not three numbers.
 		bool moveAvatar(PlayerID player, std::string_view position);
 
 		[[nodiscard]] size_t connectionCount() const { return m_sessions.size(); }

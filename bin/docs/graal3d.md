@@ -82,12 +82,15 @@ and `jump`, which only such a script defines.
 
 In the lab, a 5.12 client script read the arrow keys with `keydown2` but could not
 reach its own 3D object (`findobject` returns nothing for it), so the gserver moves
-the object instead. A 3D client that sets the flag `client.g3dpos` to `"x y z"`
-has its object moved there and ghosted to every 3D client, its own included. For
+the object instead. In 3D mode the client sends a script's `triggerserver` and
+`client.` flag writes over the 3D text channel, as `t <args>` and `s <flag>=<value>`
+lines of an "events" text. `triggerserver(<kind>, <weapon>, "g3dpos", x, y, z)` moves
+the player's object there and ghosts it to every 3D client, its own included. For
 two seconds after that, the client's own reports of its position are ignored, so
 an older report does not put the object back. At login the gserver sets
-`client.g3dpos` to the spawn point, so a script can start from there. The flag is
-not saved.
+`clientr.g3dpos` to the spawn point, so a script can start from there. Other
+`triggerserver` calls from a 3D script go to the NPC-server as weapon triggers
+(kind `weapon`) or are logged as ignored.
 
 The `Sky` layout is read from the 5.12 client (`Sky::packUpdate`). The client's
 GS2 property names for Sky include `useskytextures`, `renderbottomtexture`,
@@ -139,7 +142,7 @@ too. The server never sends a player's position back to that player.
 | Camera | with a `camera` line in the world file: one `Camera` per client, named as its camera in every packet once its ghost is in |
 | `Sky` | with a `sky` line: init and material list, the later sections (storm, wind, fog changes) left clear. Layout from the 5.12 client; not yet run with a real client. |
 | Scripts in 3D mode | with `weapon3d` lines: `addweapon` and `weaponscript` over the 3D text channel. A 5.12 lab client compiled and ran one, and its `keydown2` saw the arrow keys. |
-| Walking | a script sets `client.g3dpos`, and the gserver moves the player's object. Not yet run with a real client. |
+| Walking | a script's `triggerserver(..., "g3dpos", x, y, z)` and the gserver moves the player's object. Lab 15 showed the trigger reaching the gserver; the move is not yet run with a real client. |
 | `TerrainBlock`, `movetype` | **not sent.** |
 | 3.153 and 4.04r2 game packets | **not done.** They use Torque's older game packet (moves, datablocks). Those clients get the handshake and keep-alive only. |
 

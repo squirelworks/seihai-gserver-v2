@@ -537,11 +537,11 @@ namespace graal3d
 				lines += "s " + *serialized + "\n";
 		}
 		// Where the player's 3D object starts, for a script that moves it with
-		// client.g3dpos (see moveAvatar).
+		// triggerserver (see moveAvatar).
 		if (auto avatar = m_avatars.find(playerId); avatar != m_avatars.end())
 		{
 			const auto& p = avatar->second.object.transform.position;
-			lines += std::format("s client.g3dpos={} {} {}\n", p[0], p[1], p[2]);
+			lines += std::format("s clientr.g3dpos={} {} {}\n", p[0], p[1], p[2]);
 		}
 		if (!lines.empty())
 			connection.sendText(TextMessage{"", "events", "", lines});
@@ -651,9 +651,20 @@ namespace graal3d
 					break;
 				case 't':
 				{
+					// triggerserver(<kind>, <weapon>, "g3dpos", x, y, z) from a 3D-mode script
+					// moves the player's own object (see moveAvatar).
+					if (const auto fields = string::fromCSV(arg); fields.size() == 6 && fields[2] == "g3dpos")
+					{
+						if (!moveAvatar(playerId, fields[3] + " " + fields[4] + " " + fields[5]))
+							log::printLine(log::server, "Graal3D {}: g3dpos not moved ({}).", player->account.name, arg);
+						break;
+					}
 					// `t weapon,<name>,<params>` is a serverside triggeraction from a weapon.
 					if (!arg.starts_with("weapon,"))
+					{
+						log::printLine(log::server, "Graal3D {}: trigger ignored ({}).", player->account.name, arg);
 						break;
+					}
 					CString packet = CString() >> (char)PLI_TRIGGERACTION;
 					packet.writeGInt(0);
 					packet.writeGChar(0);
