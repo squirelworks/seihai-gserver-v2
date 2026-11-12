@@ -193,7 +193,10 @@ void Weapon::registerWeaponWithPlayer(const std::shared_ptr<Player>& player) con
 		player->sendPacket(weaponPacket);
 
 		// Tell the client the load the script.
-		if (!m_headerWithCRC.empty())
+		// Seihai: only when there is bytecode to load. A GS1-only weapon has none, so the header carried the CRC of
+		// nothing (0); 6.03 then skips its cache check, asks for the script with PLI_UPDATESCRIPT, and
+		// sendByteCodeToPlayer has nothing to send (#23, lead 1).
+		if (!m_headerWithCRC.empty() && !m_script.getClientByteCode().empty())
 		{
 			if (player->getVersion() >= CLVER_5_07)
 				player->sendPacket(CString() >> (char)PLO_LOADSCRIPT << m_headerWithCRC);
