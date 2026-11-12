@@ -18,6 +18,16 @@ Apple clang is not used: the project needs C++23 features it lacks. Homebrew
 LLVM 18 was tried first and rejected the Xcode 16.4 SDK headers, so the
 workflow takes the current `brew install llvm`.
 
+## libsodium without autotools
+
+The SEI00001 secure login needs libsodium. vcpkg builds it with autotools
+(`autoconf`, `autoconf-archive`, `automake`, `libtool`). On a machine without
+them, install a prebuilt libsodium (`brew install libsodium` on macOS, or the
+distribution's `libsodium-dev`) and configure with
+`-DVCPKG_MANIFEST_NO_DEFAULT_FEATURES=ON`. That turns off the manifest's
+`secure-login` feature, so vcpkg skips libsodium, and `server/CMakeLists.txt`
+finds the installed one (Homebrew's `/opt/homebrew` and `/usr/local` included).
+
 ## Steps the workflow runs
 
 1. Java 21 (for the antlr generator), then per OS: `gcc-14`/`ninja` on Linux,
