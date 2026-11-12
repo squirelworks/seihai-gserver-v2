@@ -1460,7 +1460,7 @@ HandlePacketResult PlayerClient::msgPLI_VERIFYWANTSEND(CString& pPacket)
 		if (info == nullptr)
 		{
 			// A 3D client's login waits on this answer: sendFile tells it the file is missing.
-			if (!answersMissingFilesFor3D())
+			if (!isGraal3DClient())
 				return HandlePacketResult::Handled;
 		}
 		else

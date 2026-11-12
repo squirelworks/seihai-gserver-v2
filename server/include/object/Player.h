@@ -346,8 +346,9 @@ public:
 	std::pair<bool, bool> sendFile(const std::filesystem::path& file);
 	// A 3.153 to 5.x client on a server with the Graal 3D side on. Its 3D login
 	// waits until every file it asked for is answered, so a missing file must get
-	// PLO_FILESENDFAILED rather than no answer.
-	bool answersMissingFilesFor3D() const;
+	// PLO_FILESENDFAILED rather than no answer, and its "Connecting..." window
+	// closes only on PLO_SERVERLISTCONNECTED.
+	bool isGraal3DClient() const;
 	// For an encrypted package (.gpake), sends its key (PLO_FILEDECRYPTKEY) from
 	// config/gpakkeys.txt. raw puts it in the file queue, so it goes out before a file
 	// queued after it. Returns false when the package has no key; true for other files.

@@ -576,7 +576,7 @@ bool Player::sendGpakKey(std::string_view filename, bool raw)
 	return true;
 }
 
-bool Player::answersMissingFilesFor3D() const
+bool Player::isGraal3DClient() const
 {
 	return isClient() && m_server->getGraal3D() != nullptr && graal3d::Service::clientHasGraal3D(m_versionId);
 }
@@ -620,7 +620,7 @@ std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file)
 		{
 			if (m_server->cached.warnOnMissingFiles.getValue() == true)
 				return {sendFailure("File not found when trying to send to player"), false};
-			if (answersMissingFilesFor3D())
+			if (isGraal3DClient())
 				return {sendFailure("Graal3D: file not found, told the client"), false};
 			return {false, false};
 		}

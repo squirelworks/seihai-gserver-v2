@@ -480,8 +480,11 @@ bool PlayerClient::sendLogin()
 			}
 		}
 
-		// Tell the client if the server is connected to the listserver.
-		if (m_server->getServerList().getConnected())
+		// Tell the client if the server is connected to the listserver. A 5.x
+		// client joining a 3D server keeps its "Connecting..." window over the 3D
+		// view until it gets this, so a 3D client gets it even when no listserver
+		// is connected.
+		if (m_server->getServerList().getConnected() || isGraal3DClient())
 			sendPacket(CString() >> (char)PLO_SERVERLISTCONNECTED);
 
 		// Reset the client.
