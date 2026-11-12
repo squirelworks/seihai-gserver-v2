@@ -1,4 +1,4 @@
-# Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-10-31, 2026-11-12: see CHANGES-SEIHAI.md.
 *.bat
 *.swp
 *.zst
@@ -27,3 +27,6 @@ packages/
 vcpkg_installed/
 CMakeSettings.json
 __pycache__/
+
+# Seihai: the secure login key (SEI00001) is secret; never commit it.
+**/config/seihai-login.key

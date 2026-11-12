@@ -1,4 +1,4 @@
-# Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-11: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
 # Sets the location where new players start on the server.
 # By default, the server uses the values inside the defaultaccount.
 # These values will override defaultaccount.
@@ -308,6 +308,15 @@ graal3d = false
 # Strings in game packets start with Torque's prefix flag (see docs/graal3d.md).
 # graal3dstringprefix = true
 # The world the 3D clients are sent: config/graal3dworld.txt (see docs/graal3d.md).
+
+# Seihai secure login (SEI00001): the Seihai client can send the account and password
+# sealed (X25519, Ed25519, ChaCha20-Poly1305) instead of in the clear. Real Graal clients
+# cannot; their logins work as before. See docs/secure-login.md.
+# secure_login = true
+# The server's Ed25519 key, made on first start (back it up: a new key alarms every player).
+# secure_login_key = config/seihai-login.key
+# Refuse every classic login. This locks out every real Graal client.
+# require_secure_login = false
 
 # Sets the server into localhost mode: all logins are allowed with no listserver verification.
 # The server still registers with the list server when one is running.

@@ -193,6 +193,9 @@ int Server::init(const std::string_view serverip, const std::string_view serverp
 	int ret = loadConfigFiles();
 	if (ret) return ret;
 
+	// Seihai: the SEI00001 secure login key.
+	loadSecureLoginKey();
+
 	// Set the server mode.
 	// This requires a full server restart to change, so don't cache the value.
 	if (const auto serverMode = m_settings.get("servermode").value_or("normal"s); string::equalsi(serverMode, "kingdoms"sv))
@@ -718,6 +721,45 @@ void Server::loadAdminSettings()
 {
 	m_adminSettings.load("adminconfig.txt");
 	getServerList().sendServerHQ();
+}
+
+bool Server::isClientVersionAllowed(const int versionId) const
+{
+	for (CString ver : m_allowedVersions)
+	{
+		if (ver.find(":") != -1)
+		{
+			CString ver1 = ver.readString(":").trim();
+			CString ver2 = ver.readString("").trim();
+			if (versionId >= getVersionID(ver1) && versionId <= getVersionID(ver2))
+				return true;
+		}
+		else if (versionId == getVersionID(ver))
+			return true;
+	}
+	return false;
+}
+
+void Server::loadSecureLoginKey()
+{
+	m_secureLoginIdentity.reset();
+	if (!m_settings.get<bool>("secure_login").value_or(true))
+		return;
+
+	const std::filesystem::path path = m_settings.get<std::string>("secure_login_key").value_or("config/seihai-login.key"s);
+	bool created = false;
+	std::string error;
+	m_secureLoginIdentity = seclogin::ServerIdentity::loadOrCreate(path, created, error);
+	if (!m_secureLoginIdentity)
+	{
+		log::printLine(log::server, "** [Error] Secure login (SEI00001) is off: {}", error);
+		return;
+	}
+
+	log::printLine(log::server, "Secure login (SEI00001): {} key {}", created ? "created" : "loaded", path.generic_string());
+	auto indent = log::server.indent();
+	log::printLine(log::server, "Public key: {}", m_secureLoginIdentity->publicKeyBase64());
+	log::printLine(log::server, "Fingerprint: {}", m_secureLoginIdentity->fingerprint());
 }
 
 void Server::loadAllowedVersions()
