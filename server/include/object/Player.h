@@ -132,12 +132,12 @@ struct ShootPacketWrapper
 {
 	NPCID source;
 	PixelPosition position;
-	int8_t offsetx;
-	int8_t offsety;
+	uint8_t gmapx;
+	uint8_t gmapy;
 	uint8_t sangle;
 	uint8_t sanglez;
 	uint8_t power;
-	uint8_t gravity;
+	float gravityInTiles;
 	std::string gani;
 	std::string shootParams;
 
@@ -221,6 +221,9 @@ public:
 
 	/// @brief Checks if the property was modified since the last call to recordCurrentPropModTime.
 	[[nodiscard]] [[a::inline]] bool wasPropModified(PlayerProp prop) const noexcept;
+
+	/// @brief Marks a property as already sent, so the NPC server's end-of-frame flush of modified props skips it.
+	[[a::inline]] void markPropSent(PlayerProp prop) noexcept;
 
 	/// @brief Constructs a PropertyContainer for PlayerProp P with the given values.
 	/// @tparam P The PlayerProp that determines the type of container to construct.
@@ -341,9 +344,9 @@ public:
 
 public:
 	// Socket-Functions
-	void sendPacket(const CString& packet);
-	void sendRawPacket(const CString& packet);
-	std::pair<bool, bool> sendFile(const std::filesystem::path& file);
+	void sendPacket(const CString& packet, PacketQueue channel = PacketQueue::NORMAL);
+	void sendRawPacket(const CString& packet, PacketQueue channel = PacketQueue::NORMAL);
+	std::pair<bool, bool> sendFile(const std::filesystem::path& file, PacketQueue channel = PacketQueue::FILE);
 	// A 3.153 to 5.x client on a server with the Graal 3D side on. Its 3D login
 	// waits until every file it asked for is answered, so a missing file must get
 	// PLO_FILESENDFAILED rather than no answer.
@@ -700,6 +703,11 @@ inline void Player::recordCurrentPropModTime()
 inline bool Player::wasPropModified(const PlayerProp prop) const noexcept
 {
 	return m_savedModTime[ENUM(prop)] != modTime[ENUM(prop)];
+}
+
+inline void Player::markPropSent(const PlayerProp prop) noexcept
+{
+	m_savedModTime[ENUM(prop)] = modTime[ENUM(prop)];
 }
 
 //----------------------------

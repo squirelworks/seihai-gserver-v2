@@ -234,7 +234,7 @@ static constexpr std::array<std::string, 255> FillOutputPacketNamesArray()
 	return names;
 }
 
-std::array<std::string, 255> OutputPacketNamesArray = FillOutputPacketNamesArray();
+static std::array<std::string, 255> OutputPacketNamesArray = FillOutputPacketNamesArray();
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -258,17 +258,22 @@ CString ShootPacketWrapper::constructShootV1() const
 
 CString ShootPacketWrapper::constructShootV2() const
 {
+	const PropertyPixelCoordinate x{static_cast<int16_t>(position.x())};
+	const PropertyPixelCoordinate y{static_cast<int16_t>(position.y())};
+	const PropertyPixelCoordinate z{static_cast<int16_t>(position.z())};
+	const PropertyPixelCoordinate pgravity{static_cast<int16_t>(gravityInTiles * 256)};
+
 	CString packet;
-	packet.writeGShort(position.x());
-	packet.writeGShort(position.y());
-	packet.writeGShort(position.z());
-	packet.writeChar(static_cast<int8_t>(offsetx + 32));
-	packet.writeChar(static_cast<int8_t>(offsety + 32));
+	packet.write(x.serialize());
+	packet.write(y.serialize());
+	packet.write(z.serialize());
+	packet.writeGChar(gmapx);
+	packet.writeGChar(gmapy);
 	packet.writeGChar(sangle);
 	packet.writeGChar(sanglez);
 	packet.writeGChar(power);
-	packet.writeGChar(gravity);
-	packet.writeGShort(gani.length());
+	packet.write(pgravity.serialize());
+	packet.writeGChar(gani.length());
 	packet.write(gani);
 	packet.writeGChar(shootParams.length());
 	packet.write(shootParams);
@@ -501,7 +506,7 @@ void Player::disconnect(const std::string_view message)
 	m_server->deletePlayer(shared_from_this());
 }
 
-void Player::sendPacket(const CString& packet)
+void Player::sendPacket(const CString& packet, const PacketQueue channel)
 {
 	if (packet.isEmpty() || m_playerSock == nullptr || m_playerSock->getState() == SOCKET_STATE_DISCONNECTED)
 		return;
@@ -528,10 +533,10 @@ void Player::sendPacket(const CString& packet)
 	}
 
 	// append buffer
-	m_fileQueue.addPacket(packet);
+	m_fileQueue.addPacket(channel, packet);
 }
 
-void Player::sendRawPacket(const CString& packet)
+void Player::sendRawPacket(const CString& packet, const PacketQueue channel)
 {
 	if (packet.isEmpty() || m_playerSock == nullptr || m_playerSock->getState() == SOCKET_STATE_DISCONNECTED)
 		return;
@@ -547,7 +552,7 @@ void Player::sendRawPacket(const CString& packet)
 #endif
 
 	// append buffer
-	m_fileQueue.addRawPacket(packet);
+	m_fileQueue.addRawPacket(channel, packet);
 }
 
 bool Player::sendGpakKey(std::string_view filename, bool raw)
@@ -570,7 +575,7 @@ bool Player::sendGpakKey(std::string_view filename, bool raw)
 
 	const auto packet = preagonal::gpakKeyPacket(name, *key);
 	if (raw)
-		sendRawPacket(packet);
+		sendRawPacket(packet, PacketQueue::FILE);
 	else
 		sendPacket(packet);
 	return true;
@@ -581,8 +586,13 @@ bool Player::answersMissingFilesFor3D() const
 	return isClient() && m_server->getGraal3D() != nullptr && graal3d::Service::clientHasGraal3D(m_versionId);
 }
 
-std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file)
+std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file, const PacketQueue channel)
 {
+	// Don't let the client request level files. An RC still downloads them from its
+	// file browser (upstream 1b9b992 means non-RC players only, but blocked RCs too).
+	if (!isRC() && inList(fs::getANSIFileName(file.extension()), ".nw"s, ".graal"s, ".zelda"s))
+		return {false, false};
+
 	// Add the filename to the list of known files so we can resend the file
 	// to the client if it gets changed after it was originally sent
 	if (const auto client = std::dynamic_pointer_cast<PlayerClient>(shared_from_this()); isClient() && client != nullptr)
@@ -593,11 +603,11 @@ std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file)
 	const auto& filesystem = m_server->getFileSystem();
 	std::string filename = fs::getANSIFileName(file);
 
-	auto sendFailure = [this, &filename](const std::string_view message) -> bool
+	auto sendFailure = [this, &filename, &channel](const std::string_view message) -> bool
 	{
 		if (!message.empty())
 			log::printLine(log::server, "[WARNING] {}: {}", message, filename);
-		sendPacket(CString() >> (char)PLO_FILESENDFAILED << filename);
+		sendPacket(CString() >> (char)PLO_FILESENDFAILED << filename, channel);
 		return false;
 	};
 
@@ -607,7 +617,7 @@ std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file)
 	time_t fileModTime = 0;
 
 	// Find the file.
-	if (std::filesystem::exists(file))
+	if (isRC() && std::filesystem::exists(file))
 	{
 		fs::File openedFile{file};
 		fileData = openedFile.read();
@@ -678,8 +688,8 @@ std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file)
 	// If we are sending a big file, let the client know now.
 	if (isBigFile)
 	{
-		sendPacket(CString() >> (char)PLO_LARGEFILESTART << filename);
-		sendPacket(CString() >> (char)PLO_LARGEFILESIZE >> (long long)fileData.size());
+		sendPacket(CString() >> (char)PLO_LARGEFILESTART << filename, channel);
+		sendPacket(CString() >> (char)PLO_LARGEFILESIZE >> (long long)fileData.size(), channel);
 	}
 
 	// Send the file now.
@@ -692,18 +702,18 @@ std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file)
 		// Older client versions didn't send the modTime.
 		if (isClient() && m_versionId < CLVER_2_1)
 		{
-			sendRawPacket(CString() >> (char)PLO_FILE >> (char)filename.length() << filename << std::string_view{fileDataSpan.subspan(0, sendSize)});
+			sendRawPacket(CString() >> (char)PLO_FILE >> (char)filename.length() << filename << std::string_view{fileDataSpan.subspan(0, sendSize)}, channel);
 		}
 		else
 		{
-			sendRawPacket(CString() >> (char)PLO_FILE >> (long long)fileModTime >> (char)filename.length() << filename << std::string_view{fileDataSpan.subspan(0, sendSize)});
+			sendRawPacket(CString() >> (char)PLO_FILE >> (long long)fileModTime >> (char)filename.length() << filename << std::string_view{fileDataSpan.subspan(0, sendSize)}, channel);
 		}
 
 		fileDataSpan = fileDataSpan.subspan(sendSize);
 	}
 
 	// If we had sent a large file, let the client know we finished sending it.
-	if (isBigFile) sendPacket(CString() >> (char)PLO_LARGEFILEEND << filename);
+	if (isBigFile) sendPacket(CString() >> (char)PLO_LARGEFILEEND << filename, channel);
 
 	return {true, isBigFile};
 }
@@ -1275,7 +1285,7 @@ void Player::setPosition(const PixelPosition& position)
 
 	if (const auto level = getLevel(); level != nullptr && level->isGmap())
 	{
-		auto mapPosition = toMapPosition(position);
+		const auto mapPosition = level->clampMapPosition(toMapPosition(position));
 		account.character.mapX = mapPosition.x();
 		account.character.mapY = mapPosition.y();
 	}
@@ -1468,7 +1478,7 @@ void Player::constructScriptParameters()
 				// Fix the map position if applicable.
 				if (const auto levelPtr = getLevel(); levelPtr != nullptr && levelPtr->isGmap())
 				{
-					if (const auto mapX = toMapPosition(globalPosition).x(); mapX != account.character.mapX)
+					if (const auto mapX = levelPtr->clampMapPosition(toMapPosition(globalPosition)).x(); mapX != account.character.mapX)
 					{
 						account.character.mapX = mapX;
 						modTime[PROPID(PlayerProp::GMAPLEVELX)] = now;
@@ -1497,7 +1507,7 @@ void Player::constructScriptParameters()
 				// Fix the map position if applicable.
 				if (const auto levelPtr = getLevel(); levelPtr != nullptr && levelPtr->isGmap())
 				{
-					if (const auto mapY = toMapPosition(globalPosition).y(); mapY != account.character.mapY)
+					if (const auto mapY = levelPtr->clampMapPosition(toMapPosition(globalPosition)).y(); mapY != account.character.mapY)
 					{
 						account.character.mapY = mapY;
 						modTime[PROPID(PlayerProp::GMAPLEVELY)] = now;
