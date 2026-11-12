@@ -12,7 +12,6 @@
 	  "name": "catch2",
 	  "version>=": "3.4.0"
 	},
-	"libsodium",
 	"miniupnpc",
 	"pkgconf",
 	{
@@ -20,5 +19,12 @@
 	  "version>=": "5.8.0"
 	},
 	"zlib"
-  ]
+  ],
+  "default-features": [ "secure-login" ],
+  "features": {
+	"secure-login": {
+	  "description": "libsodium for the SEI00001 secure login. Turn default features off to use a system libsodium instead.",
+	  "dependencies": [ "libsodium" ]
+	}
+  }
 }

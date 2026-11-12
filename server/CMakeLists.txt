@@ -279,8 +279,10 @@ find_package(unofficial-sodium CONFIG QUIET)
 if(unofficial-sodium_FOUND)
 	target_link_libraries(${TARGET_NAME} PUBLIC unofficial-sodium::sodium)
 else()
-	find_path(SODIUM_INCLUDE_DIR sodium.h REQUIRED)
-	find_library(SODIUM_LIBRARY NAMES libsodium.a sodium REQUIRED)
+	# Seihai: a vcpkg build with default features off (-DVCPKG_MANIFEST_NO_DEFAULT_FEATURES=ON) leaves libsodium out
+	# of vcpkg; then Homebrew's libsodium is found too, so a Mac without autotools can build.
+	find_path(SODIUM_INCLUDE_DIR sodium.h HINTS /opt/homebrew/include /usr/local/include REQUIRED)
+	find_library(SODIUM_LIBRARY NAMES libsodium.a sodium HINTS /opt/homebrew/lib /usr/local/lib REQUIRED)
 	target_include_directories(${TARGET_NAME} PUBLIC "${SODIUM_INCLUDE_DIR}")
 	target_link_libraries(${TARGET_NAME} PUBLIC "${SODIUM_LIBRARY}")
 endif()
