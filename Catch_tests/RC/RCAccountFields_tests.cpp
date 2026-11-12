@@ -1,7 +1,8 @@
-// Modified by the Seihai project, 2026-11-04: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-04, 2026-11-12: see CHANGES-SEIHAI.md.
 // New file: regression tests for the Edit Account fields an RC sends and reads back.
 #include "catch2/catch_all.hpp"
 
+#include <atomic>
 #include <string>
 
 #include <CString.h>
@@ -10,6 +11,10 @@
 #include <player/RCAccountFields.h>
 
 using namespace preagonal;
+
+// Server.cpp reads this flag from main.cpp, which the tests do not link. Linux links -static and never pulls Server.o in;
+// macOS links dynamically and needs it (Sequoia VM, 2026-11-12).
+std::atomic_bool shutdownProgram{false};
 
 namespace
 {
