@@ -65,6 +65,13 @@ On a Linux build, you would use `Linux Release` as the preset.
 
 IDEs such as Visual Studio and CLion have CMake support built-in and can be used to easily build and configure the projects.
 
+### macOS builds
+
+macOS is built and tested on the lab's Sequoia (macOS 15) VM with the same build
+and test commands the Linux job runs, using the `macOS Release` preset; GitHub CI
+covers Linux and Windows. The release workflow still builds macOS archives for a
+release draft (a `v*` tag or a manual run with a version), so a release keeps its macOS downloads.
+
 ## Quick Start Instructions
 
 How-to setup a server:
