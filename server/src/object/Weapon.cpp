@@ -1,5 +1,6 @@
 // Modified by the Seihai project, 2026-10-31, 2026-11-12: see CHANGES-SEIHAI.md.
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <chrono>
 #include <cstdint>
@@ -32,6 +33,7 @@
 #include <scripting/ScriptTypes.h>
 #include <utilities/CommonTypes.h>
 #include <utilities/Log.h>
+#include <utilities/ScriptCacheDes.h>
 #include <utilities/StringUtils.h>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -353,9 +355,19 @@ void Weapon::calculateHeaderChecksum()
 	const CString key = CString() >> (long long)(hashBytes[0]) >> (long long)(hashBytes[1]);
 	m_desKey = key.toString();
 
-	// CRC32 checksum the bytecode.
+	// CRC32 checksum the bytecode as the client stores it.
+	// Seihai (#24): 5.x/6.x clients cache the bytecode DES-encrypted with this key (GRESCR01) and compare the
+	// CRC32 of that stored body with this field. The CRC of the plain bytecode never matched, so every login
+	// asked for every weapon again with PLI_UPDATESCRIPT (real 6.03r7, lab run 2026-11-12).
+	std::array<uint8_t, 8> keyBytes{};
+	for (size_t i = 0; i < 4; ++i)
+	{
+		keyBytes[i] = static_cast<uint8_t>(hashBytes[0] >> (8 * i));
+		keyBytes[4 + i] = static_cast<uint8_t>(hashBytes[1] >> (8 * i));
+	}
+	const auto stored = seihai::scriptCacheEncrypt(std::string_view{reinterpret_cast<const char*>(bytecode.data()), bytecode.size()}, keyBytes);
 	m_checksum = crc32(0L, Z_NULL, 0);
-	m_checksum = crc32(m_checksum, reinterpret_cast<const uint8_t*>(bytecode.data()), bytecode.size());
+	m_checksum = crc32(m_checksum, stored.data(), static_cast<uInt>(stored.size()));
 
 	// Create the header.
 	// [GBYTE2 length_header_and_bytecode]
