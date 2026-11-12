@@ -1,0 +1,84 @@
+[2026-11-12 02:28:27] :: ------------------------------ START ------------------------------
+[2026-11-12 02:28:27] :: Preagonal GS2Emu version 4.0.0-beta (2026-11-12 02:26)
+[2026-11-12 02:28:27] :: Programmed by Joey, Nalin, Codr, and Cadavre.
+[2026-11-12 02:28:27] 
+[2026-11-12 02:28:27] :: Starting server: modern.
+[2026-11-12 02:28:27]      (command line): /tmp/claude-0/-home-user/d5887d91-e795-57ee-9165-ca3baf564963/scratchpad/pl-lab/servers/modern
+[2026-11-12 02:28:27] :: Loading server configuration.
+[2026-11-12 02:28:27]      Loading settings...
+[2026-11-12 02:28:27]        Server generation: modern
+[2026-11-12 02:28:27]      Loading admin settings.
+[2026-11-12 02:28:27]      Loading allowed client versions.
+[2026-11-12 02:28:27]      Folder config: ENABLED
+[2026-11-12 02:28:27]      Loading file system...
+[2026-11-12 02:28:27]        adding heads/ [*] to head
+[2026-11-12 02:28:27]        adding bodies/ [*.png] to body
+[2026-11-12 02:28:27]        adding swords/ [*] to sword
+[2026-11-12 02:28:27]        adding shields/ [*] to shield
+[2026-11-12 02:28:27]        adding ganis/ [*.gani] to file
+[2026-11-12 02:28:27]        adding hats/ [*.png] to file
+[2026-11-12 02:28:27]        adding images/ [*.png] to file
+[2026-11-12 02:28:27]        adding images/ [*.gif] to file
+[2026-11-12 02:28:27]        adding images/ [*.mng] to file
+[2026-11-12 02:28:27]        adding sounds/ [*.mid] to file
+[2026-11-12 02:28:27]        adding sounds/ [*.mp3] to file
+[2026-11-12 02:28:27]        adding sounds/ [*.wav] to file
+[2026-11-12 02:28:27]        adding / [*.gani] to file
+[2026-11-12 02:28:27]        adding / [*.gif] to file
+[2026-11-12 02:28:27]        adding / [*.mng] to file
+[2026-11-12 02:28:27]        adding / [*.png] to file
+[2026-11-12 02:28:27]        adding / [*.mid] to file
+[2026-11-12 02:28:27]        adding / [*.mp3] to file
+[2026-11-12 02:28:27]        adding / [*.wav] to file
+[2026-11-12 02:28:27]        adding / [*.txt] to file
+[2026-11-12 02:28:27]        adding / [*.gmap] to file
+[2026-11-12 02:28:27]        adding / [*.graal] to level
+[2026-11-12 02:28:27]        adding / [*.nw] to level
+[2026-11-12 02:28:27]        adding / [*.gmap] to level
+[2026-11-12 02:28:27]        adding levels/ [*.gmap] to file
+[2026-11-12 02:28:27]        adding levels/ [*.nw] to level
+[2026-11-12 02:28:27]        adding levels/ [*.graal] to level
+[2026-11-12 02:28:27]        adding levels/ [*.gmap] to level
+[2026-11-12 02:28:27]        adding global/ [*] to file
+[2026-11-12 02:28:27]        adding global/heads/ [*] to head
+[2026-11-12 02:28:27]        adding global/bodies/ [*.png] to body
+[2026-11-12 02:28:27]        adding global/swords/ [*] to sword
+[2026-11-12 02:28:27]        adding global/shields/ [*] to shield
+[2026-11-12 02:28:27]        adding gpaks/ [*.gpak] to file
+[2026-11-12 02:28:27]        adding gpaks/ [*.gpake] to file
+[2026-11-12 02:28:27]      Loading config/servermessage.html.
+[2026-11-12 02:28:27]      Loading config/ipbans.txt.
+[2026-11-12 02:28:27]      Loading translations: modern style.
+[2026-11-12 02:28:27]      Loading word filter.
+[2026-11-12 02:28:27]      Loading serverflags.txt.
+[2026-11-12 02:28:27]      Loading guilds...
+[2026-11-12 02:28:27]        Example
+[2026-11-12 02:28:27]      Loading maps...
+[2026-11-12 02:28:27] :: Loading server objects.
+[2026-11-12 02:28:27]      Loading weapons...
+[2026-11-12 02:28:27]        -gr_movement (0.075037 ms)
+[2026-11-12 02:28:27]        (Completed in 0.106329 ms)
+[2026-11-12 02:28:27]      Pre-loading map levels.
+[2026-11-12 02:28:27]        (Completed in 0.000211 ms)
+[2026-11-12 02:28:27] :: Initializing player listen socket.
+[2026-11-12 02:28:27]      Listening on: 127.0.0.1:14815.
+[2026-11-12 02:28:27] :: Started server modern (Lab Modern)
+[2026-11-12 02:28:28] :: Initializing listserver socket.
+[2026-11-12 02:28:28] :: [Error] Could not connect listserver socket.
+[2026-11-12 02:28:30] :: Initializing listserver socket.
+[2026-11-12 02:28:30] :: [Error] Could not connect listserver socket.
+[2026-11-12 02:28:32] :: New login: lab420 [New Client (2.22+)] [G3D20126 (4.208)]
+[2026-11-12 02:28:32] :: [Login] Localhost mode: accepting 'lab420' without listserver verification.
+[2026-11-12 02:28:32] :: New login: lab512 [New Client (2.22+)] [G3D14097 (5.12)]
+[2026-11-12 02:28:32] :: [Login] Localhost mode: accepting 'lab512' without listserver verification.
+[2026-11-12 02:28:32] :: New login: lab603 [New Client (2.22+)] [G3D0311C (6.037)]
+[2026-11-12 02:28:32] :: [Login] Localhost mode: accepting 'lab603' without listserver verification.
+[2026-11-12 02:28:34] :: Initializing listserver socket.
+[2026-11-12 02:28:34] :: [Error] Could not connect listserver socket.
+[2026-11-12 02:28:35] :: Client disconnected: [3] lab420
+[2026-11-12 02:28:35] :: Client disconnected: [4] lab512
+[2026-11-12 02:28:41] :: Client disconnected: [5] lab603
+[2026-11-12 02:28:42] :: Initializing listserver socket.
+[2026-11-12 02:28:42] :: [Error] Could not connect listserver socket.
+[2026-11-12 02:28:42] :: The server is now shutting down...
+[2026-11-12 02:28:42] :: -------------------------------------
