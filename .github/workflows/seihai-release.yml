@@ -1,7 +1,7 @@
 # Seihai: build gs2emu for Linux, Windows and macOS. A tag push (v*), or a manual
 # run with a version, also makes a DRAFT GitHub release with the four archives and
 # the full source, as the GPL asks. The tag is made when the owner presses Publish.
-# Modified by the Seihai project, 2026-11-04, 2026-11-11: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-11-04, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
 name: Seihai build and release
 
 on:
@@ -129,13 +129,16 @@ jobs:
           name: ${{ matrix.name }}
           path: dist/${{ matrix.name }}.*
 
-  # macOS, best effort and in parallel with the rest. Both build on the Intel runner;
+  # macOS is built and tested on the lab Sequoia VM, not on GitHub runners (README.md, "macOS builds").
+  # These jobs run only for a release draft (a v* tag or a manual run with a version), so the
+  # draft can still carry macOS archives; pushes and pull requests build Linux and Windows only.
+  # Both build on the Intel runner;
   # the Apple Silicon build is cross-compiled (cross: arm64), because GitHub's arm64
   # runners are often out of capacity and drop queued jobs. add-macos puts the
   # archives on the draft if and when they are built. skip_macos (manual runs only)
   # leaves them out.
   build-macos:
-    if: ${{ !inputs.skip_macos }}
+    if: ${{ (startsWith(github.ref, 'refs/tags/v') || inputs.version != '') && !inputs.skip_macos }}
     strategy:
       fail-fast: false
       matrix:
