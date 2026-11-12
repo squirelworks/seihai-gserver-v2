@@ -48,6 +48,7 @@
 #include <utilities/CommandDispatcher.h>
 #include <utilities/CommonTypes.h>
 #include <utilities/Extents.h>
+#include <utilities/SecureLogin.h>
 #include <utilities/Settings.h>
 #include <utilities/StringUtils.h>
 #include <utilities/generator/IdGenerator.h>
@@ -261,6 +262,11 @@ public:
 public:
 	const auto& getAllowedVersionString() const { return m_allowedVersionString; }
 	const auto& getAllowedVersions() const { return m_allowedVersions; }
+	// Seihai: the allowedversions.txt check, shared by the classic and the secure login.
+	bool isClientVersionAllowed(int versionId) const;
+	// Seihai: the SEI00001 server key; nullptr when secure_login is off or the key file failed.
+	const seclogin::ServerIdentity* getSecureLoginIdentity() const { return m_secureLoginIdentity ? &*m_secureLoginIdentity : nullptr; }
+	void loadSecureLoginKey();
 	const auto& getFrameStartTime() const { return m_frameStartTime; }
 	const auto& getFrameStartTimeHighPrecision() const { return m_frameStartTimeHighPrecision; }
 	const auto& getMapList() const { return m_mapList; }
@@ -570,6 +576,8 @@ private:
 	std::thread m_upnpThread;
 
 	std::unique_ptr<graal3d::Service> m_graal3d;
+
+	std::optional<seclogin::ServerIdentity> m_secureLoginIdentity;
 };
 
 inline const auto& Server::getAllowedDeathDrops() const noexcept

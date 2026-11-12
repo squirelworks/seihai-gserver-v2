@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-12: see CHANGES-SEIHAI.md.
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -60,8 +60,112 @@ HandlePacketResult PlayerLogin::handlePacket(std::optional<uint8_t> id, CString&
 
 HandlePacketResult PlayerLogin::msgLoginPacket(CString& pPacket)
 {
-	const auto type = (1 << pPacket.readGChar());
+	// Seihai: the frame after a SEI00001 hello is C2.
+	if (m_secureLogin)
+		return msgSecureSealed(pPacket);
 
+	const auto type = (1 << pPacket.readGChar());
+	if (type & PLTYPE_ANYCLIENT)
+	{
+		if (auto result = msgSecureHello(pPacket, type); result.has_value())
+			return *result;
+	}
+	return createPlayer(pPacket, type, false);
+}
+
+std::optional<HandlePacketResult> PlayerLogin::msgSecureHello(CString& pPacket, const int type)
+{
+	const std::string_view line = pPacket.toStringView();
+
+	// The token sits where the version token does: after the type, or after the type and
+	// the key byte. Only 1.x clients (PLTYPE_CLIENT) send no key byte.
+	size_t prefixLength = 2;
+	if (type == PLTYPE_CLIENT && line.substr(1).starts_with(seclogin::TOKEN))
+		prefixLength = 1;
+
+	bool malformed = false;
+	auto hello = seclogin::ClientHello::parse(line, prefixLength, malformed);
+	if (!hello)
+	{
+		if (!malformed)
+			return std::nullopt;	// A classic login.
+		log::printLine(log::server, "New login from {}: malformed SEI00001 hello, closing.", whoAmI());
+		return HandlePacketResult::Failed;
+	}
+	if (!hello->suffix.empty())
+	{
+		log::printLine(log::server, "New login from {}: SEI00001 hello with a suffix, closing.", whoAmI());
+		return HandlePacketResult::Failed;
+	}
+
+	const auto* identity = m_server->getSecureLoginIdentity();
+	if (identity == nullptr)
+	{
+		log::printLine(log::server, "New login from {}: SEI00001 (inner {}) refused, secure login is off.", whoAmI(), hello->inner);
+		return refuseSecure("This server does not take secure logins.");
+	}
+
+	// The inner token is the client version: check it now, before the client sends its password.
+	const int versionId = getVersionID(hello->inner);
+	if (versionId == CLVER_UNKNOWN || !m_server->isClientVersionAllowed(versionId))
+	{
+		log::printLine(log::server, "New login from {}: SEI00001 (inner {}) refused, version not allowed.", whoAmI(), hello->inner);
+		return refuseSecure(std::string("Your client version is not allowed on this server.\rAllowed: ") + m_server->getAllowedVersionString());
+	}
+
+	auto response = seclogin::respond(*hello, *identity);
+	if (!response)
+	{
+		log::printLine(log::server, "New login from {}: SEI00001 key exchange failed, closing.", whoAmI());
+		return HandlePacketResult::Failed;
+	}
+
+	// S1, in a plain zlib frame (our output codec is still the classic gen-3 one).
+	sendPacket(CString() << response->line);
+	m_fileQueue.sendCompress();
+
+	m_secureLogin = PendingSecureLogin{std::string(line.substr(0, prefixLength)), hello->inner, response->opener};
+
+	// Read the next frame as a login frame again, and stay registered for it.
+	PacketCount = 0;
+	LoginParsed = false;
+	LoginLeftover.clear();
+	return HandlePacketResult::Handled;
+}
+
+HandlePacketResult PlayerLogin::msgSecureSealed(CString& pPacket)
+{
+	const auto pending = std::move(*m_secureLogin);
+	m_secureLogin.reset();
+
+	const auto tail = pending.opener.open(pPacket.toStringView());
+	if (!tail)
+	{
+		// Either an attack or a broken client: close with no answer.
+		log::printLine(log::server, "New login from {}: SEI00001 sealed login did not open, closing.", whoAmI());
+		return HandlePacketResult::Failed;
+	}
+
+	// The classic login line, as the inner build would have sent it.
+	CString classic;
+	classic << pending.prefix << pending.inner;
+	classic.write(tail->data(), static_cast<int>(tail->size()));
+	classic.setRead(0);
+	const auto type = (1 << classic.readGChar());
+	if ((type & PLTYPE_ANYCLIENT) == 0)
+		return HandlePacketResult::Failed;
+	return createPlayer(classic, type, true);
+}
+
+HandlePacketResult PlayerLogin::refuseSecure(const std::string_view message)
+{
+	// What a refused classic login gets: PLO_DISCMESSAGE in a plain zlib frame, then close.
+	sendPacket(CString() >> (char)PLO_DISCMESSAGE << message);
+	return HandlePacketResult::Failed;
+}
+
+HandlePacketResult PlayerLogin::createPlayer(CString& pPacket, const int type, const bool secure)
+{
 	// Create our appropriate player.
 	std::shared_ptr<Player> player = nullptr;
 	if (type & PLTYPE_ANYCLIENT)
@@ -84,6 +188,7 @@ HandlePacketResult PlayerLogin::msgLoginPacket(CString& pPacket)
 
 	// Fix the type.
 	player->setType(type);
+	player->setSecureLogin(secure);
 
 	// Update the new player's current packet state to match ours.
 	player->PacketCount = 1;

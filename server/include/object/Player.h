@@ -181,6 +181,9 @@ public:
 	CString getGuild() const { return m_guild; }
 	int getVersion() const { return m_versionId; }
 	const std::string& getVersionStr() const { return m_version; }
+	// Seihai: the login came through SEI00001 (secure login); m_version is the inner token.
+	bool isSecureLogin() const { return m_secureLogin; }
+	void setSecureLogin(bool secure) { m_secureLogin = secure; }
 	const std::string& getServerName() const { return m_serverName; }
 	const std::string& getPlatform() const { return account.platform; }
 	[[a::inline]] std::string_view getLanguage() const;
@@ -500,6 +503,7 @@ protected:
 	uint8_t m_statusMsg = 0;
 	uint8_t m_additionalFlags = 0;
 	bool m_graal3dLinked = false;
+	bool m_secureLogin = false;
 	std::set<std::string> m_channelList;
 	clock::time_point m_lastData;
 	uint8_t m_encryptionKey = 0;
