@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-07: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-07, 2026-11-12: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -379,7 +379,9 @@ bool PlayerClient::handleLogin(CString& pPacket)
 			log::print(log::server, "[Web]");
 			break;
 	}
-	log::printLine(log::server, " [{} ({})]", m_version, getVersionString(m_version, m_type));
+	if (m_secureLogin)
+		log::printLine(log::server, " [SEI00001 (inner {}) ({})]", m_version, getVersionString(m_version, m_type));
+	else log::printLine(log::server, " [{} ({})]", m_version, getVersionString(m_version, m_type));
 
 	// Identity parsing.
 	if (!identity.isEmpty())
@@ -392,36 +394,21 @@ bool PlayerClient::handleLogin(CString& pPacket)
 
 	// Check if the specified client is allowed access.
 	{
-		auto& allowedVersions = m_server->getAllowedVersions();
-		bool allowed = false;
-		for (CString ver : allowedVersions)
-		{
-			if (ver.find(":") != -1)
-			{
-				CString ver1 = ver.readString(":").trim();
-				CString ver2 = ver.readString("").trim();
-				const int aVersion[2] = {getVersionID(ver1), getVersionID(ver2)};
-				if (m_versionId >= aVersion[0] && m_versionId <= aVersion[1])
-				{
-					allowed = true;
-					break;
-				}
-			}
-			else
-			{
-				if (const int aVersion = getVersionID(ver); m_versionId == aVersion)
-				{
-					allowed = true;
-					break;
-				}
-			}
-		}
+		const bool allowed = m_server->isClientVersionAllowed(m_versionId);
 		if (!allowed)
 		{
 			log::printLine(log::rc, "** [Disconnect] '{}': Client version not allowed. (Version: {} {})", account.name, m_version, getVersionString(m_version, m_type));
 			sendPacket(CString() >> (char)PLO_DISCMESSAGE << "Your client version is not allowed on this server.\rAllowed: " << m_server->getAllowedVersionString());
 			return false;
 		}
+	}
+
+	// Seihai: require_secure_login refuses classic logins, which carry the password in the clear.
+	if (!m_secureLogin && m_server->getSettings().get<bool>("require_secure_login").value_or(false))
+	{
+		log::printLine(log::rc, "** [Disconnect] '{}': Classic login refused (require_secure_login).", account.name);
+		sendPacket(CString() >> (char)PLO_DISCMESSAGE << "This server only takes Seihai's secure login.");
+		return false;
 	}
 
 	// Check for available slots on the server.
