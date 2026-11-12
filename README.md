@@ -67,16 +67,10 @@ IDEs such as Visual Studio and CLion have CMake support built-in and can be used
 
 ### macOS builds
 
-macOS is not built on GitHub runners for pushes and pull requests. It is built
-and tested on the lab's Sequoia VM on GwenTea2 (start it with `start-macos.sh`,
-then `ssh builder@` the VM) with the `macOS Release` preset:
-```
-cmake --preset "macOS Release" -B build -DTESTS=ON
-cmake --build build
-```
-Logs go to `~/Claude/sequoia-ci/seihai-gserver-v2.log` on that machine. The
-release workflow still builds macOS archives for a release draft (a `v*` tag or
-a manual run with a version), so a release keeps its macOS downloads.
+macOS is built and tested on the lab's Sequoia (macOS 15) VM with the same build
+and test commands the Linux job runs, using the `macOS Release` preset; GitHub CI
+covers Linux and Windows. The release workflow still builds macOS archives for a
+release draft (a `v*` tag or a manual run with a version), so a release keeps its macOS downloads.
 
 ## Quick Start Instructions
 
