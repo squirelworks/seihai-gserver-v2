@@ -1250,10 +1250,18 @@ bool PlayerClient::warp(const std::shared_ptr<Level>& level, const PixelPosition
 	// Tell the client their new level.
 	if (level->isGmap())
 	{
+		// If the player has not seen this gmap, force it to be sent FIRST.
+		// If we don't, the client will fail to warp.
+		if (!hasSeenFile(level->levelName))
+		{
+			sendFile(level->levelName, PacketQueue::NORMAL);
+			m_fileQueue.sendCompress();
+		}
+
 		// We have to do this manually since if we set it via setPropWith, it will cause a second level warp.
-		auto mapPosition = toMapPosition(position);
-		account.character.mapX = mapPosition.x();
-		account.character.mapY = mapPosition.y();
+		auto mapPosition = level->clampMapPosition(toMapPosition(position));
+		account.character.mapX = std::min(mapPosition.x(), static_cast<uint8_t>(level->getMap()->size.width() - 1));
+		account.character.mapY = std::min(mapPosition.y(), static_cast<uint8_t>(level->getMap()->size.height() - 1));
 		this->modTime[PROPID(PlayerProp::GMAPLEVELX)] = m_server->getFrameStartTime();
 		this->modTime[PROPID(PlayerProp::GMAPLEVELY)] = m_server->getFrameStartTime();
 		sendPacket(CString() >> (char)PLO_PLAYERWARP2 << getProp<PlayerProp::X>().serialize() << getProp<PlayerProp::Y>().serialize() << getProp<PlayerProp::Z>().serialize() >> (char)mapPosition.x() >> (char)mapPosition.y() << level->levelName);
@@ -1289,8 +1297,16 @@ bool PlayerClient::enterLevel(const std::shared_ptr<Level>& level, const std::op
 		account.level = level->levelName;
 	}
 
-	// Send the level now.
+	// Get the sub level.
 	const auto subLevel = level->getSubLevelAtPosition(getMapPosition());
+	if (subLevel == nullptr)
+	{
+		leaveLevel();
+		sendPacket(CString() >> (char)PLO_WARPFAILED << level->levelName);
+		return false;
+	}
+
+	// Send the level now.
 	bool succeed = sendStaticLevelData(subLevel->staticData.lock(), subLevel, clientCachedTime);
 	succeed = succeed && sendDynamicLevelData(level, clientCachedTime);
 
@@ -1481,7 +1497,16 @@ bool PlayerClient::sendStaticLevelData(const std::shared_ptr<StaticLevelData>& s
 		// This is important because the client will get stuck on "Loading" until it gets board data,
 		// so we need to know if we should send a blank board packet later.
 		sentBoard = true;
+	}
 
+	// The client will get stuck on "Loading" until it gets board data.
+	// So, if we did not send any data, send an empty packet so the client knows it can move on.
+	if (!sentBoard)
+		sendPacket(CString() >> (char)PLO_LEVELBOARD);
+
+	// If we sent board data, send other static things now.
+	if (sentBoard)
+	{
 		// Send links (if applicable).
 		// We need to always send map links for bigmaps due to overflow issues that easily occur while waiting for the warp.
 		// (The client may start to go beyond the edge of the level and cause an integer overflow in their position).
@@ -1496,11 +1521,6 @@ bool PlayerClient::sendStaticLevelData(const std::shared_ptr<StaticLevelData>& s
 	// Send chests.
 	// Always send chests since RC could have modified them.
 	staticLevelData->sendChestsToPlayer(self);
-
-	// The client will get stuck on "Loading" until it gets board data.
-	// So, if we did not send any data, send an empty packet so the client knows it can move on.
-	if (!sentBoard)
-		sendPacket(CString() >> (char)PLO_LEVELBOARD);
 
 	// Send the level mod time so the client can cache it.
 	sendPacket(CString() >> (char)PLO_LEVELMODTIME >> (long long)levelModTime);
