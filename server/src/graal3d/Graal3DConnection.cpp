@@ -274,6 +274,16 @@ namespace graal3d
 		return index;
 	}
 
+	void Connection::resendGhost(ObjectKey key)
+	{
+		auto it = m_ghosts.find(key);
+		if (it == m_ghosts.end() || it->second.kill)
+			return;
+		// Not created yet: its create carries the whole update anyway.
+		if (it->second.created)
+			it->second.pending |= it->second.object.fullMask();
+	}
+
 	void Connection::setGhost(ObjectKey key, const GhostObject& object)
 	{
 		if (!m_profile.gameObjectPackets)

@@ -92,6 +92,8 @@ namespace graal3d
 		// game packets are not implemented.
 		void setGhost(ObjectKey key, const GhostObject& object);
 		void removeGhost(ObjectKey key);
+		// Sends the object's whole update again (once the client has it).
+		void resendGhost(ObjectKey key);
 		// Gives the client this object as its control object, once its ghost is in.
 		void setControlObject(ObjectKey key);
 		// Gives the client this Camera ghost as its camera, once its ghost is in.

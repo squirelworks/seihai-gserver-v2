@@ -23,6 +23,7 @@
 
 #include <Server.h>
 #include <object/Player.h>
+#include <npcserver/NPCServer.h>
 #include <object/Weapon.h>
 #include <player/PlayerClient.h>
 #include <scripting/ScriptContainers.h>
@@ -292,7 +293,24 @@ namespace graal3d
 				}
 			}
 			else if (state == MissionState::Done)
+			{
 				log::printLine(log::server, "Graal3D: {} finished the mission start.", account);
+				// The client loads a Sky's material list only when it unpacks the Sky,
+				// and the list arrives over TCP after the first unpack: send it again.
+				if (auto it = m_byPlayer.find(playerId); it != m_byPlayer.end())
+				{
+					if (auto s = m_sessions.find(it->second); s != m_sessions.end())
+					{
+						ObjectKey key = 1;
+						for (const auto& object : m_world.objects)
+						{
+							if (object.kind == GhostObject::Kind::Sky)
+								s->second.connection->resendGhost(key);
+							++key;
+						}
+					}
+				}
+			}
 		};
 
 		cb.onClientState = [this, playerId](const ClientState& state) { handleClientState(playerId, state); };
@@ -488,6 +506,27 @@ namespace graal3d
 			connection.sendText(TextMessage{"", "events", "", lines});
 	}
 
+	std::string Service::compileClientScript(const std::string& name, std::string_view source)
+	{
+		const auto npcServer = m_server.getNPCServer();
+		if (npcServer == nullptr)
+			return {};
+
+		// The file holds clientside code; drop a //#CLIENTSIDE line if it has one.
+		if (const auto mark = source.find("//#CLIENTSIDE"); mark != std::string_view::npos)
+		{
+			const auto eol = source.find('\n', mark);
+			source = eol == std::string_view::npos ? std::string_view{} : source.substr(eol + 1);
+		}
+		const auto compiled = npcServer->scripting.getCompiledClientScript(name, source);
+		if (compiled == nullptr || compiled->script == nullptr || !compiled->script->has_value())
+			return {};
+		const auto* bytecode = std::any_cast<ScriptByteCode>(compiled->script.get());
+		if (bytecode == nullptr)
+			return {};
+		return std::string(reinterpret_cast<const char*>(bytecode->data()), bytecode->size());
+	}
+
 	void Service::sendWorldWeapons(Connection& connection)
 	{
 		for (const auto& weapon : m_world.weapons)
@@ -498,6 +537,15 @@ namespace graal3d
 				CString text;
 				if (text.load(CString() << weapon.file.c_str()))
 					script.assign(text.text(), static_cast<size_t>(text.length()));
+				// The 5.12 client runs only compiled GS2 here (lab: source text was
+				// taken but never ran), so compile it when the NPC-server can.
+				if (!script.empty())
+				{
+					if (auto bytecode = compileClientScript(weapon.name, script); !bytecode.empty())
+						script = std::move(bytecode);
+					else
+						log::printLine(log::server, "** [Warning] Graal3D: weapon3d {}: not compiled (needs serverside = true, or a compile error); sending the source", weapon.name);
+				}
 			}
 			else if (const auto w = m_server.getWeapon(weapon.name); w != nullptr)
 			{

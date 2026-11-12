@@ -108,6 +108,7 @@ namespace graal3d
 		static ObjectKey cameraKey(PlayerID player) { return 0x20000u + player; }
 		void sendInitialFlags(PlayerID player, Connection& connection);
 		void sendWorldWeapons(Connection& connection);
+		std::string compileClientScript(const std::string& name, std::string_view source);
 		void sendTo(const Endpoint& to, std::string_view data);
 		void closeSession(const Endpoint& endpoint, std::string_view reason, bool notifyClient);
 		Digest digestFor(const Endpoint& from, uint32_t sequence) const;

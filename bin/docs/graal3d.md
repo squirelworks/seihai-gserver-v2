@@ -72,17 +72,23 @@ weapon3d -System
 `weapon3d` sends a script over the 3D text channel (`addweapon`, then
 `weaponscript`) when the mission starts: the text of the named file, or, without
 a file, the server weapon of that name (its client bytecode, or its clientside
-source when it has none). The 5.x client does not move its player by itself: in
-3D mode its key bindings call `moveForward2`, `moveBackward2`, `moveLeft2`,
-`moveRight2` and `jump`, which only such a script defines. Whether the client
-takes source text, bytecode or both this way has not been checked yet.
+source when it has none). A file is compiled to GS2 bytecode when the NPC-server
+is on (`serverside = true`): in the lab the 5.12 client took source text this way
+but never ran it. The 5.x client does not move its player by itself: in 3D mode
+its key bindings call `moveForward2`, `moveBackward2`, `moveLeft2`, `moveRight2`
+and `jump`, which only such a script defines.
 
 The `Sky` layout is read from the 5.12 client (`Sky::packUpdate`). The client's
 GS2 property names for Sky include `useskytextures`, `renderbottomtexture`,
 `norenderbans` and `skysolidcolor`, but the read does not tie the three bools and
 the colour in the update to those names, so `skyoptions` sets them by position.
-The material list probably names six sky-box textures (front, right, back, left,
-top, bottom), as in stock Torque.
+The material list is plain text, one texture name per line, no header: entries 1
+to 6 are the sky box. The 5.12 client asks the gserver for it without its
+extension (`sky.dml` is requested as `sky`), so put a copy under that name too,
+and loads it only when it unpacks the Sky. The server therefore sends the Sky
+whole again once the mission start is done, when the list has arrived. In the lab
+the client never asked for the textures themselves; how it finds them is still
+open.
 
 With a `camera` line each client also gets its own `Camera` ghost
 (`G3DCamera_<account>`), and the server names it as the client's camera

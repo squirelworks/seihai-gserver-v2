@@ -994,3 +994,37 @@ SCENARIO("A Sky follows the 5.12 Sky::packUpdate layout")
 		REQUIRE(objectClassId(*profileForProtocol(21), "Sky"));
 	}
 }
+
+SCENARIO("A ghost can be sent whole again")
+{
+	Harness h;
+	GhostObject sky;
+	sky.kind = GhostObject::Kind::Sky;
+	sky.sky.materialList = "sky.dml";
+	h.conn.setGhost(1, sky);
+	h.conn.resendGhost(1); // not created yet: nothing extra
+	h.conn.receive(kFirstData, h.now);
+	h.tick(60);
+	REQUIRE(readServerPacket(h.sent.back()).ghosts.size() == 1);
+
+	h.sent.clear();
+	h.conn.receive(clientDataPacket(h.profile, 2, 1, 1, {}, 0), h.now);
+	h.tick(60);
+	h.tick(1000);
+	for (const auto& data : h.sent)
+		REQUIRE(readServerPacket(data).ghosts.empty());
+
+	WHEN("it is resent once the client has it")
+	{
+		h.sent.clear();
+		h.conn.resendGhost(1);
+		h.tick(1000);
+		THEN("the next packet carries its whole update")
+		{
+			const auto pkt = readServerPacket(h.sent.back());
+			REQUIRE(pkt.ghosts.size() == 1);
+			PayloadReader p(pkt.ghosts[0].payload);
+			REQUIRE(readSkyUpdate(p.r) == sky.sky);
+		}
+	}
+}
