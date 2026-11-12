@@ -532,7 +532,7 @@ bool FlatFileAccountLoader::loadAccount(const std::string_view accountName, Acco
 	{
 		account.loadOnly = true;
 		// Seihai: the number came from rand() * rand(), which overflows int, so guests got names such as
-		// "pc:-4187584" (GwenTea2 lab 2026-11-12, a 6.03r7 guest), and the free-name check looked up only the
+		// "pc:-4187584" (lab run 2026-11-12, a 6.03r7 guest), and the free-name check looked up only the
 		// first six characters, not the name it then gave. Draw 0 to 9999998 and check the name that is used.
 		static std::mt19937 guestNumbers{std::random_device{}()};
 		std::uniform_int_distribution<uint32_t> number(0, 9999998);
