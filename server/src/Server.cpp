@@ -2036,6 +2036,9 @@ void Server::hitPlayer(const PlayerID playerId, const int8_t power, const float 
 	{
 		const auto newHalfHearts = std::clamp(static_cast<int>(player->account.character.hitpointsInHalves) - power, 0, static_cast<int>(player->account.maxHitpoints) * 2);
 		player->sendPropsFromResults(player->setPropWith<PlayerProp::HALFHEARTS>(props::SetBy::SERVER, static_cast<uint8_t>(newHalfHearts)));
+		// Seihai: the hearts went out just now, so keep the NPC server's end-of-frame flush from sending them again
+		// (GwenTea2 lab 2026-11-12: one hurt 1; gave two PLO_PLAYERPROPS prop 2 on a 2.31).
+		player->markPropSent(PlayerProp::HALFHEARTS);
 		return;
 	}
 

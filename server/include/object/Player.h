@@ -219,6 +219,9 @@ public:
 	/// @brief Checks if the property was modified since the last call to recordCurrentPropModTime.
 	[[nodiscard]] [[a::inline]] bool wasPropModified(PlayerProp prop) const noexcept;
 
+	/// @brief Marks a property as already sent, so the NPC server's end-of-frame flush of modified props skips it.
+	[[a::inline]] void markPropSent(PlayerProp prop) noexcept;
+
 	/// @brief Constructs a PropertyContainer for PlayerProp P with the given values.
 	/// @tparam P The PlayerProp that determines the type of container to construct.
 	/// @param values The values to pass to the container's constructor.
@@ -696,6 +699,11 @@ inline void Player::recordCurrentPropModTime()
 inline bool Player::wasPropModified(const PlayerProp prop) const noexcept
 {
 	return m_savedModTime[ENUM(prop)] != modTime[ENUM(prop)];
+}
+
+inline void Player::markPropSent(const PlayerProp prop) noexcept
+{
+	m_savedModTime[ENUM(prop)] = modTime[ENUM(prop)];
 }
 
 //----------------------------
