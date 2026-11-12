@@ -946,3 +946,85 @@ SCENARIO("A Camera ghost becomes the client's camera once it is in")
 		REQUIRE((*world.cameraOffset)[1] == -3.0f);
 	}
 }
+
+SCENARIO("A Sky follows the 5.12 Sky::packUpdate layout")
+{
+	GIVEN("a world file with a sky and its options")
+	{
+		const auto world = parseWorld("sky a,b,c,d,e,f 800 0.1 0.2 0.3\nskyoptions 0 1 0 0.5 0.5 1\nskyoptions 1 1 1 0 0 0 0\n");
+		REQUIRE(world.errors.size() == 1); // the second skyoptions line has a word too many
+		REQUIRE(world.objects.size() == 1);
+		const auto& sky = world.objects[0];
+		REQUIRE(sky.kind == GhostObject::Kind::Sky);
+		REQUIRE(sky.className() == "Sky");
+		REQUIRE(sky.sky.materialList == "a,b,c,d,e,f");
+		REQUIRE(sky.sky.visibleDistance == 800.0f);
+		REQUIRE(sky.sky.fogColor[2] == 0.3f);
+		REQUIRE(sky.sky.bools == std::array<uint8_t, 3>{0, 1, 0});
+		REQUIRE(sky.sky.solidColor[2] == 1.0f);
+
+		THEN("its update reads back field for field, to the last bit")
+		{
+			BitWriter w;
+			w.setPacketStrings(true);
+			sky.writeUpdate(w, sky.fullMask());
+
+			std::string buffer;
+			const auto data = w.toString();
+			BitReader r(data);
+			r.setStringBuffer(&buffer);
+			REQUIRE(readSkyUpdate(r) == sky.sky);
+			REQUIRE(r.bitPosition() == w.bitPosition());
+		}
+	}
+
+	THEN("weapon3d lines name a file or a server weapon")
+	{
+		const auto world = parseWorld("weapon3d -move3d config/move3d.gs2\nweapon3d -System\nweapon3d\n");
+		REQUIRE(world.errors.size() == 1);
+		REQUIRE(world.weapons.size() == 2);
+		REQUIRE(world.weapons[0].name == "-move3d");
+		REQUIRE(world.weapons[0].file == "config/move3d.gs2");
+		REQUIRE(world.weapons[1].file.empty());
+	}
+
+	THEN("protocol 21 and 24 both have a Sky class")
+	{
+		REQUIRE(objectClassId(*profileForProtocol(24), "Sky"));
+		REQUIRE(objectClassId(*profileForProtocol(21), "Sky"));
+	}
+}
+
+SCENARIO("A ghost can be sent whole again")
+{
+	Harness h;
+	GhostObject sky;
+	sky.kind = GhostObject::Kind::Sky;
+	sky.sky.materialList = "sky.dml";
+	h.conn.setGhost(1, sky);
+	h.conn.resendGhost(1); // not created yet: nothing extra
+	h.conn.receive(kFirstData, h.now);
+	h.tick(60);
+	REQUIRE(readServerPacket(h.sent.back()).ghosts.size() == 1);
+
+	h.sent.clear();
+	h.conn.receive(clientDataPacket(h.profile, 2, 1, 1, {}, 0), h.now);
+	h.tick(60);
+	h.tick(1000);
+	for (const auto& data : h.sent)
+		REQUIRE(readServerPacket(data).ghosts.empty());
+
+	WHEN("it is resent once the client has it")
+	{
+		h.sent.clear();
+		h.conn.resendGhost(1);
+		h.tick(1000);
+		THEN("the next packet carries its whole update")
+		{
+			const auto pkt = readServerPacket(h.sent.back());
+			REQUIRE(pkt.ghosts.size() == 1);
+			PayloadReader p(pkt.ghosts[0].payload);
+			REQUIRE(readSkyUpdate(p.r) == sky.sky);
+		}
+	}
+}

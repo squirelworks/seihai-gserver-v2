@@ -307,6 +307,10 @@ graal3d = false
 # graal3dstringprefix = true
 # The world the 3D clients are sent: config/graal3dworld.txt (see docs/graal3d.md).
 
+# Seihai: send PLO_PING (108) every N seconds to the 4.20r8 and 6.x clients, which answer
+# with PLI_PONG (162); the round trip goes to the server log. 0 = off. Other builds are never sent it.
+clientping = 0
+
 # Seihai secure login (SEI00001): the Seihai client can send the account and password
 # sealed (X25519, Ed25519, ChaCha20-Poly1305) instead of in the clear. Real Graal clients
 # cannot; their logins work as before. See docs/secure-login.md.

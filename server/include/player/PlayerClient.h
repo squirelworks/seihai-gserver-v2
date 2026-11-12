@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-12: see CHANGES-SEIHAI.md.
 #ifndef PLAYERCLIENT_H
 #define PLAYERCLIENT_H
 
@@ -206,6 +206,23 @@ public:
 	HandlePacketResult msgPLI_UPDATESCRIPT(CString& pPacket);
 	HandlePacketResult msgPLI_VERIFYWANTSEND(CString& pPacket);
 	HandlePacketResult msgPLI_UPDATEPACKAGEREQUESTFILE(CString& pPacket);
+	HandlePacketResult msgPLI_PONG(CString& pPacket);
+
+public:
+	// Seihai: PLO_PING (108) / PLI_PONG (162). Graal_analysis protocol/unknown-ids-2026-11-06.md:
+	// 4.20r6, 4.20r8, 6.01r1 and 6.03r7 answer {108}{c 0}{s value} with {162}{'!'}{s min(value, 0x6FFF)};
+	// 5.00r7 to 5.31r4 and pre-4.20 clients do not handle 108, so they are never sent one.
+	// Sub 0 only: the effect of sub 1 is unknown.
+	static bool handlesPing(int versionId) noexcept;
+	static CString pingPacket(uint16_t value);
+	// The echoed value of a game client's 162, or nullopt for an empty (RC-style) or odd body.
+	static std::optional<uint16_t> readPong(CString& packet);
+	static constexpr uint16_t MAX_PING_VALUE = 0x3FFF;	// Two GChars; below the client's 0x6FFF cap.
+
+protected:
+	uint16_t m_pingValue = 0;
+	std::optional<clock::time_point> m_pingSentAt;
+	clock::time_point m_lastPingSent;
 
 protected:
 	bool dropItem(const PixelPosition& position, LevelItemType item);
