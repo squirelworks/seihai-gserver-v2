@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -2087,7 +2088,9 @@ void NPC::testForLinks(SetResults& result)
 		// If they did, alter their map location.
 		if (computedMapChangeX != 0 || computedMapChangeY != 0)
 		{
-			auto clamped = levelPtr->clampMapPosition({character.mapX + computedMapChangeX, character.mapY + computedMapChangeY});
+			// Seihai: brace-init from int is a narrowing error on MSVC. Below 0 becomes 0, not 255.
+			const auto toMapCoord = [](const int value) { return static_cast<uint8_t>(std::clamp(value, 0, 255)); };
+			auto clamped = levelPtr->clampMapPosition({toMapCoord(character.mapX + computedMapChangeX), toMapCoord(character.mapY + computedMapChangeY)});
 			character.mapX = clamped.x();
 			character.mapY = clamped.y();
 			result.resultPropIds.push_back(PROPID(NPCProp::GMAPLEVELX));

@@ -258,9 +258,9 @@ CString ShootPacketWrapper::constructShootV1() const
 
 CString ShootPacketWrapper::constructShootV2() const
 {
-	const PropertyPixelCoordinate x{position.x()};
-	const PropertyPixelCoordinate y{position.y()};
-	const PropertyPixelCoordinate z{position.z()};
+	const PropertyPixelCoordinate x{static_cast<int16_t>(position.x())};
+	const PropertyPixelCoordinate y{static_cast<int16_t>(position.y())};
+	const PropertyPixelCoordinate z{static_cast<int16_t>(position.z())};
 	const PropertyPixelCoordinate pgravity{static_cast<int16_t>(gravityInTiles * 256)};
 
 	CString packet;
