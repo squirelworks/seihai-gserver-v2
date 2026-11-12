@@ -1,4 +1,4 @@
-# Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-11: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
 # Seihai lab: the modern server folder, for 4.04r2 to 6.037 and resource packages.
 # Sets the location where new players start on the server.
 # By default, the server uses the values inside the defaultaccount.
@@ -308,10 +308,15 @@ graal3d = false
 # The world the 3D clients are sent: config/graal3dworld.txt (see docs/graal3d.md).
 
 # Sets the server into localhost mode: all logins are allowed with no listserver verification.
-# The server still registers with the list server when one is running.
+# In localhost mode the server does not dial the list server (localhostlist below changes that).
 # Seihai lab default: true, so the lab world runs without a listserver.  Only safe while
 # serverinterface is 127.0.0.1.  Set it to false before you open the server to other machines.
 localhost = true
+
+# Seihai: in localhost mode, still register with the list server at listip/listport, for example
+# so 2.22 and 2.31 can pick this world from a lab listserver's list.  Without one running, the
+# server retries with a growing wait and logs each failed try.
+localhostlist = false
 
 # Specifies the location of the list server.
 # DON`T CHANGE IF YOU DON`T KNOW WHAT YOU ARE DOING.

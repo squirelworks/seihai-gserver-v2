@@ -1,4 +1,5 @@
 lexer grammar GS1Lexer;
+// Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
 
 @lexer::header
 {
@@ -781,7 +782,7 @@ ANCIENTFUNCTION
     ;
 
 MC_ESCAPE       : '##'          { setText("#"); }         -> type(IDENTIFIER);
-MC_NOINDEX      : '#' ([angcmWw1235678NDLFfpbES] | 'C' [01234567] | 'P1' DIGITS? | 'P2' DIGITS? | 'P3' '0'? | 'P' [456789]) { _input->LA(1) != '(' }? -> type(MESSAGECODE);
+MC_NOINDEX      : '#' ([angcmWw1235678NDLFfpbESG] | 'C' [01234567] | 'P1' DIGITS? | 'P2' DIGITS? | 'P3' '0'? | 'P' [456789]) { _input->LA(1) != '(' }? -> type(MESSAGECODE);
 MC_SIMPLE       : '#' ([angcmWw1235678NDptKkG]   | 'C' [01234567] | 'P1' DIGITS? | 'P2' DIGITS? | 'P3' '0'? | 'P' [456789]) { pushFunction("(R)"); }   -> type(MESSAGECODE);
 MC_COMPUTED_S   : '#s'          { pushFunction("(V)"); }   -> type(MESSAGECODE);     // (S)
 MC_COMPUTED_V   : '#v'          { pushFunction("(R)"); }   -> type(MESSAGECODE);     // (R)

@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -189,6 +190,12 @@ bool ServerList::doTimedEvents(const precise_clock::time_point time)
 		const CString ip(settings.get<std::string>("serverip").value_or("AUTO"s));
 		sendPacket(CString() >> (char)SVO_SETIP >> (char)ip.length() << ip, true);
 	}
+
+	// Seihai: localhost mode does not use the listserver, so it does not dial it either (before this it tried every
+	// few seconds and logged an error each time). localhostlist = true keeps the old behaviour, for a world that
+	// runs in localhost mode but should still be listed by a lab listserver.
+	if (!isConnected && m_server->cached.localhostMode.getValue() && !m_server->getSettings().get<bool>("localhostlist").value_or(false))
+		return true;
 
 	// Reconnect to the listserver, with connection backoff to prevent a flood of connections
 	if (!isConnected)

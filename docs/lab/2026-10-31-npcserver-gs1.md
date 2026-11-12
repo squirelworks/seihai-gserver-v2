@@ -200,3 +200,74 @@ what the client sees.
    clients under Wine; record before and after per fix.
 8. Turn the probe's steps into CI: start `gs2emu --server npcdemo` in the
    Linux job and fail on missing replies or on new `npclog.txt` lines.
+
+## Re-run, 2026-11-12 (issue #33)
+
+Same sweep on the current pin, before and after the #33 fixes, so each line of
+the lists above has a current status. Cloud loopback, no real client.
+
+- Server: this fork at `06fb887` (upstream beta4 `25396a1` merged), Linux
+  release build (GCC 14, system antlr 4.10 runtime). "Before" is that commit,
+  "after" is the #33 branch. Both ran side by side on two ports.
+- Client: `seihai-suite-stress probe` (the old `npcprobe`, now in
+  seihai-servertools, seihai-core `v0.0.6`) as 2.31.
+- Worlds: `npcdemo`, and for the sweep two lab-only copies of it with the 690
+  `.graal` levels from `15thgraal` (not in the repo). The copies set
+  `serversidescriptlevels = *`, so the 1.x scripts run on the NPC-server as in
+  the first sweep. With the default `levelnpcscripts = clientside` (since
+  `2026-10-31-classic-npc-scripts.md`) these scripts go to the client and none
+  of the sweep's server errors can happen.
+- Sweep steps: generated with `tools/lab/graalnpcs.py`: warp into each of the
+  449 levels with NPC scripts, wait 2 s, walk onto every NPC with
+  `playertouchsme`. One pass each, no crash. The "after" binary was built
+  before the bare `shootball` aim change (it shot the way the NPC faces); the
+  sweep counts errors only, so that does not change its numbers.
+
+### Sweep results
+
+| Result | 2026-10-31 | Before (`06fb887`) | After (#33) |
+|---|---|---|---|
+| Levels entered | 449 | 449 | 449 |
+| Server crashes | 1 (bug 1) | 0 | 0 |
+| `invalid arguments: shootball dir` | 2,292 lines, 14 levels | 11,205 lines, 12 levels | 0 |
+| `Clientside only command: 'play'` | 81 lines | 80 lines | 80 lines |
+| `Clientside only command: 'noplayerkilling'` | 5 | 4 | 4 |
+| `Clientside only command: 'stopmidi'` | 2 | 2 | 2 |
+| GS1 parse failures | 12 scripts, 11 levels | 12 scripts, 11 levels | same |
+| GS1 lexer failures | 129 scripts, 20 levels | 129 scripts, 20 levels | same |
+
+The shootball count is higher than on 10-31 only because this run stays
+longer in the turret levels (the timeouts keep firing); the levels are the
+same set (`DW19`, `kcastle4`, `kcastle4b`, `kcastle4c`, `lizardden2`, `7`,
+`8`, `14`, `16`, `20`, `zsachurin6b`, `zsachurin6d`). The parse failures are
+the same 11 levels as listed above.
+
+### npcdemo
+
+As 2.31, with the `npcdemo` steps from seihai-servertools
+(`docs/lab/probe/npcdemo-steps.txt`) plus 20 s of waiting: every NPC answers
+as in the 10-31 table, and the blinker now alternates `visible` / hidden every
+2 s (`NPC V` props `-1`, `-0`, `-1`, ...) instead of hiding once. No
+`npclog.txt` lines, and no listserver errors with `localhost = true`.
+
+### Status of the lists above
+
+| Item | Status 2026-11-12 |
+|---|---|
+| Bug 1, level-unload crash | Gone (fixed 10-31); no crash in either sweep. |
+| Bug 2, `#a` empty | Gone (upstream's fix, merged in #30). `#g` and `#G` had the same fault and are fixed in #33. |
+| Bug 3, `#n` in `setcharprop` | Unchanged. Owner decision: needs what the original did. |
+| Bug 4, `visible` | Fixed in #33 (tests the `VISIBLE` bit). Catch test and the blinker above. |
+| Bug 5, `message X=` | Does not reproduce: the lab's lines, braced and braceless, inside the full micro-test script, all set the NPC chat (`Catch_tests/NPCServerGS1`). Not re-run through the probe's chat path. |
+| Bug 6, `hurt 1;` on 2.31 | Fixed in #33 from the hit rules in Graal_analysis manual 4.3.6 (2.22 lab): 1.x to 2.x refuse a hurt from attacker 0 and any hurt carrying an NPC id. For 1.x to 2.31 the server now sets the hearts by player prop (no knockback). The probe does not apply hits, so this needs a real 2.x client. |
+| Gap 1, NPC sizes from images | Unchanged. Design choice for the owner. |
+| Gap 2, classic script model | Done 10-31 (client-side by default). |
+| Gap 3, bare `shootball;` | Fixed in #33: 11,205 errors before, 0 after. It aims at the event's player along the dominant axis. |
+| Gap 4, client-side-only commands | Unchanged when scripts are forced server-side (counts above); not an error with the default client-side model. |
+| Gap 5, older syntax | Unchanged: same 12 parse and 129 lex failures. Compare with Seihai's GR-V1.0x loader before changing the grammar. |
+| Gap 6, `saveinfo`, `showstats`, `findnearestplayers` | Unchanged; not hit by the sweep. |
+| Gap 7, `localhost = true` dials the listserver | Fixed in #33; `localhostlist = true` brings it back for a lab listserver. |
+
+Still to do with real clients (lab machines): 2.05, 2.17, 2.22 and 2.31
+under Wine on `npcdemo`, a turret level with a bare `shootball`, and a level
+NPC `hurt` on 2.31.

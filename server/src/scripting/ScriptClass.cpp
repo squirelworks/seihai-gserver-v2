@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
 #include <chrono>
 #include <cstdint>
 #include <string>
@@ -38,8 +39,14 @@ ScriptClass& ScriptClass::setScript(std::string_view classScript)
 	m_desKey = key.toString();
 
 	// CRC32 checksum.
+	// Seihai: over the bytecode the class packet carries, which is what the client caches and checksums when it asks
+	// for the class again (PLI_UPDATECLASS), as for weapons and ganis. Over the source the checksum never matched, so
+	// every request sent the class again. The source is used only when there is no bytecode.
 	m_checksum = crc32(0L, Z_NULL, 0);
-	m_checksum = crc32(m_checksum, reinterpret_cast<const uint8_t*>(classScript.data()), classScript.length());
+	if (const auto& bytecode = m_script.getClientByteCode(); !bytecode.empty())
+		m_checksum = crc32(m_checksum, reinterpret_cast<const uint8_t*>(bytecode.data()), static_cast<uInt>(bytecode.size()));
+	else
+		m_checksum = crc32(m_checksum, reinterpret_cast<const uint8_t*>(classScript.data()), static_cast<uInt>(classScript.length()));
 
 	// Create the header.
 	// [GBYTE2 length_header_and_bytecode]
