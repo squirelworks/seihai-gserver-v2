@@ -54,7 +54,17 @@ sun 0.57 0.57 -0.57  0.8 0.8 0.8 1  0.3 0.3 0.35 1
 # the shape of every player's own object, and where it starts
 playershape player.dts
 spawn 0 0 1
+
+# optional: give each client a Camera, this far from the spawn point
+camera 0 -3 2
 ```
+
+With a `camera` line each client also gets its own `Camera` ghost
+(`G3DCamera_<account>`), and the server names it as the client's camera
+(`ServerConnection.camera` in the client's scripts) once the client has it. The
+server sets no camera mode and no followed object: the client's scripts set
+`cameramode`, `position` and `eulerrotation` themselves. Without the line no camera
+is sent, which login steps 5 and 6 do not need.
 
 A shape is a file name the client loads: `.dts`, `.dif`, `.3ds` or `.ft`. A client
 asks the gserver over TCP for any file it does not have, and stays at login step 5
@@ -81,7 +91,8 @@ too. The server never sends a player's position back to that player.
 | Ghosting (4.20r6, 5.x) | done. Objects are created, updated (only what changed) and deleted in the ghost section of each packet, and what a lost packet carried is sent again. `GameObject` (name, shape, skin, position and rotation, velocity, chat, `attr[1..8]`, nickname and colour, the solid/shadow/collision flags) and `Sun`. |
 | Control object (4.20r6, 5.x) | done. Once the client has its player object, the server makes it the control object, which is login step 5. Step 6 follows once the client's TCP file downloads are done. |
 | From the client: its own object | read in every packet: the position, and the client's changes to the object (moves, chat, shape). Other players see them. |
-| `Sky`, `TerrainBlock`, `Camera`, `movetype` | **not sent.** None is needed for login steps 5 and 6. Terrain and sky layouts are only partly known. |
+| Camera | with a `camera` line in the world file: one `Camera` per client, named as its camera in every packet once its ghost is in |
+| `Sky`, `TerrainBlock`, `movetype` | **not sent.** None is needed for login steps 5 and 6. Terrain and sky layouts are only partly known. |
 | 3.153 and 4.04r2 game packets | **not done.** They use Torque's older game packet (moves, datablocks). Those clients get the handshake and keep-alive only. |
 
 The server log shows each link: `Graal3D: <account> linked from <ip> (protocol 24, 5.x ...)`.

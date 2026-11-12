@@ -103,6 +103,7 @@ namespace graal3d
 		void ghostWorld(PlayerID player, const std::string& account, Connection& connection);
 		void forEachOtherConnection(PlayerID player, const std::function<void(Connection&)>& fn);
 		static ObjectKey avatarKey(PlayerID player) { return 0x10000u + player; }
+		static ObjectKey cameraKey(PlayerID player) { return 0x20000u + player; }
 		void sendInitialFlags(PlayerID player, Connection& connection);
 		void sendTo(const Endpoint& to, std::string_view data);
 		void closeSession(const Endpoint& endpoint, std::string_view reason, bool notifyClient);

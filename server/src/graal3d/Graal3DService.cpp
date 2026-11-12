@@ -381,6 +381,20 @@ namespace graal3d
 		for (const auto& [other, avatar] : m_avatars)
 			connection.setGhost(avatarKey(other), avatar);
 		connection.setControlObject(avatarKey(playerId));
+
+		// A Camera of its own, placed off the spawn point, when the world asks
+		// for one. The client's scripts move it (cameramode, position).
+		if (m_world.cameraOffset)
+		{
+			GhostObject camera;
+			camera.kind = GhostObject::Kind::Camera;
+			camera.object.name = "G3DCamera_" + account;
+			camera.object.transform = m_world.spawn;
+			for (size_t i = 0; i < 3; ++i)
+				camera.object.transform.position[i] += (*m_world.cameraOffset)[i];
+			connection.setGhost(cameraKey(playerId), camera);
+			connection.setCameraObject(cameraKey(playerId));
+		}
 		log::printLine(log::server, "Graal3D: {} gets {} world objects and {} players.", account, m_world.objects.size(), m_avatars.size());
 	}
 

@@ -94,6 +94,10 @@ namespace graal3d
 		void removeGhost(ObjectKey key);
 		// Gives the client this object as its control object, once its ghost is in.
 		void setControlObject(ObjectKey key);
+		// Gives the client this Camera ghost as its camera, once its ghost is in.
+		// The camera is named in every packet from then on (no name clears it).
+		void setCameraObject(ObjectKey key);
+		[[nodiscard]] bool cameraNamed() const { return m_cameraNamed; }
 
 		[[nodiscard]] std::optional<uint32_t> ghostIndex(ObjectKey key) const;
 		[[nodiscard]] bool ghostDelivered(ObjectKey key) const;
@@ -170,6 +174,7 @@ namespace graal3d
 		std::optional<InEvent> decodeEvent(uint32_t classId, const std::string& payload, size_t bits, std::string& stringBuffer);
 		void processEvent(const InEvent& event);
 		void writeControlSection(BitWriter& writer, Notify& note, uint64_t nowMs);
+		void writeCameraSection(BitWriter& writer);
 		void writeGhostSection(BitWriter& writer, Notify& note);
 		void ghostNotify(const Notify& note, bool delivered);
 		[[nodiscard]] bool ghostWorkPending() const;
@@ -223,6 +228,8 @@ namespace graal3d
 		std::optional<ObjectKey> m_controlKey;
 		bool m_controlInFlight = false;
 		bool m_controlDelivered = false;
+		std::optional<ObjectKey> m_cameraKey;
+		bool m_cameraNamed = false;
 
 		// The client's own control object, as its echoes describe it.
 		GameObjectState m_clientObject;

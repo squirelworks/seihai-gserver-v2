@@ -60,6 +60,8 @@ namespace
 		PacketHeader header;
 		bool control = false;
 		uint32_t controlIndex = 0;
+		bool camera = false;
+		uint32_t cameraIndex = 0;
 		uint32_t controlMask = 0;
 		std::vector<ClientEvent> events;
 		uint32_t ghostIdBits = 0;
@@ -102,7 +104,12 @@ namespace
 			std::string moveType;
 			out.controlMask = readGameObjectUpdate(r, state, moveType);
 		}
-		REQUIRE_FALSE(r.readFlag()); // camera
+		if (r.readFlag())
+		{
+			out.camera = true;
+			out.cameraIndex = r.readInt(12);
+			REQUIRE_FALSE(r.readFlag()); // no camera packet data
+		}
 		REQUIRE_FALSE(r.readFlag()); // fov
 		REQUIRE_FALSE(r.readFlag()); // no unguaranteed events
 		int32_t prev = -2;
@@ -839,5 +846,70 @@ SCENARIO("The world file")
 		REQUIRE(world.spawn.position[1] == 2.0f);
 		REQUIRE(world.errors.size() == 1);
 		REQUIRE(world.errors[0].starts_with("line 7"));
+	}
+}
+
+SCENARIO("A Camera ghost becomes the client's camera once it is in")
+{
+	Harness h;
+	const auto& profile = h.profile;
+
+	GhostObject camera;
+	camera.kind = GhostObject::Kind::Camera;
+	camera.object.name = "G3DCamera_guest";
+	camera.object.transform.position = {0.0f, -3.0f, 2.0f};
+	h.conn.setGhost(7, camera);
+	h.conn.setCameraObject(7);
+	h.conn.receive(kFirstData, h.now);
+	h.tick(60);
+
+	const auto first = readServerPacket(h.sent.back());
+	THEN("it is created as a Camera, and not named before the client has it")
+	{
+		REQUIRE_FALSE(first.camera);
+		REQUIRE(first.ghosts.size() == 1);
+		REQUIRE(first.ghosts[0].classId == *objectClassId(profile, "Camera"));
+		PayloadReader p(first.ghosts[0].payload);
+		GameObjectState got;
+		std::string moveType;
+		readGameObjectUpdate(p.r, got, moveType);
+		REQUIRE(got == camera.object);
+		REQUIRE_FALSE(p.r.readFlag()); // camera mode
+		REQUIRE_FALSE(p.r.readFlag()); // followed object
+		REQUIRE(p.r.bitPosition() == first.ghosts[0].bits);
+	}
+
+	WHEN("the create is acked")
+	{
+		h.conn.receive(clientDataPacket(profile, 2, 1, 1, {}, 0), h.now);
+		h.tick(60);
+		h.tick(1000);
+		THEN("every packet names it as the camera")
+		{
+			const auto pkt = readServerPacket(h.sent.back());
+			REQUIRE(pkt.camera);
+			REQUIRE(pkt.cameraIndex == *h.conn.ghostIndex(7));
+		}
+
+		AND_WHEN("it is removed")
+		{
+			h.conn.removeGhost(7);
+			h.tick(1000);
+			THEN("the packet with its delete no longer names it")
+			{
+				const auto pkt = readServerPacket(h.sent.back());
+				REQUIRE_FALSE(pkt.camera);
+				REQUIRE(pkt.ghosts.size() == 1);
+				REQUIRE(pkt.ghosts[0].deleted);
+			}
+		}
+	}
+
+	THEN("the world file's camera line sets the offset")
+	{
+		const auto world = parseWorld("camera 0 -3 2\n");
+		REQUIRE(world.errors.empty());
+		REQUIRE(world.cameraOffset);
+		REQUIRE((*world.cameraOffset)[1] == -3.0f);
 	}
 }

@@ -180,7 +180,7 @@ namespace graal3d
 		// camera, no field of view.
 		Notify note{m_lastSendSeq, {}, {}, false};
 		writeControlSection(w, note, nowMs);
-		w.writeFlag(false);
+		writeCameraSection(w);
 		w.writeFlag(false);
 
 		// Events: no unguaranteed ones, then the guaranteed-ordered queue.
@@ -304,6 +304,8 @@ namespace graal3d
 			m_controlInFlight = false;
 			m_controlDelivered = false;
 		}
+		if (m_cameraKey == key)
+			m_cameraKey.reset(); // stop naming it before its delete goes out
 
 		auto& g = it->second;
 		if (!g.created && !g.createInFlight && !g.killInFlight)
@@ -324,6 +326,32 @@ namespace graal3d
 		m_controlKey = key;
 		m_controlInFlight = false;
 		m_controlDelivered = false;
+	}
+
+	void Connection::setCameraObject(ObjectKey key)
+	{
+		m_cameraKey = key;
+	}
+
+	void Connection::writeCameraSection(BitWriter& w)
+	{
+		// The client looks the index up as a Camera and, if that fails, drops the
+		// rest of the packet. So name it only once its create has been acked.
+		m_cameraNamed = false;
+		if (m_cameraKey)
+		{
+			const auto it = m_ghosts.find(*m_cameraKey);
+			m_cameraNamed = it != m_ghosts.end() && it->second.created && !it->second.kill &&
+							it->second.object.kind == GhostObject::Kind::Camera;
+			if (m_cameraNamed)
+			{
+				w.writeFlag(true);
+				w.writeInt(it->second.index, 12);
+				w.writeFlag(false); // no camera packet data: its ghost carries the state
+				return;
+			}
+		}
+		w.writeFlag(false);
 	}
 
 	std::optional<uint32_t> Connection::ghostIndex(ObjectKey key) const
