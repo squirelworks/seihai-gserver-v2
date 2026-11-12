@@ -97,6 +97,20 @@ too. The server never sends a player's position back to that player.
 
 The server log shows each link: `Graal3D: <account> linked from <ip> (protocol 24, 5.x ...)`.
 
+## Which client each finding comes from
+
+The 3D clients are not one protocol. Each layout here was read from one build, and
+nothing says the others match.
+
+| Client | Protocol | What is known |
+| --- | --- | --- |
+| 3.153, 4.04r2 (the first Graal 3D) | 19 | Handshake and keep-alive only. It is stock TGE underneath: datablocks, moves and TGE object classes, with no `GameObject` and no mission phases. Its events were read from the 4.04r2 `Graal3DEngine.dll`. Nothing in the ghosting, control-object or camera work applies to it. |
+| 4.20r6 | 21 | Its class table (read from 4.20r6) has `GameObject`, `Camera` and `Sun`, so the server ghosts to it. The layouts of those classes were not read from 4.20r6: they are assumed to match 5.00r7. |
+| 5.00r7, 5.12 | 24 | The `GameObject`, `Camera`, `Sun`, control-object and ghost layouts were read from the 5.00r7 dll. The handshake was checked against a real 5.12 client. |
+
+The camera is off unless the world file has a `camera` line, so a client whose
+`Camera` layout differs is only affected when it is turned on.
+
 ## Not checked with a real client yet
 
 The handshake bytes are tested against the packets a real 5.12 client sent in a
