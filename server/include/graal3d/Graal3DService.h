@@ -61,6 +61,8 @@ namespace graal3d
 
 		// Opens the UDP port. `interfaceIp` empty means every interface.
 		bool start(std::string_view interfaceIp, uint16_t port);
+		// A client build with a Torque 3D side: 3.153 to 5.x.
+		static bool clientHasGraal3D(int version);
 
 		// The objects every client is sent. `packetStrings`: see TorqueBitStream.h
 		// (the option graal3dstringprefix). Call before start().
@@ -103,6 +105,7 @@ namespace graal3d
 		void ghostWorld(PlayerID player, const std::string& account, Connection& connection);
 		void forEachOtherConnection(PlayerID player, const std::function<void(Connection&)>& fn);
 		static ObjectKey avatarKey(PlayerID player) { return 0x10000u + player; }
+		static ObjectKey cameraKey(PlayerID player) { return 0x20000u + player; }
 		void sendInitialFlags(PlayerID player, Connection& connection);
 		void sendTo(const Endpoint& to, std::string_view data);
 		void closeSession(const Endpoint& endpoint, std::string_view reason, bool notifyClient);
