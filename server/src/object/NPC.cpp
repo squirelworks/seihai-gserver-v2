@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -361,9 +362,14 @@ void NPC::processMoveQueue(std::chrono::milliseconds deltaTime)
 	if (moveQueue.empty())
 		return;
 
-	const bool hadMoveQueue = !moveQueue.empty();
 	bool terminateQueue = false;
-	while (deltaTime != 0ms && !moveQueue.empty())
+	const bool hadMoveQueue = !moveQueue.empty();
+
+	const auto currentLevel = getLevel();
+	if (currentLevel == nullptr)
+		terminateQueue = true;
+
+	while (deltaTime != 0ms && !moveQueue.empty() && !terminateQueue)
 	{
 		NPCMove& move = moveQueue.front();
 
@@ -454,7 +460,7 @@ void NPC::processMoveQueue(std::chrono::milliseconds deltaTime)
 		if (!movementFinished)
 		{
 			// If the map position changed, set that now.
-			const auto& [mapX, mapY, _] = toMapPosition(potentialPosition);
+			const auto& [mapX, mapY, _] = currentLevel->clampMapPosition(toMapPosition(potentialPosition));
 			if (storageType == NPCStorageType::LEVEL && (mapX != character.mapX || mapY != character.mapY))
 				indexInLevelFile = std::nullopt;
 			if (mapX != character.mapX)
@@ -1461,8 +1467,12 @@ SetResults NPC::setProp(const NPCProp prop, const SetBy setBy, PropertyBase* bas
 			if (numProp == nullptr || numProp->value == character.mapX)
 				SETPROP_RETURN_IGNORE;
 
-			character.mapX = numProp->value;
-			indexInLevelFile = std::nullopt;
+			if (const auto map = levelPtr->getMap(); map != nullptr)
+			{
+				auto clamped = levelPtr->clampMapPosition({numProp->value, character.mapY});
+				character.mapX = clamped.x();
+				indexInLevelFile = std::nullopt;
+			}
 			break;
 		}
 
@@ -1472,8 +1482,12 @@ SetResults NPC::setProp(const NPCProp prop, const SetBy setBy, PropertyBase* bas
 			if (numProp == nullptr || numProp->value == character.mapY)
 				SETPROP_RETURN_IGNORE;
 
-			character.mapY = numProp->value;
-			indexInLevelFile = std::nullopt;
+			if (const auto map = levelPtr->getMap(); map != nullptr)
+			{
+				auto clamped = levelPtr->clampMapPosition({character.mapX, numProp->value});
+				character.mapY = clamped.y();
+				indexInLevelFile = std::nullopt;
+			}
 			break;
 		}
 
@@ -1886,7 +1900,7 @@ void NPC::constructScriptParameters()
 				// Fix the map position if applicable.
 				if (const auto levelPtr = getLevel(); levelPtr != nullptr && levelPtr->isGmap())
 				{
-					if (const auto mapX = toMapPosition(globalPosition).x(); mapX != character.mapX)
+					if (const auto mapX = levelPtr->clampMapPosition(toMapPosition(globalPosition)).x(); mapX != character.mapX)
 					{
 						character.mapX = mapX;
 						modTime[PROPID(NPCProp::GMAPLEVELX)] = now;
@@ -1917,7 +1931,7 @@ void NPC::constructScriptParameters()
 				// Fix the map position if applicable.
 				if (const auto levelPtr = getLevel(); levelPtr != nullptr && levelPtr->isGmap())
 				{
-					if (const auto mapY = toMapPosition(globalPosition).y(); mapY != character.mapY)
+					if (const auto mapY = levelPtr->clampMapPosition(toMapPosition(globalPosition)).y(); mapY != character.mapY)
 					{
 						character.mapY = mapY;
 						modTime[PROPID(NPCProp::GMAPLEVELY)] = now;
@@ -2074,8 +2088,11 @@ void NPC::testForLinks(SetResults& result)
 		// If they did, alter their map location.
 		if (computedMapChangeX != 0 || computedMapChangeY != 0)
 		{
-			character.mapX += computedMapChangeX;
-			character.mapY += computedMapChangeY;
+			// Seihai: brace-init from int is a narrowing error on MSVC. Below 0 becomes 0, not 255.
+			const auto toMapCoord = [](const int value) { return static_cast<uint8_t>(std::clamp(value, 0, 255)); };
+			auto clamped = levelPtr->clampMapPosition({toMapCoord(character.mapX + computedMapChangeX), toMapCoord(character.mapY + computedMapChangeY)});
+			character.mapX = clamped.x();
+			character.mapY = clamped.y();
 			result.resultPropIds.push_back(PROPID(NPCProp::GMAPLEVELX));
 			result.resultPropIds.push_back(PROPID(NPCProp::GMAPLEVELY));
 			indexInLevelFile = std::nullopt;
