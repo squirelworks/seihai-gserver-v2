@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch_all.hpp>
 
@@ -92,6 +93,27 @@ TEST_CASE("Script client bytecode", "[Scripting][Script]")
 	context->script = std::make_shared<std::any>(std::string{"bytecode"});
 	script.setClientCompiledScript(context);
 	REQUIRE(script.getClientByteCode().empty());
+}
+
+TEST_CASE("Script minify with block comments", "[Scripting][Script]")
+{
+	// A comment that is closed drops only the comment.
+	const auto closed = Script::minify("//#CLIENTSIDE\nmessage before;\n/* a\nb */\nmessage after;\n");
+	CHECK(closed.find("message before;") != std::string::npos);
+	CHECK(closed.find("message after;") != std::string::npos);
+	CHECK(closed.find("b */") == std::string::npos);
+
+	// A comment that is never closed runs to the end of the script. This used to
+	// remove_prefix(npos) and loop forever.
+	const auto open = Script::minify("//#CLIENTSIDE\nmessage before;\n/* never closed\nmessage gone;\n");
+	CHECK(open.find("message before;") != std::string::npos);
+	CHECK(open.find("message gone;") == std::string::npos);
+	CHECK(open.find("never closed") == std::string::npos);
+
+	// On the last line, with no newline after it.
+	const auto last = Script::minify("//#CLIENTSIDE\nmessage before; /* trailing");
+	CHECK(last.find("message before;") != std::string::npos);
+	CHECK(last.find("trailing") == std::string::npos);
 }
 
 TEST_CASE_METHOD(ServerFixture, "Script joins", "[Scripting][IScriptEngine][GS1]")
