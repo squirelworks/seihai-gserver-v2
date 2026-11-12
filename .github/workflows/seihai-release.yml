@@ -82,12 +82,14 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cmake -S . -B build -DTESTS=ON
-          cmake --build build --target RC Gpak Graal3D SecureLogin
+          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin
           timeout 60 bin/RC
           timeout 60 bin/Gpak
           timeout 60 bin/Graal3D
+          timeout 60 bin/NPCServerGS1
+          timeout 60 bin/ScriptCache
           timeout 60 bin/SecureLogin
-          rm -f bin/RC bin/Gpak bin/Graal3D bin/SecureLogin
+          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin
       - name: Package
         shell: bash
         run: |
@@ -190,12 +192,14 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cmake -S . -B build -DTESTS=ON
-          cmake --build build --target RC Gpak Graal3D SecureLogin
+          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin
           timeout 60 bin/RC
           timeout 60 bin/Gpak
           timeout 60 bin/Graal3D
+          timeout 60 bin/NPCServerGS1
+          timeout 60 bin/ScriptCache
           timeout 60 bin/SecureLogin
-          rm -f bin/RC bin/Gpak bin/Graal3D bin/SecureLogin
+          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin
       - name: Package
         shell: bash
         run: |

@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
 #ifndef WEAPON_H
 #define WEAPON_H
 
@@ -62,6 +63,8 @@ public:
 	[[a::inline]] LevelItemType getWeaponId() const noexcept;
 	[[a::inline]] Script& getScript() noexcept;
 	[[a::inline]] const Script& getScript() const noexcept;
+	// Seihai: the PLO_LOADSCRIPT header (type,name,cacheflag,key,crc), for tests.
+	[[nodiscard]] const std::string& getHeaderWithCRC() const noexcept { return m_headerWithCRC; }
 
 public:
 	const std::string name;

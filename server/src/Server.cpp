@@ -2069,8 +2069,25 @@ void Server::hitPlayer(const PlayerID playerId, const int8_t power, const float 
 	const auto encodedDX = static_cast<uint8_t>(static_cast<int16_t>(dx * 16) + 64);
 	const auto encodedDY = static_cast<uint8_t>(static_cast<int16_t>(dy * 16) + 64);
 
+	// Seihai: 1.x to 2.31 clients refuse every PLO_HURTPLAYER the server can send for a script. They drop a hurt whose
+	// attacker is not a player they know (id 0 is not one), and drop it whatever the NPC id when a trailing NPC id is
+	// present (2.22 lab; Graal_analysis manual 4.3.6). Naming the victim as its own attacker would fail the guild test
+	// for any player in a guild. So for them the server lowers the hearts itself and sends them as a player prop, which
+	// these clients accept; there is no knockback. A heal (negative power) still needs AP 40, as on the client.
+	if (hurtsByHeartsProp(player->getVersion()))
+	{
+		const auto newHalfHearts = std::clamp(static_cast<int>(player->account.character.hitpointsInHalves) - power, 0, static_cast<int>(player->account.maxHitpoints) * 2);
+		player->sendPropsFromResults(player->setPropWith<PlayerProp::HALFHEARTS>(props::SetBy::SERVER, static_cast<uint8_t>(newHalfHearts)));
+		return;
+	}
+
 	// Send the final packet.
-	player->sendPacket(CString() >> (char)PLO_HURTPLAYER >> (short)0 >> (char)(encodedDX) >> (char)(encodedDY) >> (char)power >> (int)source->id);
+	player->sendPacket(CString() >> (char)PLO_HURTPLAYER >> (short)0 >> (char)(encodedDX) >> (char)(encodedDY) >> (char)power >> (int)(source != nullptr ? source->id : 0));
+}
+
+bool Server::hurtsByHeartsProp(const int clientVersion)
+{
+	return clientVersion != CLVER_UNKNOWN && clientVersion <= CLVER_2_31;
 }
 
 void Server::sendTriggerAction(const PlayerID toPlayerId, const NPCID fromNpcId, const LocalPixelPosition& localPosition, const std::string_view action, const std::string_view params) const

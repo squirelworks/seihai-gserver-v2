@@ -1548,7 +1548,9 @@ HandlePacketResult PlayerClient::msgPLI_UPDATECLASS(CString& pPacket)
 			std::string_view des{empty.data(), 10};
 			std::string_view crc{empty.data(), 5};
 
-			const auto header = string::toCSVFromPack("class"sv, std::string_view{className}, "1"sv, des, crc);
+			// Seihai: cache flag 0, so the client does not store this empty stand-in under key 0 (with 1 it writes a
+			// GRESCR01 file for it).
+			const auto header = string::toCSVFromPack("class"sv, std::string_view{className}, "0"sv, des, crc);
 
 			// Should technically be PLO_LOADSCRIPT but for some reason the client breaks player.join() scripts
 			// if a weapon decides to request an class that doesn't exist on the server.

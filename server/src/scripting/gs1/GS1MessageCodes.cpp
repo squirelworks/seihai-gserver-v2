@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <any>
 #include <array>
@@ -500,8 +501,12 @@ GS1ScriptValue mc_g(const GS1Visitor* visitor, const std::string_view messageCod
 	if (arguments.size() == 1)
 		index = DoubleAsIntegralFloor<size_t>(GS1Visitor::getScriptValueAsCopy<double>(*arguments[0]).value_or(0.0));
 
-	if (const auto client = getPlayerClientFromSource(visitor->getCurrentSource(), index); client != nullptr)
-		return makeGS1ScriptValue(client->getGuild().toString());
+	// Seihai: the player is the nearest player on the stack, as for #a. In a level NPC event the current source is the NPC.
+	if (const auto source = visitor->findNearestScriptObjectSourceFromStack(ScriptObjectType::PLAYER); source.has_value())
+	{
+		if (const auto client = getPlayerClientFromSource(source.value(), index); client != nullptr)
+			return makeGS1ScriptValue(client->getGuild().toString());
+	}
 
 	return makeGS1ScriptValue(std::string{});
 }
@@ -515,12 +520,16 @@ GS1ScriptValue mc_G(const GS1Visitor* visitor, const std::string_view messageCod
 	if (arguments.size() == 1)
 		index = DoubleAsIntegralFloor<size_t>(GS1Visitor::getScriptValueAsCopy<double>(*arguments[0]).value_or(0.0));
 
-	if (const auto client = getPlayerClientFromSource(visitor->getCurrentSource(), index); client != nullptr)
+	// Seihai: the nearest player on the stack, as for #a and #g.
+	if (const auto source = visitor->findNearestScriptObjectSourceFromStack(ScriptObjectType::PLAYER); source.has_value())
 	{
-		if (client->isGuest())
-			return makeGS1ScriptValue("trial"s);
+		if (const auto client = getPlayerClientFromSource(source.value(), index); client != nullptr)
+		{
+			if (client->isGuest())
+				return makeGS1ScriptValue("trial"s);
 
-		return makeGS1ScriptValue("classic"s);
+			return makeGS1ScriptValue("classic"s);
+		}
 	}
 
 	return makeGS1ScriptValue(std::string{});
