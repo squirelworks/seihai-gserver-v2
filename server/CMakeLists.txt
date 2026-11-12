@@ -234,7 +234,7 @@ endif()
 # Dependency: gs2parser.
 FetchContent_Declare(gs2parser
 	GIT_REPOSITORY https://github.com/xtjoeytx/gs2-parser.git
-	GIT_SHALLOW    ON
+	GIT_SHALLOW    OFF
 	GIT_TAG        73e7ea8d6ed88112967547c5e6941bfa035fec6c		# main 2026-07-02
 )
 FetchContent_MakeAvailable(gs2parser)
@@ -299,12 +299,12 @@ endif()
 # ----------------------------
 # Dependency: gs2lib.
 FetchContent_Declare(gs2lib
-	# Seihai: our mirror, branch seihai (upstream 35056f8, the commit GServer-v2
-	# beta4 25396a1 pins, + the 3.153 token + the 5.12 gen-5 step rule
+	# Seihai: our mirror, branch seihai (upstream e269a79, the commit GServer-v2
+	# beta4 fe72da9 pins, + the 3.153 token + the 5.12 gen-5 step rule
 	# + the socket wait/unregister fix + the 2026-11-06 packet names, with
 	# upstream's own 2026-11-06 names kept as aliases of ours).
 	GIT_REPOSITORY https://github.com/squirelworks/seihai-gs2lib.git
-	GIT_TAG        417ef96783bac5988ca343425df10aad04c138f4
+	GIT_TAG        f94f22dd85c3ffea187da944e6bbbdded899ef43
 )
 FetchContent_MakeAvailable(gs2lib)
 add_dependencies(${TARGET_NAME} gs2lib)
@@ -318,19 +318,11 @@ FetchContent_Declare(libtommath
 	GIT_SHALLOW    ON
 	GIT_TAG        develop
 	EXCLUDE_FROM_ALL
+	FIND_PACKAGE_ARGS CONFIG
 )
 FetchContent_MakeAvailable(libtommath)
+set(libtommath_DIR "${libtommath_BINARY_DIR}")
 target_include_directories(${TARGET_NAME} PUBLIC "${libtommath_SOURCE_DIR}")
-
-# Map libtomcrypt configurations as it fails with MinSizeRel.
-if(TARGET libtommath)
-	set_target_properties(libtommath PROPERTIES
-		MAP_IMPORTED_CONFIG_DEBUG Release
-		MAP_IMPORTED_CONFIG_RELEASE Release
-		MAP_IMPORTED_CONFIG_MINSIZEREL Release
-		MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release
-	)
-endif()
 
 # ----------------------------
 # Dependency: libtomcrypt-preagonal.
