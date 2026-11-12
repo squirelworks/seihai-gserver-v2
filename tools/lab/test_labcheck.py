@@ -127,7 +127,7 @@ class SyntheticTests(unittest.TestCase):
         self.assertIn("sec (2.31, SEI00001) logged in", report)
 
     def test_guest_session_takes_the_guest_login(self):
-        # GwenTea2 lab 2026-11-12: a 6.03r7 guest logs in as "guest" and plays as "pc:<number>".
+        # lab run 2026-11-12: a 6.03r7 guest logs in as "guest" and plays as "pc:<number>".
         t = "2026-11-12 03:00:00"
         dump = out_packet(t, "pc:-4187584", 2, 25, gchar(25) + gchar(73))
         log = f"[{t}] :: New login: guest [New Client (2.22+)] [G3D0311C (6.037)]\n"
