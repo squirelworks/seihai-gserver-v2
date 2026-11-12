@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-11: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
 #ifndef SERVER_H
 #define SERVER_H
 
@@ -397,6 +397,9 @@ public:
 	void hitObjectsAtPoint(const TilePosition& pos, int8_t power, const std::weak_ptr<Level>& level, const PlayerPtr& source) const;
 	void hitObjectsAtPoint(const TilePosition& pos, int8_t power, const std::weak_ptr<Level>& level, const NPCPtr& source) const;
 	void hitPlayer(PlayerID playerId, int8_t power, float fromX, float fromY, const std::shared_ptr<NPC>& source) const;
+	// Seihai: true when hitPlayer lowers the hearts by player prop for this client version (1.x to 2.31), because those
+	// clients refuse the PLO_HURTPLAYER a script's hit would send.
+	static bool hurtsByHeartsProp(int clientVersion);
 
 public:
 	std::string getLogDateTimeString() const;

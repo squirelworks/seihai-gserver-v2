@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
 #include <any>
 #include <iterator>
 #include <string>
@@ -120,7 +121,7 @@ void setNPCFlags(const ScriptEvent& event, GameVariableStore& variableStore, con
 	if (npc == nullptr)
 		return;
 
-	variableStore.add("visible", npc->visFlags != PROPID(NPCVisFlags::HIDDEN));
+	variableStore.add("visible", (npc->visFlags & PROPID(NPCVisFlags::VISIBLE)) != 0);
 
 	if (const auto server = BabyDI::Get<Server>(); server != nullptr && server->Generation == ServerGeneration::CLASSIC)
 	{

@@ -947,6 +947,8 @@ official serverside: ❌<br>
 
 Hurts the current player for `halfhearts` damage.
 
+**Seihai**, serverside: the player is knocked away from the NPC's centre. Clients 1.x to 2.31 refuse every hurt message a script can send (they need a known attacking player, and drop any hit that names an NPC), so for them the server lowers the hearts itself and sends them as a player prop; there is no knockback. A negative value heals only at AP 40 or more, as on the client.
+
 ---
 ## insertstring
 
@@ -2579,6 +2581,8 @@ Shoots an arrow projectile in the specified [direction](scripting-gs1-variables.
 Shoots a ball projectile at the player.
 
 **gs2emu** adds an optional [direction](scripting-gs1-variables.md#directions) in the serverside version.
+
+**Seihai** accepts the bare form serverside too, as the 1.x levels use it. The server's balls fly in four directions, so a bare `shootball;` aims along the dominant axis from the NPC to the event's player, or the way the NPC faces when there is no player.
 
 ---
 ## shootfireball
