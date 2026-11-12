@@ -102,6 +102,7 @@ set(
 	"include/utilities/Log.h"
 	"include/utilities/PropertySerializers.h"
 	"include/utilities/Random.h"
+	"include/utilities/SecureLogin.h"
 	"include/utilities/Settings.h"
 	"include/utilities/StringUtils.h"
 	"include/utilities/generator/IdGenerator.h"
@@ -179,6 +180,7 @@ set(
 	"src/utilities/FilePermissions.cpp"
 	"src/utilities/Log.cpp"
 	"src/utilities/PropertySerializers.cpp"
+	"src/utilities/SecureLogin.cpp"
 	"src/utilities/Settings.cpp"
 	"src/utilities/StringUtils.cpp"
 	"src/utilities/manager/GuildManager.cpp"
@@ -266,6 +268,21 @@ FetchContent_Declare(AntlrJar
 )
 FetchContent_MakeAvailable(AntlrJar)
 set(ANTLR4_JAR_LOCATION "${FETCHCONTENT_BASE_DIR}/antlr-jar/antlr.jar")
+endif()
+
+# ----------------------------
+# Dependency: libsodium (Seihai: X25519, Ed25519, SHA-256, HMAC and ChaCha20-Poly1305
+# for the SEI00001 secure login, server/src/utilities/SecureLogin.cpp).
+# vcpkg ships it as unofficial-sodium; elsewhere use the system library, static first
+# (the tests link with -static).
+find_package(unofficial-sodium CONFIG QUIET)
+if(unofficial-sodium_FOUND)
+	target_link_libraries(${TARGET_NAME} PUBLIC unofficial-sodium::sodium)
+else()
+	find_path(SODIUM_INCLUDE_DIR sodium.h REQUIRED)
+	find_library(SODIUM_LIBRARY NAMES libsodium.a sodium REQUIRED)
+	target_include_directories(${TARGET_NAME} PUBLIC "${SODIUM_INCLUDE_DIR}")
+	target_link_libraries(${TARGET_NAME} PUBLIC "${SODIUM_LIBRARY}")
 endif()
 
 # ----------------------------
