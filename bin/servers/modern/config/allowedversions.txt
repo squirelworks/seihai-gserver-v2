@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-11: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-11, 2026-11-13: see CHANGES-SEIHAI.md.
 [generation-range]
 
 classic = GNW13110           // 1.41r1
@@ -41,6 +41,7 @@ modern = G3D17026:G3D0511C   // 4.04r2 - 6.037; 4.20r8 and later load resource p
 //G3D22067  // 5.0.0.7 - 5.007
 
 //G3D14097  // 5.1.2.0 - 5.12
+//G3D15010  // 5.2.4.x - 5.24r3, 5.24r4 (and 6.00 beta 2)
 //G3D3007A  // 6.0.0.7
 //G3D3007A  // 6.0.1.5
 //G3D2505C  // 6.0.3.4

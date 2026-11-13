@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-01, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-01, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
 #ifndef PLAYER_H
 #define PLAYER_H
 
@@ -345,6 +345,8 @@ public:
 public:
 	// Socket-Functions
 	void sendPacket(const CString& packet, PacketQueue channel = PacketQueue::NORMAL);
+	// Seihai: sendPacket without the per-version rewrite of player props.
+	void sendPacketUnchecked(const CString& packet, PacketQueue channel = PacketQueue::NORMAL);
 	void sendRawPacket(const CString& packet, PacketQueue channel = PacketQueue::NORMAL);
 	std::pair<bool, bool> sendFile(const std::filesystem::path& file, PacketQueue channel = PacketQueue::FILE);
 	// A 3.153 to 5.x client on a server with the Graal 3D side on. Its 3D login

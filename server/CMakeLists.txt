@@ -1,4 +1,4 @@
-# Modified by the Seihai project, 2026-11-07, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
 #
 #  server/src/CMakeLists.txt
 #
@@ -72,6 +72,7 @@ set(
 	"include/object/Player.h"
 	"include/object/ShowImg.h"
 	"include/object/Weapon.h"
+	"include/player/LegacyPlayerProps.h"
 	"include/player/PlayerClient.h"
 	"include/player/PlayerClientOriginal.h"
 	"include/player/PlayerLogin.h"
@@ -152,6 +153,7 @@ set(
 	"src/object/NPC.cpp"
 	"src/object/ShowImg.cpp"
 	"src/object/Weapon.cpp"
+	"src/player/LegacyPlayerProps.cpp"
 	"src/player/Player.cpp"
 	"src/player/PlayerClient.cpp"
 	"src/player/PlayerClientOriginal.cpp"
@@ -305,9 +307,10 @@ FetchContent_Declare(gs2lib
 	# beta4 fe72da9 pins, + the 3.153 token + the 5.12 gen-5 step rule
 	# + the socket wait/unregister fix + the 2026-11-06 packet names, with
 	# upstream's own 2026-11-06 names kept as aliases of ours, + the 5.007
-	# label for 5.00r7, + the Mac PowerPC 4.04r2, 4.20r6 and 5.12 version ids).
+	# label for 5.00r7, + the Mac PowerPC 4.04r2, 4.20r6 and 5.12 version ids,
+	# + the 5.24 version id G3D15010, seihai-gs2lib #18).
 	GIT_REPOSITORY https://github.com/squirelworks/seihai-gs2lib.git
-	GIT_TAG        084a51604746a7c14ac833cf7150854895972bb7
+	GIT_TAG        4f6147f0ddc70a2b3a6734452421f6c6e41e7efc
 )
 FetchContent_MakeAvailable(gs2lib)
 add_dependencies(${TARGET_NAME} gs2lib)
