@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
 // New file: wire format of the Graal 3D (Torque) UDP connection. See Graal3DProtocol.h.
 
 #include <graal3d/Graal3DProtocol.h>
@@ -31,8 +31,10 @@ namespace graal3d
 			"NetStringEvent", "RemoteCommandEvent", "RequestReloadEvent", "SimpleMessageEvent",
 			"TerrainChunkEvent", "TerrainRequestUpdatesEvent",
 		};
-		// 3.153 and 4.04r2: only the events are listed. The TGE object and datablock
-		// classes are only needed for ghosting, which this server does not do yet.
+		// 3.153 and 4.04r2: the server ghosts one Camera per client (its control
+		// object) with one CameraData datablock; see Graal3DTge.h.
+		const std::vector<std::string_view> kObjects404{"Camera"};
+		const std::vector<std::string_view> kDatablocks404{"CameraData"};
 		const std::vector<std::string_view> kEvents404{
 			"BigDataChunkEvent", "BigDataStartEvent", "ConnectionMessageEvent", "GhostAlwaysObjectEvent",
 			"LightningStrikeEvent", "NetStringEvent", "PathManagerEvent", "RemoteCommandEvent",
@@ -41,7 +43,7 @@ namespace graal3d
 		};
 
 		const std::array<Profile, 3> kProfiles{
-			Profile{19, "3.153, 4.04r2", true, false, 3, {}, kEvents404},
+			Profile{19, "3.153, 4.04r2", true, false, 3, kObjects404, kEvents404, kDatablocks404, true},
 			Profile{21, "4.20r6", false, true, 2, kObjects420, kEvents420},
 			Profile{24, "5.x (5.00r7, 5.12)", false, true, 2, kObjects5, kEvents5},
 		};
@@ -78,6 +80,16 @@ namespace graal3d
 		for (uint32_t i = 0; i < profile.objectClasses.size(); ++i)
 		{
 			if (profile.objectClasses[i] == name)
+				return i;
+		}
+		return std::nullopt;
+	}
+
+	std::optional<uint32_t> datablockClassId(const Profile& profile, std::string_view name)
+	{
+		for (uint32_t i = 0; i < profile.datablockClasses.size(); ++i)
+		{
+			if (profile.datablockClasses[i] == name)
 				return i;
 		}
 		return std::nullopt;
@@ -159,6 +171,13 @@ namespace graal3d
 			w.writeInt(0, 12);
 			w.writeInt(i, 12);
 			w.writeString(profile.objectClasses[i]);
+		}
+		for (uint32_t i = 0; i < profile.datablockClasses.size(); ++i)
+		{
+			w.writeFlag(true);
+			w.writeInt(1, 12);
+			w.writeInt(i, 12);
+			w.writeString(profile.datablockClasses[i]);
 		}
 		for (uint32_t i = 0; i < profile.eventClasses.size(); ++i)
 		{
