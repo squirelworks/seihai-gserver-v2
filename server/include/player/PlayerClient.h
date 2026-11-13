@@ -228,6 +228,23 @@ public:
 	static bool echoesScriptFlag(std::string_view flagName) noexcept;
 	static CString scriptFlagState(std::string_view flagName, bool present, const std::optional<std::string>& text);
 
+	// Seihai: a gr.flagset / gr.flagdel write that leaves an account flag as the server holds it (present, and with
+	// `text` when it has one) is dropped, with nothing sent back (issue #75). `flagPair` is `name`, `name=value` or,
+	// with `remove`, the name; an empty value is a delete, as in PLI_FLAGSET.
+	static bool scriptFlagUnchanged(bool remove, std::string_view flagPair, bool present, const std::optional<std::string>& text) noexcept;
+
+	// Seihai: the cap on the gr.flagset / gr.flagdel writes that change something, per client (issue #75): a burst
+	// of CAPACITY, then PER_SECOND. A write over the cap is dropped. Unchanged writes and the gr.x/gr.y/gr.z
+	// movement hack (which translated scripts no longer send) do not count.
+	struct ScriptFlagBudget
+	{
+		static constexpr double CAPACITY = 32.0;
+		static constexpr double PER_SECOND = 8.0;
+		double tokens = CAPACITY;
+		std::optional<clock::time_point> last;
+		bool take(clock::time_point now) noexcept;
+	};
+
 	// Seihai: PLO_SERVERWARP (178) is held until the client's file requests have gone
 	// quiet. A 5.24r4 or 6.03r7 asks the login server for pics1.png once, right after
 	// level entry, and never asks the next server again; a 178 sent at once (normal
@@ -250,6 +267,8 @@ protected:
 
 protected:
 	uint16_t m_pingValue = 0;
+	ScriptFlagBudget m_scriptFlagBudget;
+	bool m_scriptFlagCapLogged = false;
 	std::optional<clock::time_point> m_pingSentAt;
 	clock::time_point m_lastPingSent;
 

@@ -144,7 +144,29 @@ too. The server never sends a player's position back to that player.
 | Scripts in 3D mode | with `weapon3d` lines: `addweapon` and `weaponscript` over the 3D text channel. A 5.12 lab client compiled and ran one, and its `keydown2` saw the arrow keys. |
 | Walking | a script's `triggerserver(..., "g3dpos", x, y, z)` and the gserver moves the player's object. Lab 15 showed the trigger reaching the gserver; the move is not yet run with a real client. |
 | `TerrainBlock`, `movetype` | **not sent.** |
-| 3.153 and 4.04r2 game packets | **not done.** They use Torque's older game packet (moves, datablocks). Those clients get the handshake and keep-alive only. |
+| 3.153 and 4.04r2 game packets | done, not yet run with a real client. See "Protocol 19" below. |
+
+## Protocol 19 (3.153, 4.04r2)
+
+These clients run the stock Torque game layer: datablocks, `Camera` / `Player`
+ghosts and moves, with a three-phase mission start. The layouts come from a static
+read of the 4.04r2 `Graal3DEngine.dll` (Graal_analysis `torque/protocol19-server.md`);
+3.153 is assumed to read the same. What the server does with them:
+
+| Step | What goes out |
+|---|---|
+| First client packet | `MissionStartPhase1` with the mission sequence (`1`) and the mission name (`Graal3D`). 3.153's script sends the sequence back in its ack, 4.04r2 sends the ack bare; both are taken. |
+| Phase 1 ack | One datablock, a `CameraData` with no shape and every optional field clear (`SimDataBlockEvent`), then the connection message `DataBlocksDone` (5). |
+| `DataBlocksDownloadDone` (6) from the client | `MissionStartPhase2`, the connection message `GhostAlwaysStarting` (3) with the ghost count, and from now on ghosts: one stock `Camera` per client, at the world's `spawn` point. No ghost goes out before this, since a ghost naming a datablock the client has not loaded drops the connection. |
+| Phase 2 ack, and the Camera's create acked | `GhostAlwaysDone` (0), then `MissionStartPhase3`. The client lights the (empty) scene and acks. |
+| Phase 3 ack | The Camera becomes the control object (fly mode). 4.04r2 then raises login step 5. |
+| Every client packet after that | The client's moves are read and acknowledged in the server's move ack. They are not applied: the client moves its own Camera by prediction, and the server does not move it back. |
+
+Not done for these clients: the `Player` (its update and `PlayerData` are not read
+yet, so nobody walks as a player and other players are not shown), the world's
+objects (they are `GameObject`s, a 4.20r6 and later class), `Sun` and `Sky`, terrain,
+and anything that comes from a `Player` control object (damage flash, white-out).
+Flags and `weapon3d` scripts go over the 3D text channel as for 5.x.
 
 The server log shows each link: `Graal3D: <account> linked from <ip> (protocol 24, 5.x ...)`.
 

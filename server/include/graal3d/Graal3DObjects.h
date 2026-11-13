@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
 // New file: the ghosted objects of a Graal 3D world in the GameObject era (4.20r6
 // and 5.x): GameObject, the Graal class every 3D thing is, and Sun. Their update
 // layouts come from a static read of the 5.00r7 Graal3DEngine.dll (protocol 24,
@@ -34,6 +34,7 @@
 #include <string_view>
 #include <vector>
 
+#include <graal3d/Graal3DTge.h>
 #include <graal3d/TorqueBitStream.h>
 
 namespace graal3d
@@ -160,21 +161,32 @@ namespace graal3d
 			Sun,
 			Camera, // `object` holds its name and transform
 			Sky,
+			TgeCamera, // protocol 19: a stock TGE Camera, `tgeCamera` and `datablockId`
 		};
 
 		Kind kind = Kind::GameObject;
 		GameObjectState object;
 		SunState sun;
 		SkyState sky;
+		tge::CameraState tgeCamera;
+		uint32_t datablockId = tge::FirstDatablockId;
+
+		// TgeCamera masks: 1 = position and rotation, 2 = the datablock (creates only).
+		static constexpr uint32_t TgeMove = 1;
+		static constexpr uint32_t TgeDatablock = 2;
 
 		[[nodiscard]] std::string_view className() const
 		{
-			return kind == Kind::Sun ? "Sun" : kind == Kind::Camera ? "Camera" : kind == Kind::Sky ? "Sky" : "GameObject";
+			return kind == Kind::Sun ? "Sun" : kind == Kind::Camera || kind == Kind::TgeCamera ? "Camera" : kind == Kind::Sky ? "Sky" : "GameObject";
 		}
+		// Protocol 19 ghosts only this kind; the GameObject era every other one.
+		[[nodiscard]] bool isTge() const { return kind == Kind::TgeCamera; }
 		// The update for `mask` (ignored for Sun and Sky, which are always sent whole).
 		void writeUpdate(BitWriter& writer, uint32_t mask) const;
 		[[nodiscard]] uint32_t fullMask() const
 		{
+			if (kind == Kind::TgeCamera)
+				return TgeMove | TgeDatablock;
 			return kind == Kind::Sun || kind == Kind::Sky ? 1u : gameObjectFullMask(object);
 		}
 		[[nodiscard]] uint32_t changesFrom(const GhostObject& before) const;

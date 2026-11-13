@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
 // New file: tests for the Graal 3D (Torque) UDP side. The client bytes are from the
 // 2026-10-30 Wine lab, where the real 5.12 client joined a test 3D server
 // (Graal_analysis torque/network.md, "The full handshake, live").
@@ -539,13 +539,14 @@ SCENARIO("Mission phases, the text channel and lost packets")
 	}
 }
 
-SCENARIO("A 3.153 or 4.04r2 connection only keeps alive")
+SCENARIO("A 3.153 or 4.04r2 connection starts the mission on its first data packet")
 {
 	const auto& profile = *profileForProtocol(19);
 	std::vector<std::string> sent;
 	Connection conn{profile, 0x401, 0, Connection::Callbacks{[&](std::string_view d) { sent.emplace_back(d); }, nullptr, nullptr, nullptr}};
 
-	// A header-only data packet with the odd connect-sequence bit.
+	// A header-only data packet with the odd connect-sequence bit. Its game
+	// section is missing, so nothing in it is read, but the link is up.
 	BitWriter w;
 	PacketHeader hdr;
 	hdr.connectSequenceBit = 1;
@@ -554,17 +555,18 @@ SCENARIO("A 3.153 or 4.04r2 connection only keeps alive")
 	conn.receive(w.toString(), 10);
 	REQUIRE(conn.update(100));
 
-	THEN("its data packet is acked with an ack packet and no events are sent")
+	THEN("it is answered with a data packet carrying MissionStartPhase1, and text can be queued")
 	{
 		REQUIRE(sent.size() == 1);
 		BitReader r(sent[0]);
 		auto h = readPacketHeader(r);
 		REQUIRE(h);
-		REQUIRE(h->type == PacketType::Ack);
+		REQUIRE(h->type == PacketType::Data);
 		REQUIRE(h->connectSequenceBit == 1);
 		REQUIRE(h->highestAck == 1);
+		REQUIRE(conn.missionState() == MissionState::Phase1Sent);
 		conn.sendText(TextMessage{"", "set", "", "x"});
-		REQUIRE(conn.pendingEvents() == 0);
+		REQUIRE(conn.pendingEvents() > 0);
 	}
 }
 

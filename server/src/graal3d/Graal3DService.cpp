@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
 // New file: the gserver's Graal 3D UDP side. See Graal3DService.h.
 
 #include <graal3d/Graal3DService.h>
@@ -402,6 +402,20 @@ namespace graal3d
 
 	void Service::ghostWorld(PlayerID playerId, const std::string& account, Connection& connection)
 	{
+		if (connection.profile().tgePackets)
+		{
+			// 3.153 and 4.04r2: the GameObject world is not theirs. Each gets one
+			// stock TGE Camera at the spawn point as its control object; the
+			// Player layout of those clients is not read yet.
+			GhostObject camera;
+			camera.kind = GhostObject::Kind::TgeCamera;
+			camera.tgeCamera.position = m_world.spawn.position;
+			connection.setGhost(cameraKey(playerId), camera);
+			connection.setControlObject(cameraKey(playerId));
+			log::printLine(log::server, "Graal3D: {} (protocol 19) gets a Camera at the spawn point as its control object.", account);
+			return;
+		}
+
 		ObjectKey key = 1;
 		for (const auto& object : m_world.objects)
 			connection.setGhost(key++, object);
