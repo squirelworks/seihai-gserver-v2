@@ -9,6 +9,12 @@ Every change below was checked on a private loopback lab with real Graal
 clients and with the [Seihai](https://github.com/squirelworks/seihai) client.
 Each file we changed carries a one-line notice at its top.
 
+## 2026-11-13
+
+| Change | Files | Clients it fixes |
+|---|---|---|
+| A game client that asks for a file the server does not have now always gets `PLO_FILESENDFAILED` (30). Before, it got an answer only with `warnonmissingfiles = true` (off by default) or on the Graal 3D side; otherwise nothing came back. `warnonmissingfiles` now only decides whether the miss is logged. Level files (`.nw`, `.graal`, `.zelda`) asked for by a client are still refused silently, as before. In the lab, the rebuilt 5.12 engine asked for `pics1.png`, `head0.png`, `body.png`, `sword1.png` and `shield1.png` on a world that had none of them, and got no reply at all; a real 5.12 with a stale file-name cache did the same and drew nothing. | `server/src/player/Player.cpp` | every client that asks for files (23, 34, update packages), seen with 5.12 |
+
 ## 2026-11-12
 
 | Change | Files | Clients it fixes |
