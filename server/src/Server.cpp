@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-11, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -2439,6 +2439,11 @@ void Server::sendPacketToAll(const CString& packet, const std::set<PlayerID>& ex
 		if (exclude.contains(id))
 			continue;
 		if (player->isNPCServer())
+			continue;
+		// Seihai: a socket whose login is not read yet has no encryption set up. The 5 s world
+		// time reached a type-6 RC there as a plain zlib frame ahead of its gen-5 stream (lab
+		// 2026-11-13); a strict reader drops the link on it.
+		if (player->getType() == PLTYPE_AWAIT)
 			continue;
 		if (sendIf && !sendIf(player.get()))
 			continue;
