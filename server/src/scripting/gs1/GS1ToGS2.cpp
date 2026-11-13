@@ -1011,8 +1011,30 @@ std::optional<std::string> Translator::stringCommand(GS1Parser::StatementBuiltIn
 	// 5.24r4 and 6.03r7 clients have no `set` or `unset` function and send no flag for `player.name = ...` (lab probe,
 	// 2026-11-13), but `triggeraction` is a client command (3.153 tables). The server applies the pair with the rules
 	// of PLI_FLAGSET / PLI_FLAGDEL and sends the flag back, so a later `player.name` read sees it (one round trip).
-	auto flagCall = [&](std::string_view action, const std::string& pair)
-	{ return std::format("{}triggeraction(0, 0, \"{}\", {});\n", pad, action, pair); };
+	//
+	// The `gr.` names are hacks, not account flags (issue #75). `gr.x`, `gr.y` and `gr.z` are the movement hack, which
+	// the server ignores from every 2.3 and later client (with flaghack_movement off it would keep them as account flags
+	// that nothing reads back), and only 5.12 and later clients run translated GS1, so they are
+	// not sent at all: the stock `-gr_movement` weapon sent them 20 times a second each (about 40 triggers a second
+	// on real 5.24r4 and 6.03r7, standing still). Any other `gr.` write goes only when it differs from the last one this
+	// script sent for that name; the server keeps nothing for those names, so nothing else can change them.
+	auto flagCall = [&](std::string_view action, const std::string& flag, const std::string& pair) -> std::string
+	{
+		const auto lower = toLower(flag);
+		if (lower == "gr.x"sv || lower == "gr.y"sv || lower == "gr.z"sv)
+			return std::string{};
+		const auto call = [&](const std::string& p, const std::string& in)
+		{ return std::format("{}triggeraction(0, 0, \"{}\", {});\n", in, action, p); };
+		if (!lower.starts_with("gr."sv))
+			return call(pair, pad);
+		auto sent = "this.__gs1sent_"s + lower;
+		std::ranges::replace(sent.begin() + 5, sent.end(), '.', '_');
+		if (action == "gr.flagdel"sv)
+			return std::format("{}{} = \"\";\n", pad, sent) + call(pair, pad);
+		const auto temp = std::format("temp.__gs1flag{}", m_temps++);
+		return std::format("{0}{1} = {2};\n{0}if ({1} != {3}) {{\n{0}\t{3} = {1};\n", pad, temp, pair, sent) + call(temp, pad + "\t")
+			+ std::format("{}}}\n", pad);
+	};
 
 	// `set name;` / `unset name;`: the flag is named as text. A `client.` or `this.` name stays on the client
 	// (`client.` is sent as a flag by the client itself).
@@ -1044,8 +1066,8 @@ std::optional<std::string> Translator::stringCommand(GS1Parser::StatementBuiltIn
 			return std::format("{}{} = {};\n", pad, this->name(lower), flagValue.has_value() ? quote(flagValue.value()) : "true"s);
 		}
 		if (name == "unset"sv)
-			return flagCall("gr.flagdel"sv, quote(flag));
-		return flagCall("gr.flagset"sv, quote(flagValue.has_value() ? flag + "=" + flagValue.value() : flag));
+			return flagCall("gr.flagdel"sv, flag, quote(flag));
+		return flagCall("gr.flagset"sv, flag, quote(flagValue.has_value() ? flag + "=" + flagValue.value() : flag));
 	}
 
 	if (name == "setstring"sv)
@@ -1061,7 +1083,7 @@ std::optional<std::string> Translator::stringCommand(GS1Parser::StatementBuiltIn
 
 		// Any other name is a player flag. An empty value removes it, as PLI_FLAGSET does.
 		const auto flag = trim(rawText(args[0]).value_or(var.value()));
-		return flagCall("gr.flagset"sv, std::format("{} @ ({})", quote(flag + "="), value(1)));
+		return flagCall("gr.flagset"sv, flag, std::format("{} @ ({})", quote(flag + "="), value(1)));
 	}
 
 	if (name == "addstring"sv || name == "insertstring"sv || name == "replacestring"sv || name == "removestring"sv || name == "deletestring"sv)

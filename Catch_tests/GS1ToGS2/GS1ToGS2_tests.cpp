@@ -180,7 +180,7 @@ TEST_CASE("GS1 client scripts compile to the gs2-parser bytecode of their GS2 fo
 	CHECK(gs1::compileClientScript(gs2Script).bytecode == compileGS2(gs2Script));
 
 	// A script that cannot be lowered has no bytecode, and says why.
-	// The stock -gr_movement weapon (bin/servers/default/weapons) now compiles: its gr.x / gr.y strings are flags.
+	// The stock -gr_movement weapon (bin/servers/default/weapons) now compiles; its gr.x / gr.y writes are not sent (#75).
 	const auto grMovement = gs1::compileClientScript(R"(//#CLIENTSIDE
 if (playerenters || timeout) {
   if (!gr.off) {
@@ -200,4 +200,41 @@ if (playerenters || timeout) {
 	CHECK_FALSE(refusedScript.errors.empty());
 
 	CHECK_FALSE(gs1::compileClientScript("  \n").ok());
+}
+
+TEST_CASE("GS1 gr. flag writes are not resent every tick", "[GS1ToGS2]")
+{
+	// Issue #75: the stock -gr_movement weapon sent gr.x and gr.y as a trigger every 50 ms (about 40 a second on real
+	// 5.24r4 and 6.03r7, standing still). The movement hack names are not sent at all: the server ignores them from
+	// every 2.3 and later client.
+	constexpr auto GrMovement = R"(if (playerenters || timeout) {
+  if (!gr.off) {
+    if (!gr.x.off) setstring gr.x,#v(int((playerx+0.25)*2)/2);
+    if (!gr.y.off) setstring gr.y,#v(int((playery+0.25)*2)/2);
+  }
+  timeout=0.05;
+}
+)"sv;
+	const auto movement = gs2(GrMovement);
+	CHECK(movement.find("triggeraction") == std::string::npos);
+	CHECK(compileGS2(movement).size() > 0);
+	CHECK(gs1::compileClientScript("//#CLIENTSIDE\n"s + std::string{GrMovement}).ok());
+	CHECK(gs2("if (created) { set gr.x; unset gr.y; setstring GR.Z,1; }").find("triggeraction") == std::string::npos);
+
+	// Any other gr. write goes only when it differs from the last one this script sent; a delete always goes.
+	const auto changed = gs2("if (created) { setstring gr.mode,on; unset gr.mode; }");
+	CHECK(changed ==
+		"function onCreated() {\n"
+		"\ttemp.__gs1flag0 = \"gr.mode=\" @ (\"on\");\n"
+		"\tif (temp.__gs1flag0 != this.__gs1sent_gr_mode) {\n"
+		"\t\tthis.__gs1sent_gr_mode = temp.__gs1flag0;\n"
+		"\t\ttriggeraction(0, 0, \"gr.flagset\", temp.__gs1flag0);\n"
+		"\t}\n"
+		"\tthis.__gs1sent_gr_mode = \"\";\n"
+		"\ttriggeraction(0, 0, \"gr.flagdel\", \"gr.mode\");\n"
+		"}\n");
+	CHECK(compileGS2(changed).size() > 0);
+
+	// Account flags are not gated on the client (the server may change them); the server drops unchanged writes.
+	CHECK(gs2("if (created) set gotkey;") == "function onCreated() {\n\ttriggeraction(0, 0, \"gr.flagset\", \"gotkey\");\n}\n");
 }

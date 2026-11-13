@@ -1353,6 +1353,28 @@ void PlayerClient::applyScriptFlag(const bool remove, const std::string& flagPai
 	if (flagName.empty())
 		return;
 
+	// Issue #75: a write that changes nothing goes no further and is not sent back, and the writes that do change
+	// something are capped per client, so a script that writes a flag every tick costs nothing once it settles.
+	if (echoesScriptFlag(flagName))
+	{
+		const auto held = account.variables.get(flagName).lock();
+		std::optional<std::string> heldText;
+		if (held != nullptr)
+		{
+			if (const auto text = held->get<std::string>(); text.has_value())
+				heldText = text.value().get();
+		}
+		if (scriptFlagUnchanged(remove, flagPair, held != nullptr, heldText))
+			return;
+	}
+	if (!m_scriptFlagBudget.take(clock::now()))
+	{
+		if (!m_scriptFlagCapLogged)
+			log::printLine(log::server, "** {}: script flag writes over {:.0f} a second; dropping the extra ones.", account.name, ScriptFlagBudget::PER_SECOND);
+		m_scriptFlagCapLogged = true;
+		return;
+	}
+
 	CString packet;
 	packet >> (char)(remove ? PLI_FLAGDEL : PLI_FLAGSET) << flagPair;
 	packet.setRead(1);
@@ -1375,6 +1397,28 @@ bool PlayerClient::echoesScriptFlag(const std::string_view flagName) noexcept
 {
 	// `this.`, `server.` and the `gr.` hacks are not account flags, so nothing is sent back for them.
 	return !flagName.empty() && !flagName.starts_with("this.") && !flagName.starts_with("server.") && !flagName.starts_with("gr.");
+}
+
+bool PlayerClient::scriptFlagUnchanged(const bool remove, const std::string_view flagPair, const bool present, const std::optional<std::string>& text) noexcept
+{
+	const auto separator = flagPair.find('=');
+	const auto value = separator == std::string_view::npos ? std::string_view{} : flagPair.substr(separator + 1);
+	if (remove || (separator != std::string_view::npos && value.empty()))
+		return !present;
+	if (separator == std::string_view::npos)
+		return present && !text.has_value();
+	return present && text.has_value() && text.value() == value;
+}
+
+bool PlayerClient::ScriptFlagBudget::take(const clock::time_point now) noexcept
+{
+	if (last.has_value() && now > last.value())
+		tokens = std::min(CAPACITY, tokens + std::chrono::duration<double>(now - last.value()).count() * PER_SECOND);
+	last = now;
+	if (tokens < 1.0)
+		return false;
+	tokens -= 1.0;
+	return true;
 }
 
 CString PlayerClient::scriptFlagState(const std::string_view flagName, const bool present, const std::optional<std::string>& text)
