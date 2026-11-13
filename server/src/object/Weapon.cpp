@@ -31,6 +31,7 @@
 #include <scripting/ScriptClass.h>
 #include <scripting/ScriptContainers.h>
 #include <scripting/ScriptTypes.h>
+#include <scripting/gs1/GS1ToGS2.h>
 #include <utilities/CommonTypes.h>
 #include <utilities/Log.h>
 #include <utilities/ScriptCacheDes.h>
@@ -142,7 +143,9 @@ bool Weapon::saveWeapon()
 
 	file->close();
 
-	calculateHeaderChecksum();
+	m_gs1ByteCodeSource.reset();
+	m_gs1ByteCode.clear();
+	calculateHeaderChecksum(m_script.getClientByteCode());
 
 	// Queue the created event.
 	scripting.events.addEvent(ScriptEventType::CREATED, source::FromServer());
@@ -157,7 +160,11 @@ Weapon& Weapon::updateWeapon(const std::string_view newImage, const std::string_
 	image = newImage;
 	modTime = clock::now();
 
-	calculateHeaderChecksum();
+	// Seihai: a GS1 clientside script is compiled when a client first needs it (getClientByteCode), which works the
+	// header out again for that bytecode.
+	m_gs1ByteCodeSource.reset();
+	m_gs1ByteCode.clear();
+	calculateHeaderChecksum(m_script.getClientByteCode());
 
 	// Queue the created event.
 	scripting.events.addEvent(ScriptEventType::CREATED, source::FromServer());
@@ -187,10 +194,16 @@ void Weapon::registerWeaponWithPlayer(const std::shared_ptr<Player>& player) con
 		player->sendPacket(weaponPacket);
 	}
 	// If we have bytecode, send the weapon headers.
-	else if (m_server->Generation == ServerGeneration::MODERN)
+	// Seihai: on any server. Without an NPC-server, or on a classic or newmain one, a GS1 weapon is compiled here
+	// (getClientByteCode); before, a client after 5.07 got nothing at all, or a header with no script on modern.
+	else
 	{
-		if (const auto classes = getJoinedClassesList(); !classes.empty())
-			weaponPacket >> (char)NPCProp::CLASS >> (short)classes.length() << classes;
+		// Joined classes go as classes of their own only on modern; elsewhere they are part of the script.
+		if (m_server->Generation == ServerGeneration::MODERN)
+		{
+			if (const auto classes = getJoinedClassesList(); !classes.empty())
+				weaponPacket >> (char)NPCProp::CLASS >> (short)classes.length() << classes;
+		}
 
 		// Send the weapon.
 		player->sendPacket(weaponPacket);
@@ -199,7 +212,7 @@ void Weapon::registerWeaponWithPlayer(const std::shared_ptr<Player>& player) con
 		// Seihai: only when there is bytecode to load. A GS1-only weapon has none, so the header carried the CRC of
 		// nothing (0); 6.03 then skips its cache check, asks for the script with PLI_UPDATESCRIPT, and
 		// sendByteCodeToPlayer has nothing to send (#23, lead 1).
-		if (!m_headerWithCRC.empty() && !m_script.getClientByteCode().empty())
+		if (!getClientByteCode().empty() && !m_headerWithCRC.empty())
 		{
 			if (player->getVersion() >= CLVER_5_07)
 				player->sendPacket(CString() >> (char)PLO_LOADSCRIPT << m_headerWithCRC);
@@ -215,7 +228,7 @@ void Weapon::registerWeaponWithPlayer(const std::shared_ptr<Player>& player) con
 void Weapon::sendByteCodeToPlayer(const std::shared_ptr<Player>& player) const
 {
 	// Send the bytecode.
-	if (const auto& bytecode = m_script.getClientByteCode(); !bytecode.empty())
+	if (const auto& bytecode = getClientByteCode(); !bytecode.empty())
 	{
 		const auto bytecodePtr = reinterpret_cast<const char*>(bytecode.data());
 		const std::string_view bytecodeView(bytecodePtr, bytecode.size());
@@ -367,10 +380,35 @@ std::string Weapon::getClientSideScript() const
 	return result;
 }
 
-void Weapon::calculateHeaderChecksum()
+const ScriptByteCode& Weapon::getClientByteCode() const
+{
+	if (const auto& compiled = m_script.getClientByteCode(); !compiled.empty())
+		return compiled;
+
+	auto source = getClientSideScript();
+	if (m_gs1ByteCodeSource.has_value() && m_gs1ByteCodeSource.value() == source)
+		return m_gs1ByteCode;
+
+	m_gs1ByteCode.clear();
+	if (!source.empty())
+	{
+		auto compiled = gs1::compileClientScript(source);
+		if (!compiled.ok())
+		{
+			log::printLine(log::server, "Weapon ({}): its clientside script was not compiled for 5.12 and later clients, which get the weapon without it:", name);
+			for (const auto& error : compiled.errors)
+				log::printLine(log::server, "  {}", error);
+		}
+		m_gs1ByteCode = std::move(compiled.bytecode);
+	}
+	m_gs1ByteCodeSource = std::move(source);
+	calculateHeaderChecksum(m_gs1ByteCode);
+	return m_gs1ByteCode;
+}
+
+void Weapon::calculateHeaderChecksum(const ScriptByteCode& bytecode) const
 {
 	const auto& script = m_script.getOriginalSource();
-	const auto& bytecode = m_script.getClientByteCode();
 
 	// Set the cryptographic key to be the script's hash.
 	// This will become the DES encryption key the client will use the encrypt the bytecode.

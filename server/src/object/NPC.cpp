@@ -1743,7 +1743,7 @@ void NPC::setPropsFromPacket(CString& packet, const PlayerPtr& source)
 
 //----------------------------
 
-CString NPC::getModifiedPropsPacket() const
+CString NPC::getModifiedPropsPacket(const bool skipScript) const
 {
 	DO_PACKETLOG(bool printedHeader = false);
 
@@ -1751,6 +1751,8 @@ CString NPC::getModifiedPropsPacket() const
 	for (auto i = 0; i < NPCPROP_COUNT; ++i)
 	{
 		if (!canSendProp(static_cast<NPCProp>(i)))
+			continue;
+		if (skipScript && i == PROPID(NPCProp::SCRIPT))
 			continue;
 
 		if (modTime[i].has_value() && modTime[i] != m_savedModTime[i])
@@ -1907,6 +1909,30 @@ void NPC::sendAllPropsToNearby() const
 		player->sendPacket(bytecodePacket.value());
 		sendGS1ByteCodeTo(*player);
 	}
+}
+
+void NPC::sendModifiedPropsToNearby(const std::shared_ptr<Level>& npcLevel) const
+{
+	if (npcLevel == nullptr)
+		return;
+
+	const CString packet = CString() >> (char)PLO_NPCPROPS >> (int)id << getModifiedPropsPacket();
+	if (packet.length() <= 4)
+		return;
+
+	const auto position = getGlobalPosition();
+	constexpr auto script = PROPID(NPCProp::SCRIPT);
+	if (!canSendProp(NPCProp::SCRIPT) || !modTime[script].has_value() || modTime[script] == m_savedModTime[script])
+	{
+		m_server->sendPacketToNearby(packet, position, npcLevel);
+		return;
+	}
+
+	// The script changed. Bytecode clients get the new script from the NPC being sent again
+	// (sendScriptUpdatesToLevel), so the GS1 text is left out for them.
+	m_server->sendPacketToNearby(packet, position, npcLevel, {}, [this](const Player* player) { return !sendsGS1ByteCodeTo(*player); });
+	if (const CString noScript = CString() >> (char)PLO_NPCPROPS >> (int)id << getModifiedPropsPacket(true); noScript.length() > 4)
+		m_server->sendPacketToNearby(noScript, position, npcLevel, {}, [this](const Player* player) { return sendsGS1ByteCodeTo(*player); });
 }
 
 //----------------------------

@@ -330,9 +330,7 @@ void Server::initFilesystemCallbacks()
 				else
 				{
 					// Send the modified properties to nearby players.
-					CString propsPacket = CString() >> (char)PLO_NPCPROPS >> (int)npc->id << npc->getModifiedPropsPacket();
-					if (propsPacket.length() > 4)
-						sendPacketToNearby(propsPacket, npc->getGlobalPosition(), level);
+					npc->sendModifiedPropsToNearby(level);
 				}
 			}
 

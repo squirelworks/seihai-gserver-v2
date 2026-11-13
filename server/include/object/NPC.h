@@ -424,7 +424,8 @@ public:
 	/// @param source Indicates who is setting the properties.
 	void setPropsFromPacket(CString& packet, const PlayerPtr& source = nullptr);
 
-	CString getModifiedPropsPacket() const;
+	// Seihai: skipScript leaves the script prop out, for clients that get the script as bytecode.
+	CString getModifiedPropsPacket(bool skipScript = false) const;
 	/// @param emptyScript Seihai: send the script prop with no text (for clients that get GS2 bytecode instead).
 	CString getAllPropsPacket(std::optional<clock::time_point> newTime = std::nullopt, bool emptyScript = false) const;
 
@@ -439,6 +440,8 @@ public:
 	void sendGS1ByteCodeTo(Player& player) const;
 	/// @brief Sends all props to the players in range, each in the form its client runs.
 	void sendAllPropsToNearby() const;
+	// Seihai: PLO_NPCPROPS with the modified props, without the GS1 script text for bytecode clients.
+	void sendModifiedPropsToNearby(const std::shared_ptr<Level>& npcLevel) const;
 
 	template<NPCProp... Props>
 	[[a::inline]] CString getPropsPacketFor() const;
