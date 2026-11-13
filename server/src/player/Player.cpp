@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-01, 2026-11-04, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-01, 2026-11-04, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -644,6 +644,11 @@ std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file, const 
 				return {sendFailure("File not found when trying to send to player"), false};
 			if (isGraal3DClient())
 				return {sendFailure("Graal3D: file not found, told the client"), false};
+			// Seihai: a game client always hears that a file is missing (PLO_FILESENDFAILED), as for
+			// 1.x's PLI_UPDATEFILE above; warnonmissingfiles only decides whether it is logged. With no
+			// answer a 5.12 client kept asking for pics1.png, head0.png and the rest and drew nothing.
+			if (isClient())
+				return {sendFailure(""), false};
 			return {false, false};
 		}
 
