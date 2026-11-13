@@ -1007,10 +1007,15 @@ std::optional<std::string> Translator::stringCommand(GS1Parser::StatementBuiltIn
 	auto value = [&](size_t i) -> std::string { return i < args.size() ? arg(args[i]) : "\"\""s; };
 	auto local = [](const std::string& n) { return n.starts_with("this."sv) || n.starts_with("client."sv); };
 
-	// `set name;` / `unset name;`: the flag is named as text.
-	// Real 5.24r4 and 6.03r7 clients have no `set` or `unset` function, and send no flag for `player.name = ...`; a
-	// `client.` variable is sent as a flag (lab probe, 2026-11-13). So `set client.name;` is `client.name = true;`
-	// and a plain player flag is refused.
+	// A player flag goes to the server: `triggeraction(0, 0, "gr.flagset", "name[=value]")` or `"gr.flagdel"`. Real
+	// 5.24r4 and 6.03r7 clients have no `set` or `unset` function and send no flag for `player.name = ...` (lab probe,
+	// 2026-11-13), but `triggeraction` is a client command (3.153 tables). The server applies the pair with the rules
+	// of PLI_FLAGSET / PLI_FLAGDEL and sends the flag back, so a later `player.name` read sees it (one round trip).
+	auto flagCall = [&](std::string_view action, const std::string& pair)
+	{ return std::format("{}triggeraction(0, 0, \"{}\", {});\n", pad, action, pair); };
+
+	// `set name;` / `unset name;`: the flag is named as text. A `client.` or `this.` name stays on the client
+	// (`client.` is sent as a flag by the client itself).
 	if (name == "set"sv || name == "unset"sv)
 	{
 		const auto raw = args.size() == 1 ? rawText(args[0]) : std::nullopt;
@@ -1027,14 +1032,20 @@ std::optional<std::string> Translator::stringCommand(GS1Parser::StatementBuiltIn
 			flag = trim(flag.substr(0, eq));
 		}
 		const auto lower = toLower(flag);
-		if (!isPlainName(lower) || !local(lower))
+		if (!isPlainName(lower))
 		{
-			err(cmd, std::format("`{} {}`: a player flag has no GS2 client form (5.24r4 and 6.03r7 have no `{}` and send no flag for `player.{}`); only `client.` and `this.` names are lowered", name, flag, name, flag));
+			err(cmd, std::format("`{} {}`: only a plain flag name is lowered", name, flag));
 			return std::string{};
 		}
+		if (local(lower))
+		{
+			if (name == "unset"sv)
+				return std::format("{}{} = \"\";\n", pad, this->name(lower));
+			return std::format("{}{} = {};\n", pad, this->name(lower), flagValue.has_value() ? quote(flagValue.value()) : "true"s);
+		}
 		if (name == "unset"sv)
-			return std::format("{}{} = \"\";\n", pad, this->name(lower));
-		return std::format("{}{} = {};\n", pad, this->name(lower), flagValue.has_value() ? quote(flagValue.value()) : "true"s);
+			return flagCall("gr.flagdel"sv, quote(flag));
+		return flagCall("gr.flagset"sv, quote(flagValue.has_value() ? flag + "=" + flagValue.value() : flag));
 	}
 
 	if (name == "setstring"sv)
@@ -1048,9 +1059,9 @@ std::optional<std::string> Translator::stringCommand(GS1Parser::StatementBuiltIn
 		if (local(var.value()))
 			return std::format("{}{} = {};\n", pad, this->name(var.value()), value(1));
 
-		// Any other name is a player flag, which these clients cannot set (see `set` above).
-		err(cmd, std::format("`setstring {}`: a player flag has no GS2 client form (5.24r4 and 6.03r7 have no `set` and send no flag for `player.{}`); only `client.` and `this.` strings are lowered", var.value(), var.value()));
-		return std::string{};
+		// Any other name is a player flag. An empty value removes it, as PLI_FLAGSET does.
+		const auto flag = trim(rawText(args[0]).value_or(var.value()));
+		return flagCall("gr.flagset"sv, std::format("{} @ ({})", quote(flag + "="), value(1)));
 	}
 
 	if (name == "addstring"sv || name == "insertstring"sv || name == "replacestring"sv || name == "removestring"sv || name == "deletestring"sv)
@@ -1618,7 +1629,7 @@ std::string Translator::writeName(GS1Parser::IdentifierAccessContext* access)
 	if (index.empty())
 	{
 		if (isScriptVar(n) && m_flags.contains(lower))
-			err(access, std::format("`{0}` is a player flag the script sets; writing a GS1 flag by its plain name has no client-checked GS2 form (a 5.x client sends no flag for `player.{0} = ...`)", n));
+			err(access, std::format("`{0}` is a player flag the script sets; a plain `{0} = ...` would shadow it with a script variable, which has no faithful GS2 form (`set` and `setstring` are lowered)", n));
 		else if (builtinWithoutGS2Write(lower))
 			err(access, std::format("writing the GS1 variable `{}` has no client-checked GS2 form; it is not lowered", n));
 		else if (countedList(lower).has_value())

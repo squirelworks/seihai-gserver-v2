@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -1084,6 +1084,16 @@ HandlePacketResult PlayerClient::msgPLI_TRIGGERACTION(CString& pPacket)
 	// Grab action name.
 	auto actualActionName{string::trimMutate(string::toLower(actions[0]))};
 
+	// Seihai: player flags written by a GS1 script that was translated to GS2 for a 5.12 or later client. Those
+	// clients have no `set`/`unset` and send no PLI_FLAGSET for `player.name = ...` (lab probe, 2026-11-13), so the
+	// translator sends `triggeraction(0, 0, "gr.flagset", "name[=value]")` or `"gr.flagdel"` instead. The pair goes
+	// through PLI_FLAGSET / PLI_FLAGDEL, with their rules, and the result is sent back so the script reads it.
+	if (actualActionName == "gr.flagset" || actualActionName == "gr.flagdel")
+	{
+		applyScriptFlag(actualActionName == "gr.flagdel", string::join(actions | std::views::drop(1), ","));
+		return HandlePacketResult::Handled;
+	}
+
 	// TODO(refactor): move into trigger command dispatcher, some use private player vars.
 	{
 		if (m_server->cached.enableTriggerhackExecscript.getValue())
@@ -1335,6 +1345,45 @@ HandlePacketResult PlayerClient::msgPLI_TRIGGERACTION(CString& pPacket)
 	}
 
 	return HandlePacketResult::Handled;
+}
+
+void PlayerClient::applyScriptFlag(const bool remove, const std::string& flagPair)
+{
+	const auto flagName = string::trim(std::string_view{flagPair}.substr(0, flagPair.find('=')));
+	if (flagName.empty())
+		return;
+
+	CString packet;
+	packet >> (char)(remove ? PLI_FLAGDEL : PLI_FLAGSET) << flagPair;
+	packet.setRead(1);
+	if (remove)
+		msgPLI_FLAGDEL(packet);
+	else msgPLI_FLAGSET(packet);
+
+	// The client keeps its own copy of the flags (sent with PLO_FLAGSET at login). Send what the server now holds.
+	if (!echoesScriptFlag(flagName))
+		return;
+	if (const auto flag = account.variables.get(flagName).lock(); flag != nullptr)
+	{
+		const auto text = flag->get<std::string>();
+		sendPacket(scriptFlagState(flagName, true, text.has_value() ? std::optional<std::string>{text.value().get()} : std::nullopt));
+	}
+	else sendPacket(scriptFlagState(flagName, false, std::nullopt));
+}
+
+bool PlayerClient::echoesScriptFlag(const std::string_view flagName) noexcept
+{
+	// `this.`, `server.` and the `gr.` hacks are not account flags, so nothing is sent back for them.
+	return !flagName.empty() && !flagName.starts_with("this.") && !flagName.starts_with("server.") && !flagName.starts_with("gr.");
+}
+
+CString PlayerClient::scriptFlagState(const std::string_view flagName, const bool present, const std::optional<std::string>& text)
+{
+	if (!present)
+		return CString() >> (char)PLO_FLAGDEL << flagName;
+	if (text.has_value())
+		return CString() >> (char)PLO_FLAGSET << flagName << "=" << text.value();
+	return CString() >> (char)PLO_FLAGSET << flagName;
 }
 
 HandlePacketResult PlayerClient::msgPLI_TAMPERCHECK(CString& pPacket)
