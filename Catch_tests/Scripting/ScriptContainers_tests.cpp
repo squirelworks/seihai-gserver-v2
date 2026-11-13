@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-13: see CHANGES-SEIHAI.md.
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch_all.hpp>
 #include <catch2/catch_approx.hpp>
@@ -14,7 +15,9 @@
 #include <variant>
 #include <vector>
 
+#include <BabyDI.h>
 #include <CString.h>
+#include <Server.h>
 
 #include <scripting/ScriptContainers.h>
 #include <scripting/ScriptTypes.h>
@@ -218,10 +221,29 @@ TEST_CASE("ScriptEventQueue queue visibility and duplicate detection", "[Scripti
 	REQUIRE(queue.hasEvent(ScriptEventType::TIMEOUT, initiator));
 	REQUIRE_FALSE(queue.hasEvent(ScriptEventType::CREATED, initiator));
 
+	// Seihai: addEvent only queues while an NPC-Server is running, so the test brings one up. Before, it relied on a
+	// Server left behind by another test in this executable and saw 1 event when run alone or first.
+	BabyDI_RELEASE(Server);
+	auto* server = BabyDI_PROVIDE(Server, new Server("test"));
+	server->getSettings().set("serverside", true);
+	server->loadNPCServer();
+	REQUIRE(server->hasNPCServer());
+
 	queue.addEvent(ScriptEventType::CREATED, initiator);
 	queue.addEvent(ScriptEventType::CREATED, initiator);
 	queue.addEvent(ScriptEventType::CREATED, initiator, 1.0, "abc"s);
 	REQUIRE(queue.queue().size() == 2);
+
+	BabyDI_RELEASE(Server);
+}
+
+TEST_CASE("ScriptEventQueue ignores events without an NPC-Server", "[Scripting][ScriptContainers][ScriptEventQueue]")
+{
+	BabyDI_RELEASE(Server);
+
+	ScriptEventQueue queue;
+	queue.addEvent(ScriptEventType::CREATED, source::FromNPC(123));
+	REQUIRE(queue.queue().empty());
 }
 
 TEST_CASE("ScriptContainer exposes event and variable stores", "[Scripting][ScriptContainers][ScriptContainer]")
