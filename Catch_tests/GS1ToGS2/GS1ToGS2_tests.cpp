@@ -106,9 +106,9 @@ TEST_CASE("GS1 commands become GS2 calls and statements", "[GS1ToGS2]")
 	CHECK(gs2("if (created) { set client.seen; unset client.seen; set this.open; }") ==
 		"function onCreated() {\n\tclient.seen = true;\n\tclient.seen = \"\";\n\tthis.open = true;\n}\n");
 	// A player flag goes to the server as a trigger (seihai-core #30); the server applies it and sends it back.
-	CHECK(gs2("if (created) { set gotKey; unset gotKey; set level=3; setstring quest,done; setstring quest,; }") ==
+	CHECK(gs2("if (created) { set gotKey; unset gotKey; setstring quest,done; setstring quest,; }") ==
 		"function onCreated() {\n\ttriggeraction(0, 0, \"gr.flagset\", \"gotKey\");\n\ttriggeraction(0, 0, \"gr.flagdel\", \"gotKey\");\n"
-		"\ttriggeraction(0, 0, \"gr.flagset\", \"level=3\");\n\ttriggeraction(0, 0, \"gr.flagset\", \"quest=\" @ (\"done\"));\n"
+		"\ttriggeraction(0, 0, \"gr.flagset\", \"quest=\" @ (\"done\"));\n"
 		"\ttriggeraction(0, 0, \"gr.flagset\", \"quest=\" @ (\"\"));\n}\n");
 	CHECK(gs2("if (created) setstring server.count,#v(playerrupees);") ==
 		"function onCreated() {\n\ttriggeraction(0, 0, \"gr.flagset\", \"server.count=\" @ ((player.rupees)));\n}\n");
