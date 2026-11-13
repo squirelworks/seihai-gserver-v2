@@ -157,8 +157,7 @@ bool isPlainName(const std::string_view s)
 bool gs2HasCommand(const std::string_view name)
 {
 	return std::ranges::binary_search(GS2ClientCommands, name)
-		|| name == "set"sv || name == "unset"sv || name == "setlevel"sv || name == "setlevel2"sv
-		|| name == "setplayerprop"sv || name == "join"sv || contains(OpcodeBuiltins, name);
+		|| name == "setlevel"sv || name == "setlevel2"sv || name == "join"sv || contains(OpcodeBuiltins, name);
 }
 
 std::optional<std::string_view> renamedCommand(const std::string_view name)
@@ -178,8 +177,8 @@ std::string_view commandHint(const std::string_view name)
 	return ""sv;
 }
 
-// The GS2 name of a GS1 built-in variable. `timeout` is `this.timeout`, the spelling timers.gs2 reads and writes;
-// the player numbers are the same word on the `player` object.
+// The GS2 name of a GS1 built-in variable. `timeout` is `this.timeout`, but a write to it is `setTimer` (see
+// Translator::assignment); the player numbers are the same word on the `player` object.
 std::string gs2Name(const std::string_view name)
 {
 	const auto lower = toLower(name);
@@ -771,6 +770,19 @@ std::string Translator::assignment(GS1Parser::StatementAssignmentContext* stmt, 
 	}
 
 	const auto opType = tokenType(stmt->assignment_operator()->children[0]).value_or(GS1Parser::OP_ASSIGN);
+
+	// `timeout = t;` starts the timer. Real 5.24r4 and 6.03r7 clients run onTimeout after `setTimer(t)` and never
+	// after `this.timeout = t` (lab probe, 2026-11-13).
+	if (const auto parts = nameAndIndex(access); parts.has_value() && parts->second.empty() && toLower(parts->first) == "timeout"sv)
+	{
+		if (opType != GS1Parser::OP_ASSIGN)
+		{
+			err(stmt, "only `timeout = value` is lowered (as `setTimer(value)`)");
+			return {};
+		}
+		return std::format("{}setTimer({});\n", pad, expr(stmt->expression()));
+	}
+
 	const auto target = writeName(access);
 	const bool element = target.ends_with(']');
 
@@ -947,6 +959,19 @@ std::string Translator::command(GS1Parser::StatementBuiltInCommandContext* cmd, 
 	if (auto s = stringCommand(cmd, name, indent); s.has_value())
 		return s.value();
 
+	// `setplayerprop #c,text;` is `player.chat = text;`. 5.24r4 and 6.03r7 have no `setplayerprop`, and send the chat
+	// for `player.chat = ...` (lab probe, 2026-11-13). The other properties are not checked on a real client yet.
+	if (name == "setplayerprop"sv)
+	{
+		const auto prop = args.empty() ? std::nullopt : rawText(args[0]);
+		if (!prop.has_value() || toLower(trim(prop.value())) != "#c"sv || args.size() != 2)
+		{
+			err(cmd, "only `setplayerprop #c,text` is lowered (as `player.chat = text`)");
+			return {};
+		}
+		return std::format("{}player.chat = {};\n", pad, arg(args[1]));
+	}
+
 	const auto gs2 = std::string{renamedCommand(name).value_or(name)};
 	if (!gs2HasCommand(gs2))
 	{
@@ -959,10 +984,7 @@ std::string Translator::command(GS1Parser::StatementBuiltInCommandContext* cmd, 
 	{
 		if (i > 0)
 			list += ", ";
-		// The first word of `setplayerprop` names the property (`#c`); it is not a message to expand.
-		if (i == 0 && gs2 == "setplayerprop"sv)
-			list += quote(rawText(args[0]).value_or(""));
-		else list += arg(args[i]);
+		list += arg(args[i]);
 	}
 	return std::format("{}{}({});\n", pad, gs2, list);
 }
@@ -986,16 +1008,33 @@ std::optional<std::string> Translator::stringCommand(GS1Parser::StatementBuiltIn
 	auto local = [](const std::string& n) { return n.starts_with("this."sv) || n.starts_with("client."sv); };
 
 	// `set name;` / `unset name;`: the flag is named as text.
+	// Real 5.24r4 and 6.03r7 clients have no `set` or `unset` function, and send no flag for `player.name = ...`; a
+	// `client.` variable is sent as a flag (lab probe, 2026-11-13). So `set client.name;` is `client.name = true;`
+	// and a plain player flag is refused.
 	if (name == "set"sv || name == "unset"sv)
 	{
-		if (args.size() != 1)
+		const auto raw = args.size() == 1 ? rawText(args[0]) : std::nullopt;
+		if (!raw.has_value())
 		{
 			err(cmd, std::format("`{}` needs one flag name", name));
 			return std::string{};
 		}
-		if (const auto raw = rawText(args[0]); raw.has_value())
-			return std::format("{}{}({});\n", pad, name, quote(trim(raw.value())));
-		return std::format("{}{}({});\n", pad, name, value(0));
+		auto flag = trim(raw.value());
+		std::optional<std::string> flagValue;
+		if (const auto eq = flag.find('='); eq != std::string::npos)
+		{
+			flagValue = flag.substr(eq + 1);
+			flag = trim(flag.substr(0, eq));
+		}
+		const auto lower = toLower(flag);
+		if (!isPlainName(lower) || !local(lower))
+		{
+			err(cmd, std::format("`{} {}`: a player flag has no GS2 client form (5.24r4 and 6.03r7 have no `{}` and send no flag for `player.{}`); only `client.` and `this.` names are lowered", name, flag, name, flag));
+			return std::string{};
+		}
+		if (name == "unset"sv)
+			return std::format("{}{} = \"\";\n", pad, this->name(lower));
+		return std::format("{}{} = {};\n", pad, this->name(lower), flagValue.has_value() ? quote(flagValue.value()) : "true"s);
 	}
 
 	if (name == "setstring"sv)
@@ -1009,13 +1048,9 @@ std::optional<std::string> Translator::stringCommand(GS1Parser::StatementBuiltIn
 		if (local(var.value()))
 			return std::format("{}{} = {};\n", pad, this->name(var.value()), value(1));
 
-		// Any other name is a player flag: `set("name=value")`, or `unset("name")` for an empty value.
-		const auto raw = args.size() > 1 ? rawText(args[1]) : std::optional{""s};
-		if (raw.has_value() && raw.value().empty())
-			return std::format("{}unset({});\n", pad, quote(var.value()));
-		if (raw.has_value() && raw.value().find('#') == std::string::npos)
-			return std::format("{}set({});\n", pad, quote(var.value() + "=" + raw.value()));
-		return std::format("{}set({} @ {});\n", pad, quote(var.value() + "="), value(1));
+		// Any other name is a player flag, which these clients cannot set (see `set` above).
+		err(cmd, std::format("`setstring {}`: a player flag has no GS2 client form (5.24r4 and 6.03r7 have no `set` and send no flag for `player.{}`); only `client.` and `this.` strings are lowered", var.value(), var.value()));
+		return std::string{};
 	}
 
 	if (name == "addstring"sv || name == "insertstring"sv || name == "replacestring"sv || name == "removestring"sv || name == "deletestring"sv)
