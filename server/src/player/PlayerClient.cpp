@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-07, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-07, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -2385,8 +2385,9 @@ namespace preagonal
 
 bool PlayerClient::handlesPing(const int versionId) noexcept
 {
-	// 4.20r8 is the only 4.20 build in the version table; 6.015 (6.01r1) to 6.037 cover 6.x.
-	return versionId == CLVER_4_208 || (versionId >= CLVER_6_015 && versionId <= CLVER_6_037_LINUX);
+	// 4.20r8 and the Mac 4.20r6 (its 108 handler answers with 162; seihai-core's 4.20r6 row);
+	// 6.015 (6.01r1) to 6.037 cover 6.x.
+	return versionId == CLVER_4_208 || versionId == CLVER_4_206_MAC || (versionId >= CLVER_6_015 && versionId <= CLVER_6_037_LINUX);
 }
 
 CString PlayerClient::pingPacket(const uint16_t value)

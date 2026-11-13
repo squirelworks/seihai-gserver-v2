@@ -1,4 +1,4 @@
-// Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
+// Seihai project, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
 // PLO_PING (108) / PLI_PONG (162) for game clients (issue #25).
 
 #define CATCH_CONFIG_MAIN
@@ -20,12 +20,13 @@ std::atomic_bool shutdownProgram{false};
 TEST_CASE("PLO_PING goes only to the builds that answer it", "[ping]")
 {
 	CHECK(PlayerClient::handlesPing(CLVER_4_208));
+	CHECK(PlayerClient::handlesPing(CLVER_4_206_MAC));
 	CHECK(PlayerClient::handlesPing(CLVER_6_015));
 	CHECK(PlayerClient::handlesPing(CLVER_6_034));
 	CHECK(PlayerClient::handlesPing(CLVER_6_037));
 	CHECK(PlayerClient::handlesPing(CLVER_6_037_LINUX));
 
-	for (const int v : {CLVER_UNKNOWN, CLVER_2_31, CLVER_3_153, CLVER_4_0211, CLVER_4_110, CLVER_5_07, CLVER_5_12, CLVER_5_31x, CLVER_IPHONE_1_1})
+	for (const int v : {CLVER_UNKNOWN, CLVER_2_31, CLVER_3_153, CLVER_4_0211, CLVER_4_042, CLVER_4_042_MAC, CLVER_4_110, CLVER_5_07, CLVER_5_12, CLVER_5_12_MAC, CLVER_5_31x, CLVER_IPHONE_1_1})
 		CHECK_FALSE(PlayerClient::handlesPing(v));
 }
 

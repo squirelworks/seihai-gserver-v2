@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -181,7 +181,8 @@ void Weapon::registerWeaponWithPlayer(const std::shared_ptr<Player>& player) con
 	// Classic weapons.
 	if (m_script.getClientByteCode().empty() && player->getVersion() <= CLVER_5_07)
 	{
-		const std::string script = getClientSideScript();
+		// Seihai: without an NPC-server nothing turned the weapon file's newlines into \xa7.
+		const std::string script = gs1WireText(getClientSideScript());
 		weaponPacket >> (char)NPCProp::SCRIPT >> (short)script.length() << script;
 		player->sendPacket(weaponPacket);
 	}
@@ -325,6 +326,28 @@ void Weapon::leaveClass(const std::string_view className)
 
 	m_joinedClasses.erase(it);
 	m_server->updateWeaponForPlayers(this);
+}
+
+std::string Weapon::gs1WireText(const std::string_view script)
+{
+	std::string out;
+	out.reserve(script.size());
+	for (size_t i = 0; i < script.size(); ++i)
+	{
+		const char c = script[i];
+		if (c == '\r')
+		{
+			// \r\n and a lone \r are one line break each.
+			if (i + 1 < script.size() && script[i + 1] == '\n')
+				++i;
+			out += '\xa7';
+		}
+		else if (c == '\n')
+			out += '\xa7';
+		else
+			out += c;
+	}
+	return out;
 }
 
 std::string Weapon::getClientSideScript() const

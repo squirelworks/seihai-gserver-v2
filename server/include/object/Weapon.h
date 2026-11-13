@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
 #ifndef WEAPON_H
 #define WEAPON_H
 
@@ -73,6 +73,11 @@ public:
 	std::string image;
 	clock::time_point modTime;
 	ScriptContainer scripting;
+
+	// Seihai: GS1 script text as the classic clients read it in PLO_NPCWEAPONADD: one line per
+	// \xa7, no \n or \r. A raw newline ends the packet early on the client, so each script line
+	// after it is read as a packet of its own (lab: bogus ids 73, 84 and 93 on 4.04r2 Mac).
+	static std::string gs1WireText(std::string_view script);
 
 protected:
 	std::string getClientSideScript() const;
