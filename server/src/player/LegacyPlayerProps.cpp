@@ -183,25 +183,11 @@ bool pre21KnowsProp(const int versionId, const int propId, const bool forOtherPl
 	}
 }
 
-CString rewritePropsForPre21(const CString& props, const int versionId, const bool forOtherPlayer, const std::set<int>& alsoDrop, const std::optional<int> halfHearts)
+CString rewritePropsForPre21(const CString& props, const int versionId, const bool forOtherPlayer, const std::set<int>& alsoDrop, const bool fromPre21Client)
 {
 	CString in{props};
 	in.setRead(0);
 	CString out;
-
-	// Prop 2 for another player: added after the nickname, before the next
-	// higher prop id, unless the stream carries its own.
-	bool heartsPending = false;
-	const auto flushHearts = [&](const int beforeId)
-	{
-		if (heartsPending && beforeId != PROPID(PlayerProp::HALFHEARTS) && beforeId > PROPID(PlayerProp::HALFHEARTS))
-		{
-			out >> (char)PROPID(PlayerProp::HALFHEARTS) >> (char)std::clamp(*halfHearts, 0, 223);
-			heartsPending = false;
-		}
-		else if (beforeId == PROPID(PlayerProp::HALFHEARTS))
-			heartsPending = false;
-	};
 
 	while (in.bytesLeft() > 0)
 	{
@@ -210,8 +196,6 @@ CString rewritePropsForPre21(const CString& props, const int versionId, const bo
 			break;
 
 		const bool keep = pre21KnowsProp(versionId, propId, forOtherPlayer) && !alsoDrop.contains(propId);
-		if (keep && propId != PROPID(PlayerProp::JOINLEAVELVL) && propId != PROPID(PlayerProp::DISCONNECT))
-			flushHearts(propId);
 		try
 		{
 			if (keep && propId == PROPID(PlayerProp::SWORDIMAGE))
@@ -234,12 +218,16 @@ CString rewritePropsForPre21(const CString& props, const int versionId, const bo
 					length = std::min(length, 5);
 
 				out >> (char)propId;
-				if (propId == PROPID(PlayerProp::NICKNAME) && forOtherPlayer && halfHearts.has_value())
-					heartsPending = true;
 				if (propId == PROPID(PlayerProp::HORSEIMAGE))
 				{
 					const std::string image = toGifName(props.subString(start + 1, length - 1).toString());
 					out >> (char)image.length() << image;
+				}
+				else if (propId == PROPID(PlayerProp::STATUS) && length == 1 && !fromPre21Client)
+				{
+					// Status bit 4 is "male" from 2.0 on, but "swimming" for a
+					// 1.x client, which then draws the player as a head only.
+					out >> (char)((static_cast<unsigned char>(props[start]) - 32) & ~PLSTATUS_MALE);
 				}
 				else
 					out << props.subString(start, length);
@@ -252,21 +240,20 @@ CString rewritePropsForPre21(const CString& props, const int versionId, const bo
 		}
 	}
 
-	flushHearts(PLAYERPROP_COUNT);
 	return out;
 }
 
-CString rewritePacketForPre21(const CString& packet, const int versionId, const std::set<int>& alsoDrop, const std::optional<int> halfHearts)
+CString rewritePacketForPre21(const CString& packet, const int versionId, const std::set<int>& alsoDrop, const bool fromPre21Client)
 {
 	if (packet.length() < 1)
 		return packet;
 
 	const int packetId = static_cast<unsigned char>(packet[0]) - 32;
 	if (packetId == PLO_PLAYERPROPS)
-		return CString() >> (char)PLO_PLAYERPROPS << rewritePropsForPre21(packet.subString(1), versionId, false, alsoDrop);
+		return CString() >> (char)PLO_PLAYERPROPS << rewritePropsForPre21(packet.subString(1), versionId, false, alsoDrop, fromPre21Client);
 
 	if (packetId == PLO_OTHERPLPROPS && packet.length() >= 3)
-		return CString() >> (char)PLO_OTHERPLPROPS << packet.subString(1, 2) << rewritePropsForPre21(packet.subString(3), versionId, true, alsoDrop, halfHearts);
+		return CString() >> (char)PLO_OTHERPLPROPS << packet.subString(1, 2) << rewritePropsForPre21(packet.subString(3), versionId, true, alsoDrop, fromPre21Client);
 
 	return packet;
 }
