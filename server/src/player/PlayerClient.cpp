@@ -127,6 +127,8 @@ HandlePacketResult PlayerClient::handlePacket(const std::optional<uint8_t> id, C
 	try
 	{
 		m_lastData = clock::now();
+		if (isFileRequest(id.value()))
+			m_lastFileActivity = m_lastData;
 
 		const auto result = (this->*handle)(packet);
 		if (result == HandlePacketResult::Bubble)
@@ -219,6 +221,9 @@ bool PlayerClient::doTimedEvents()
 
 	// Increase online time.
 	++account.onlineSeconds;
+
+	// Seihai: a held PLO_SERVERWARP goes once the file requests have gone quiet.
+	sendHeldServerWarp(currTime);
 
 	// Seihai: optional PLO_PING to the builds that answer it (clientping = seconds, 0 = off).
 	if (const int pingEvery = m_server->getSettings().get<int>("clientping").value_or(0); pingEvery > 0 && handlesPing(m_versionId)
@@ -1257,6 +1262,9 @@ bool PlayerClient::warp(const std::string_view levelName, const PixelPosition& p
 
 bool PlayerClient::warp(const std::shared_ptr<Level>& level, const PixelPosition& position, const std::optional<time_t> clientCachedTime)
 {
+	// Seihai: a level send starts a round of file requests; a held 178 waits for them.
+	m_lastFileActivity = clock::now();
+
 	// If we are warping to the same level, just update the player's location.
 	auto localPosition = toLocalPixelPosition(position);
 	if (!m_currentLevel.expired() && account.level == level->levelName)
@@ -2424,6 +2432,53 @@ HandlePacketResult PlayerClient::msgPLI_PONG(CString& pPacket)
 	}
 	else log::printLine(log::server, "[Ping] {}: answer {} does not match the last ping ({}).", account.name, *value, m_pingValue);
 	return HandlePacketResult::Handled;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Seihai: PLO_SERVERWARP hold.
+
+bool PlayerClient::isFileRequest(const uint8_t packetId) noexcept
+{
+	switch (packetId)
+	{
+		case PLI_WANTFILE:
+		case PLI_UPDATEFILE:
+		case PLI_VERIFYWANTSEND:
+		case PLI_UPDATEGANI:
+		case PLI_UPDATESCRIPT:
+		case PLI_UPDATECLASS:
+		case PLI_UPDATEPACKAGEREQUESTFILE:
+			return true;
+		default:
+			return false;
+	}
+}
+
+bool PlayerClient::serverWarpReady(const clock::time_point now, const clock::time_point heldSince, const clock::time_point lastFileActivity) noexcept
+{
+	if (now - heldSince >= SERVERWARP_MAX_HOLD)
+		return true;
+	return now - lastFileActivity >= SERVERWARP_QUIET && now - heldSince >= SERVERWARP_QUIET;
+}
+
+void PlayerClient::holdServerWarp(const CString& packet)
+{
+	// A second 178 replaces the first; the client follows only one.
+	if (!m_heldServerWarp.has_value())
+		m_serverWarpHeldSince = clock::now();
+	m_heldServerWarp = packet;
+	log::printLine(log::server, "{} gets the server warp once its file requests are answered", account.name);
+}
+
+void PlayerClient::sendHeldServerWarp(const clock::time_point now)
+{
+	if (!m_heldServerWarp.has_value() || !serverWarpReady(now, m_serverWarpHeldSince, m_lastFileActivity))
+		return;
+
+	// The file queue sends in order, so every file already queued for this client
+	// reaches it before the warp does.
+	sendPacket(m_heldServerWarp.value(), PacketQueue::FILE);
+	m_heldServerWarp.reset();
 }
 
 } // end namespace preagonal
