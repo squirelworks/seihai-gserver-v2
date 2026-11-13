@@ -2434,8 +2434,6 @@ HandlePacketResult PlayerClient::msgPLI_PONG(CString& pPacket)
 	return HandlePacketResult::Handled;
 }
 
-} // end namespace preagonal
-
 ///////////////////////////////////////////////////////////////////////////////
 // Seihai: PLO_SERVERWARP hold.
 
@@ -2482,3 +2480,5 @@ void PlayerClient::sendHeldServerWarp(const clock::time_point now)
 	sendPacket(m_heldServerWarp.value(), PacketQueue::FILE);
 	m_heldServerWarp.reset();
 }
+
+} // end namespace preagonal
