@@ -228,6 +228,26 @@ public:
 	static bool echoesScriptFlag(std::string_view flagName) noexcept;
 	static CString scriptFlagState(std::string_view flagName, bool present, const std::optional<std::string>& text);
 
+	// Seihai: PLO_SERVERWARP (178) is held until the client's file requests have gone
+	// quiet. A 5.24r4 or 6.03r7 asks the login server for pics1.png once, right after
+	// level entry, and never asks the next server again; a 178 sent at once (normal
+	// queue) overtook the 210 KB transfer in the file queue, the client left mid-file
+	// and drew every tile black (Graal_analysis client-internals/v5v6-expiry-and-black-screen.md).
+	void holdServerWarp(const CString& packet);
+	// True when a held 178 may go: no file request or level send for SERVERWARP_QUIET,
+	// or held for SERVERWARP_MAX_HOLD already.
+	static bool serverWarpReady(clock::time_point now, clock::time_point heldSince, clock::time_point lastFileActivity) noexcept;
+	// The packet ids that count as a file request for the hold.
+	static bool isFileRequest(uint8_t packetId) noexcept;
+	static constexpr std::chrono::seconds SERVERWARP_QUIET{2};
+	static constexpr std::chrono::seconds SERVERWARP_MAX_HOLD{30};
+
+protected:
+	void sendHeldServerWarp(clock::time_point now);
+	std::optional<CString> m_heldServerWarp;
+	clock::time_point m_serverWarpHeldSince;
+	clock::time_point m_lastFileActivity;
+
 protected:
 	uint16_t m_pingValue = 0;
 	std::optional<clock::time_point> m_pingSentAt;
