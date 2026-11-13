@@ -1613,7 +1613,10 @@ bool PlayerClient::sendDynamicLevelData(const std::shared_ptr<Level>& level, std
 			if (!level->isSinglePlayer)
 			{
 				const CString carryNPCProps = CString() >> (char)PLO_NPCPROPS >> (int)m_carryNPC << npc->getAllPropsPacket();
-				m_server->sendPacketToNearby(carryNPCProps, getGlobalPosition(), level, {m_id});
+				m_server->sendPacketToNearby(carryNPCProps, getGlobalPosition(), level, {m_id}, [&npc](const Player* p) { return !npc->sendsGS1ByteCodeTo(*p); });
+				// Seihai: clients that run the script as bytecode get the prop with no text (#27).
+				const CString carryNPCPropsNoScript = CString() >> (char)PLO_NPCPROPS >> (int)m_carryNPC << npc->getAllPropsPacket(std::nullopt, true);
+				m_server->sendPacketToNearby(carryNPCPropsNoScript, getGlobalPosition(), level, {m_id}, [&npc](const Player* p) { return npc->sendsGS1ByteCodeTo(*p); });
 			}
 		}
 	}
@@ -2385,9 +2388,11 @@ namespace preagonal
 
 bool PlayerClient::handlesPing(const int versionId) noexcept
 {
-	// 4.20r8 and the Mac 4.20r6 (its 108 handler answers with 162; seihai-core's 4.20r6 row);
-	// 6.015 (6.01r1) to 6.037 cover 6.x.
-	return versionId == CLVER_4_208 || versionId == CLVER_4_206_MAC || (versionId >= CLVER_6_015 && versionId <= CLVER_6_037_LINUX);
+	// 4.20r8 and the Mac build labelled 4.20r6 (G3D27076, a 4.10r2-era build, gs2lib
+	// CLVER_4_102_MAC; its 108 handler answers with 162; seihai-core's 4.20r6 row);
+	// 6.015 (6.01r1) to 6.037 cover 6.x. The real Mac 4.20r6 (G3D21126, CLVER_4_206_MAC)
+	// has not been run, so it gets no PLO_PING.
+	return versionId == CLVER_4_208 || versionId == CLVER_4_102_MAC || (versionId >= CLVER_6_015 && versionId <= CLVER_6_037_LINUX);
 }
 
 CString PlayerClient::pingPacket(const uint16_t value)
