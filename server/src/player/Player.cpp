@@ -41,6 +41,7 @@
 #include <object/Character.h>
 #include <object/Player.h>
 #include <object/Weapon.h>
+#include <player/LegacyPlayerProps.h>
 #include <player/PlayerClient.h>
 #include <player/PlayerProps.h>
 #include <scripting/IScriptEngine.h>
@@ -510,6 +511,26 @@ void Player::sendPacket(const CString& packet, const PacketQueue channel)
 {
 	if (packet.isEmpty() || m_playerSock == nullptr || m_playerSock->getState() == SOCKET_STATE_DISCONNECTED)
 		return;
+
+	// Seihai: a 1.x client reads player props in the pre-2.1 forms only. A
+	// classic server already writes those; any other server writes 2.x forms,
+	// which end the 1.x client's parse before X and Y (#27).
+	if (isClient() && legacy::isPre21Client(m_versionId) && m_server != nullptr && m_server->Generation != ServerGeneration::CLASSIC)
+	{
+		if (const auto packetId = static_cast<unsigned char>(packet[0]) - 32; packetId == PLO_PLAYERPROPS || packetId == PLO_OTHERPLPROPS)
+		{
+			const CString rewritten = legacy::rewritePacketForPre21(packet, m_versionId);
+			if (rewritten.length() <= (packetId == PLO_OTHERPLPROPS ? 3 : 1))
+				return;
+			return sendPacketUnchecked(rewritten, channel);
+		}
+	}
+
+	sendPacketUnchecked(packet, channel);
+}
+
+void Player::sendPacketUnchecked(const CString& packet, const PacketQueue channel)
+{
 
 #ifdef PACKETLOGGING
 	// This will suck as long as we have gs2lib.

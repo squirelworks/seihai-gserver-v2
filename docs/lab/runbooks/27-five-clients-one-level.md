@@ -12,12 +12,10 @@ throwaway folder for the run:
 1. Copy `servers/default` to `servers/milestone`.
 2. In its `config/allowedversions.txt`, make the `newmain` line take all five:
    `newmain = GNW07080, GNW03014, GNW28015, G3D14097:G3D0511C`
-   (1.39, 2.22, 2.31, then 5.12 to 6.037). The version table (gs2lib
-   `IUtil.cpp`) has no 5.24 token: the 5.24 client's own token is not in the
-   range by name, so it may get "version not allowed". If it does, write down
-   its token from `serverlog.txt` (the refused login prints it). That is a
-   finding for #27 and gs2lib, not a lab failure; go on with four, or with 5.12
-   in its place.
+   (1.39, 2.22, 2.31, then 5.12 to 6.037). Since seihai-gs2lib #18 the
+   5.24r3/5.24r4 token `G3D15010` sits inside that range (`CLVER_5_24`), so
+   5.24 needs no line of its own. A build older than that still refuses it
+   ("Version: G3D15010 unknown").
 3. In its `config/serveroptions.txt`: `serverport = 14806`, keep
    `localhost = true`.
 4. Add the test level `milestone.nw` to `world/` with one NPC whose GS1
@@ -30,8 +28,12 @@ throwaway folder for the run:
    NPCEND
    ```
    and set `startlevel = milestone.nw` (or warp each client there).
-5. PNG art: the pre-2.1 client needs GIF names. Note which body, head and
-   sword images the default account uses, and whether GIF copies exist.
+5. PNG art: the pre-2.1 client loads only GIF. Since the 1.x props fix
+   (CHANGES-SEIHAI.md, 2026-11-13) a stock sword, shield or head goes to
+   1.39 as its preset number, so 1.39 draws its own built-in art; any other
+   image name goes as `.gif`. For custom art, make the GIF copies with
+   `seihai-servertools check --client-reach --make-gif <world>` and note which ones it
+   skipped (more than 256 colours).
 
 ## Steps
 

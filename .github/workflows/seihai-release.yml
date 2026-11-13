@@ -1,7 +1,7 @@
 # Seihai: build gs2emu for Linux, Windows and macOS. A tag push (v*), or a manual
 # run with a version, also makes a DRAFT GitHub release with the four archives and
 # the full source, as the GPL asks. The tag is made when the owner presses Publish.
-# Modified by the Seihai project, 2026-11-04, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-11-04, 2026-11-11, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
 name: Seihai build and release
 
 on:
@@ -82,7 +82,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cmake -S . -B build -DTESTS=ON
-          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin ClientPing Scripting
+          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin ClientPing Scripting LegacyProps
           timeout 60 bin/RC
           timeout 60 bin/Gpak
           timeout 60 bin/Graal3D
@@ -90,8 +90,9 @@ jobs:
           timeout 60 bin/ScriptCache
           timeout 60 bin/SecureLogin
           timeout 60 bin/ClientPing
+          timeout 60 bin/LegacyProps
           timeout 60 bin/Scripting "Script minify with block comments"
-          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin bin/ClientPing bin/Scripting
+          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin bin/ClientPing bin/Scripting bin/LegacyProps
           python3 -m unittest tools/lab/test_labcheck.py
       - name: Package
         shell: bash
@@ -198,7 +199,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cmake -S . -B build -DTESTS=ON
-          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin ClientPing Scripting
+          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin ClientPing Scripting LegacyProps
           timeout 60 bin/RC
           timeout 60 bin/Gpak
           timeout 60 bin/Graal3D
@@ -206,8 +207,9 @@ jobs:
           timeout 60 bin/ScriptCache
           timeout 60 bin/SecureLogin
           timeout 60 bin/ClientPing
+          timeout 60 bin/LegacyProps
           timeout 60 bin/Scripting "Script minify with block comments"
-          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin bin/ClientPing bin/Scripting
+          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin bin/ClientPing bin/Scripting bin/LegacyProps
           python3 -m unittest tools/lab/test_labcheck.py
       - name: Package
         shell: bash
