@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
 // New file: issue #24. The CRC the server announces for a cached weapon or class must be
 // the CRC32 of the body the client caches, or the client's cache check never matches and every
 // login downloads every script again. For a weapon that body is the bytecode DES-encrypted with
@@ -187,4 +187,13 @@ TEST_CASE_METHOD(ModernServer, "PLO_WEAPONHASH carries the CRC32 of the bytecode
 	const auto parts = string::fromCSV(weapon.getHeaderWithCRC());
 	REQUIRE(parts.size() == 5);
 	CHECK(crc != readGInt5(parts[4]));
+}
+
+// Seihai, 2026-11-13: a GS1 text weapon goes out with \xa7 for every line break. The Mac PowerPC
+// 4.04r2 got the weapon file's raw newlines and read each script line as a packet of its own.
+TEST_CASE("GS1 weapon text carries no raw line breaks", "[weapon][gs1]")
+{
+	CHECK(Weapon::gs1WireText("//#CLIENTSIDE\nif (created) {\r\n  timeout=0.05;\r}\n") == "//#CLIENTSIDE\xa7if (created) {\xa7  timeout=0.05;\xa7}\xa7");
+	CHECK(Weapon::gs1WireText("a\xa7" "b") == "a\xa7" "b");
+	CHECK(Weapon::gs1WireText("") == "");
 }
