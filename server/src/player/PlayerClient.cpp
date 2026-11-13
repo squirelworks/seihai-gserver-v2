@@ -2385,7 +2385,7 @@ namespace preagonal
 
 bool PlayerClient::handlesPing(const int versionId) noexcept
 {
-	// 4.20r8 and the Mac build archived as 4.20r6 (G3D27076, a 4.10r2-era build, gs2lib
+	// 4.20r8 and the Mac build labelled 4.20r6 (G3D27076, a 4.10r2-era build, gs2lib
 	// CLVER_4_102_MAC; its 108 handler answers with 162; seihai-core's 4.20r6 row);
 	// 6.015 (6.01r1) to 6.037 cover 6.x. The real Mac 4.20r6 (G3D21126, CLVER_4_206_MAC)
 	// has not been run, so it gets no PLO_PING.

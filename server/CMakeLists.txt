@@ -312,7 +312,7 @@ FetchContent_Declare(gs2lib
 	# 13 catalogue game tokens it lacked and G3D27076 renamed CLVER_4_102_MAC,
 	# seihai-gs2lib #19).
 	GIT_REPOSITORY https://github.com/squirelworks/seihai-gs2lib.git
-	GIT_TAG        c9c8066a57e66ac5ed9b7e1fcd95a3d19a70c9a2
+	GIT_TAG        f412de13cd1e9425dc54cac6bbdb5a7577867170
 )
 FetchContent_MakeAvailable(gs2lib)
 add_dependencies(${TARGET_NAME} gs2lib)
