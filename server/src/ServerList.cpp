@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -978,7 +978,14 @@ void ServerList::msgSVI_SERVERINFO(CString& pPacket)
 	// A hack to allow v5 clients to serverwarp to servers
 	const auto player = m_server->getPlayer(pid, PLTYPE_ANYCLIENT);
 	if (player && player->getVersion() >= CLVER_2_1)
-		player->sendPacket(CString() >> (char)PLO_SERVERWARP << serverpacket);
+	{
+		// Seihai: held until the client's file requests are answered, so the warp does
+		// not cut off a download the client will not ask the next server for.
+		if (const auto client = std::dynamic_pointer_cast<PlayerClient>(player); client != nullptr)
+			client->holdServerWarp(CString() >> (char)PLO_SERVERWARP << serverpacket);
+		else
+			player->sendPacket(CString() >> (char)PLO_SERVERWARP << serverpacket);
+	}
 }
 
 void ServerList::msgSVI_REQUESTTEXT(CString& pPacket)
