@@ -310,7 +310,7 @@ FetchContent_Declare(gs2lib
 	# label for 5.00r7, + the Mac PowerPC 4.04r2, 4.20r6 and 5.12 version ids,
 	# + the 5.24 version id G3D15010, seihai-gs2lib #18).
 	GIT_REPOSITORY https://github.com/squirelworks/seihai-gs2lib.git
-	GIT_TAG        4f6147f0ddc70a2b3a6734452421f6c6e41e7efc
+	GIT_TAG        65e0e09b75865fc1fd75af74be0b12ca19232281
 )
 FetchContent_MakeAvailable(gs2lib)
 add_dependencies(${TARGET_NAME} gs2lib)
