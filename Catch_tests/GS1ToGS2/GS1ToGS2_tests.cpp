@@ -75,7 +75,7 @@ function onPlayerTouchsMe() {
 		this.open = 1;
 		setimg("dooropen.png");
 		play("door.wav");
-		this.timeout = 1;
+		setTimer(1);
 	}
 }
 function onTimeout() {
@@ -102,11 +102,16 @@ TEST_CASE("GS1 commands become GS2 calls and statements", "[GS1ToGS2]")
 	CHECK(gs2("if (created) showimg 1,light.png,x,y;") == "function onCreated() {\n\tshowimg(1, \"light.png\", x, y);\n}\n");
 	CHECK(gs2("if (created) { setstring this.msg,ok; setstring client.n,#a; }") ==
 		"function onCreated() {\n\tthis.msg = \"ok\";\n\tclient.n = player.account;\n}\n");
-	CHECK(gs2("if (created) { setstring quest,done; setstring quest,; }") ==
-		"function onCreated() {\n\tset(\"quest=done\");\n\tunset(\"quest\");\n}\n");
+	// 5.24r4 and 6.03r7 have no set/unset and send a flag only for `client.` (lab probe, 2026-11-13).
+	CHECK(gs2("if (created) { set client.seen; unset client.seen; set this.open; }") ==
+		"function onCreated() {\n\tclient.seen = true;\n\tclient.seen = \"\";\n\tthis.open = true;\n}\n");
+	CHECK(refused("if (created) setstring quest,done;", "a player flag has no GS2 client form"));
+	CHECK(refused("if (created) set gotkey;", "a player flag has no GS2 client form"));
+	CHECK(refused("if (created) unset gotkey;", "a player flag has no GS2 client form"));
 	CHECK(gs2("if (playerchats) tokenize #c;") == "function onPlayerChats() {\n\ttokens = (player.chat).tokenize();\n}\n");
 	CHECK(gs2("if (created) setcharprop #3,head3.png;") == "function onCreated() {\n\tthis.headimg = \"head3.png\";\n}\n");
-	CHECK(gs2("if (created) setplayerprop #c,Hello #n;") == "function onCreated() {\n\tsetplayerprop(\"#c\", (\"Hello \" @ player.nick));\n}\n");
+	CHECK(gs2("if (created) setplayerprop #c,Hello #n;") == "function onCreated() {\n\tplayer.chat = (\"Hello \" @ player.nick);\n}\n");
+	CHECK(refused("if (created) setplayerprop #n,Bob;", "only `setplayerprop #c,text`"));
 	CHECK(gs2("if (created) { addstring this.list,a; deletestring this.list,0; }") ==
 		"function onCreated() {\n\tthis.list.add(\"a\");\n\tthis.list.delete(0);\n}\n");
 
@@ -117,7 +122,8 @@ TEST_CASE("GS1 commands become GS2 calls and statements", "[GS1ToGS2]")
 TEST_CASE("GS1 names, message codes and functions", "[GS1ToGS2]")
 {
 	CHECK(gs2("if (created) { playerx = playery + 1; timeout = 0.05; }") ==
-		"function onCreated() {\n\tplayer.x = (player.y + 1);\n\tthis.timeout = 0.05;\n}\n");
+		"function onCreated() {\n\tplayer.x = (player.y + 1);\n\tsetTimer(0.05);\n}\n");
+	CHECK(refused("if (created) timeout += 1;", "only `timeout = value`"));
 	CHECK(gs2("if (created) message You have #v(playerrupees) rupees, #n;") ==
 		"function onCreated() {\n\tmessage((\"You have \" @ (player.rupees) @ \" rupees, \" @ player.nick));\n}\n");
 	CHECK(gs2("if (playerchats && strequals(#c,open)) say2 #T(#t(0))#bnext;") ==
@@ -127,9 +133,6 @@ TEST_CASE("GS1 names, message codes and functions", "[GS1ToGS2]")
 	CHECK(gs2("if (created) with (getplayer(Bob)) { hide; i = 1; }") ==
 		"function onCreated() {\n\twith (findplayer(\"Bob\")) {\n\t\thide();\n\t\tthiso.i = 1;\n\t}\n}\n");
 
-	// A player flag the script sets is read from the player, as a 5.24r4 client reads it.
-	CHECK(gs2("if (created) set gotkey;\nif (playerenters && gotkey) hide;\n") ==
-		"function onCreated() {\n\tset(\"gotkey\");\n}\nfunction onPlayerEnters() {\n\tif (player.gotkey) {\n\t\thide();\n\t}\n}\n");
 
 	// GS2 pushes a list's elements right to left, so values that call something are read first, in GS1's order.
 	CHECK(gs2("if (created) a = {random(1,2), 5, random(3,4)};") ==
