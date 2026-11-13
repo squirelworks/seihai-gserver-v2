@@ -520,7 +520,16 @@ void Player::sendPacket(const CString& packet, const PacketQueue channel)
 		if (const auto packetId = static_cast<unsigned char>(packet[0]) - 32; packetId == PLO_PLAYERPROPS || packetId == PLO_OTHERPLPROPS)
 		{
 			const auto alsoDrop = legacy::parseDropList(m_server->getSettings().get<std::string>("legacyprops_drop").value_or(""));
-			const CString rewritten = legacy::rewritePacketForPre21(packet, m_versionId, alsoDrop);
+			// The other player's hearts, which a 1.x client needs to draw its body.
+			std::optional<int> halfHearts;
+			if (packetId == PLO_OTHERPLPROPS && packet.length() >= 3)
+			{
+				CString idBytes = packet.subString(1, 2);
+				idBytes.setRead(0);
+				if (const auto other = m_server->getPlayer(static_cast<PlayerID>(idBytes.readGUShort())); other != nullptr)
+					halfHearts = other->account.character.hitpointsInHalves;
+			}
+			const CString rewritten = legacy::rewritePacketForPre21(packet, m_versionId, alsoDrop, halfHearts);
 			if (rewritten.length() <= (packetId == PLO_OTHERPLPROPS ? 3 : 1))
 				return;
 			return sendPacketUnchecked(rewritten, channel);

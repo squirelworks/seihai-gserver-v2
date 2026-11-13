@@ -172,6 +172,32 @@ TEST_CASE("1.x clients get player props in the pre-2.1 forms", "[legacy]")
 		REQUIRE(std::ranges::find(got, PROPID(PlayerProp::ACCOUNTNAME)) != got.end());
 	}
 
+	SECTION("another player's hearts are added after the nickname")
+	{
+		CString out = legacy::rewritePropsForPre21(props, CLVER_1_39, true, {}, 6);
+		const auto got = ids(out);
+		REQUIRE(got[0] == PROPID(PlayerProp::JOINLEAVELVL));
+		REQUIRE(got[1] == PROPID(PlayerProp::NICKNAME));
+		REQUIRE(got[2] == PROPID(PlayerProp::HALFHEARTS));
+		REQUIRE(got[3] == PROPID(PlayerProp::SWORDIMAGE));
+		REQUIRE(std::ranges::count(got, PROPID(PlayerProp::HALFHEARTS)) == 1);
+
+		// Not for a movement update, which names no one.
+		CString move;
+		move >> (char)PROPID(PlayerProp::X) >> (char)62;
+		REQUIRE(ids(legacy::rewritePropsForPre21(move, CLVER_1_39, true, {}, 6)) == std::vector<int>{PROPID(PlayerProp::X)});
+
+		// Not twice when the stream has its own.
+		CString own;
+		own >> (char)PROPID(PlayerProp::NICKNAME) << str("a") >> (char)PROPID(PlayerProp::HALFHEARTS) >> (char)4;
+		const auto ownIds = ids(legacy::rewritePropsForPre21(own, CLVER_1_39, true, {}, 6));
+		REQUIRE(std::ranges::count(ownIds, PROPID(PlayerProp::HALFHEARTS)) == 1);
+
+		// Not for the client's own props.
+		const auto self = ids(legacy::rewritePropsForPre21(props, CLVER_1_39, false, {}, 6));
+		REQUIRE(std::ranges::count(self, PROPID(PlayerProp::HALFHEARTS)) == 0);
+	}
+
 	SECTION("only 1.20 to 1.41r1 are rewritten")
 	{
 		REQUIRE(legacy::isPre21Client(CLVER_1_39));

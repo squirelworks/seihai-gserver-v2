@@ -12,6 +12,7 @@
 #ifndef LEGACYPLAYERPROPS_H
 #define LEGACYPLAYERPROPS_H
 
+#include <optional>
 #include <set>
 #include <string_view>
 
@@ -35,11 +36,15 @@ bool pre21KnowsProp(int versionId, int propId, bool forOtherPlayer);
 /// A sword, shield or head that is a stock image (`sword1.png`, `head0.png`) goes
 /// as its preset number, so the client draws its own built-in GIF; any other
 /// `.png` image name becomes `.gif`. Colors keep the first five.
-CString rewritePropsForPre21(const CString& props, int versionId, bool forOtherPlayer, const std::set<int>& alsoDrop = {});
+/// For another player, `halfHearts` (that player's hearts, in halves) is added
+/// as prop 2 to a packet that names the player (nickname) and lacks it: a 1.x
+/// client takes a player it has no hearts for as dead and draws only the head
+/// (#27 bisect, 2026-11-13). A 2.x server does not send prop 2 to others.
+CString rewritePropsForPre21(const CString& props, int versionId, bool forOtherPlayer, const std::set<int>& alsoDrop = {}, std::optional<int> halfHearts = std::nullopt);
 
 /// @brief Rewrite a whole PLO_PLAYERPROPS or PLO_OTHERPLPROPS packet for a 1.x
 /// client. Any other packet is returned unchanged.
-CString rewritePacketForPre21(const CString& packet, int versionId, const std::set<int>& alsoDrop = {});
+CString rewritePacketForPre21(const CString& packet, int versionId, const std::set<int>& alsoDrop = {}, std::optional<int> halfHearts = std::nullopt);
 
 /// @brief The serveroptions.txt `legacyprops_drop` list (prop ids, comma
 /// separated): props also left out for 1.x clients. A lab switch, to find

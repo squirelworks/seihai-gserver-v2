@@ -183,11 +183,25 @@ bool pre21KnowsProp(const int versionId, const int propId, const bool forOtherPl
 	}
 }
 
-CString rewritePropsForPre21(const CString& props, const int versionId, const bool forOtherPlayer, const std::set<int>& alsoDrop)
+CString rewritePropsForPre21(const CString& props, const int versionId, const bool forOtherPlayer, const std::set<int>& alsoDrop, const std::optional<int> halfHearts)
 {
 	CString in{props};
 	in.setRead(0);
 	CString out;
+
+	// Prop 2 for another player: added after the nickname, before the next
+	// higher prop id, unless the stream carries its own.
+	bool heartsPending = false;
+	const auto flushHearts = [&](const int beforeId)
+	{
+		if (heartsPending && beforeId != PROPID(PlayerProp::HALFHEARTS) && beforeId > PROPID(PlayerProp::HALFHEARTS))
+		{
+			out >> (char)PROPID(PlayerProp::HALFHEARTS) >> (char)std::clamp(*halfHearts, 0, 223);
+			heartsPending = false;
+		}
+		else if (beforeId == PROPID(PlayerProp::HALFHEARTS))
+			heartsPending = false;
+	};
 
 	while (in.bytesLeft() > 0)
 	{
@@ -196,6 +210,8 @@ CString rewritePropsForPre21(const CString& props, const int versionId, const bo
 			break;
 
 		const bool keep = pre21KnowsProp(versionId, propId, forOtherPlayer) && !alsoDrop.contains(propId);
+		if (keep && propId != PROPID(PlayerProp::JOINLEAVELVL) && propId != PROPID(PlayerProp::DISCONNECT))
+			flushHearts(propId);
 		try
 		{
 			if (keep && propId == PROPID(PlayerProp::SWORDIMAGE))
@@ -218,6 +234,8 @@ CString rewritePropsForPre21(const CString& props, const int versionId, const bo
 					length = std::min(length, 5);
 
 				out >> (char)propId;
+				if (propId == PROPID(PlayerProp::NICKNAME) && forOtherPlayer && halfHearts.has_value())
+					heartsPending = true;
 				if (propId == PROPID(PlayerProp::HORSEIMAGE))
 				{
 					const std::string image = toGifName(props.subString(start + 1, length - 1).toString());
@@ -234,10 +252,11 @@ CString rewritePropsForPre21(const CString& props, const int versionId, const bo
 		}
 	}
 
+	flushHearts(PLAYERPROP_COUNT);
 	return out;
 }
 
-CString rewritePacketForPre21(const CString& packet, const int versionId, const std::set<int>& alsoDrop)
+CString rewritePacketForPre21(const CString& packet, const int versionId, const std::set<int>& alsoDrop, const std::optional<int> halfHearts)
 {
 	if (packet.length() < 1)
 		return packet;
@@ -247,7 +266,7 @@ CString rewritePacketForPre21(const CString& packet, const int versionId, const 
 		return CString() >> (char)PLO_PLAYERPROPS << rewritePropsForPre21(packet.subString(1), versionId, false, alsoDrop);
 
 	if (packetId == PLO_OTHERPLPROPS && packet.length() >= 3)
-		return CString() >> (char)PLO_OTHERPLPROPS << packet.subString(1, 2) << rewritePropsForPre21(packet.subString(3), versionId, true, alsoDrop);
+		return CString() >> (char)PLO_OTHERPLPROPS << packet.subString(1, 2) << rewritePropsForPre21(packet.subString(3), versionId, true, alsoDrop, halfHearts);
 
 	return packet;
 }
