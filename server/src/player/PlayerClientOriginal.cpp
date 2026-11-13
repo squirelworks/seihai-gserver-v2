@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-13: see CHANGES-SEIHAI.md.
 #include <chrono>
 #include <memory>
 #include <optional>
@@ -222,7 +222,10 @@ bool PlayerClientOriginal::sendDynamicLevelData(const std::shared_ptr<Level>& le
 			// if (!level->isSingleplayer)
 			{
 				const CString carryNPCProps = CString() >> (char)PLO_NPCPROPS >> (int)m_carryNPC << npc->getAllPropsPacket();
-				m_server->sendPacketToNearby(carryNPCProps, getGlobalPosition(), level, { m_id });
+				m_server->sendPacketToNearby(carryNPCProps, getGlobalPosition(), level, { m_id }, [&npc](const Player* p) { return !npc->sendsGS1ByteCodeTo(*p); });
+				// Seihai: clients that run the script as bytecode get the prop with no text (#27).
+				const CString carryNPCPropsNoScript = CString() >> (char)PLO_NPCPROPS >> (int)m_carryNPC << npc->getAllPropsPacket(std::nullopt, true);
+				m_server->sendPacketToNearby(carryNPCPropsNoScript, getGlobalPosition(), level, { m_id }, [&npc](const Player* p) { return npc->sendsGS1ByteCodeTo(*p); });
 			}
 		}
 	}

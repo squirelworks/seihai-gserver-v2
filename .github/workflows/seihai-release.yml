@@ -82,7 +82,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cmake -S . -B build -DTESTS=ON
-          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin ClientPing Scripting LegacyProps
+          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin ClientPing Scripting LegacyProps GS1ToGS2
           timeout 60 bin/RC
           timeout 60 bin/Gpak
           timeout 60 bin/Graal3D
@@ -91,8 +91,9 @@ jobs:
           timeout 60 bin/SecureLogin
           timeout 60 bin/ClientPing
           timeout 60 bin/LegacyProps
+          timeout 60 bin/GS1ToGS2
           timeout 60 bin/Scripting "Script minify with block comments"
-          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin bin/ClientPing bin/Scripting bin/LegacyProps
+          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin bin/ClientPing bin/Scripting bin/LegacyProps bin/GS1ToGS2
           python3 -m unittest tools/lab/test_labcheck.py
       - name: Package
         shell: bash
@@ -199,7 +200,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cmake -S . -B build -DTESTS=ON
-          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin ClientPing Scripting LegacyProps
+          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin ClientPing Scripting LegacyProps GS1ToGS2
           timeout 60 bin/RC
           timeout 60 bin/Gpak
           timeout 60 bin/Graal3D
@@ -208,8 +209,9 @@ jobs:
           timeout 60 bin/SecureLogin
           timeout 60 bin/ClientPing
           timeout 60 bin/LegacyProps
+          timeout 60 bin/GS1ToGS2
           timeout 60 bin/Scripting "Script minify with block comments"
-          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin bin/ClientPing bin/Scripting bin/LegacyProps
+          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin bin/ClientPing bin/Scripting bin/LegacyProps bin/GS1ToGS2
           python3 -m unittest tools/lab/test_labcheck.py
       - name: Package
         shell: bash

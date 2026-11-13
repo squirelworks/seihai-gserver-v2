@@ -91,6 +91,7 @@ set(
 	"include/scripting/gs1/GS1Flags.h"
 	"include/scripting/gs1/GS1Functions.h"
 	"include/scripting/gs1/GS1MessageCodes.h"
+	"include/scripting/gs1/GS1ToGS2.h"
 	"include/scripting/gs1/GS1Variables.h"
 	"include/scripting/gs1/GS1Visitor.h"
 	"include/scripting/gs1/ScriptEngineGS1.h"
@@ -175,6 +176,7 @@ set(
 	"src/scripting/gs1/GS1Flags.cpp"
 	"src/scripting/gs1/GS1Functions.cpp"
 	"src/scripting/gs1/GS1MessageCodes.cpp"
+	"src/scripting/gs1/GS1ToGS2.cpp"
 	"src/scripting/gs1/GS1Variables.cpp"
 	"src/scripting/gs1/GS1Visitor.cpp"
 	"src/scripting/gs1/ScriptEngineGS1.cpp"
@@ -308,9 +310,11 @@ FetchContent_Declare(gs2lib
 	# + the socket wait/unregister fix + the 2026-11-06 packet names, with
 	# upstream's own 2026-11-06 names kept as aliases of ours, + the 5.007
 	# label for 5.00r7, + the Mac PowerPC 4.04r2, 4.20r6 and 5.12 version ids,
-	# + the 5.24 version id G3D15010, seihai-gs2lib #18).
+	# + the 5.24 version id G3D15010, seihai-gs2lib #18, + version ids for the
+	# 13 catalogue game tokens it lacked and G3D27076 renamed CLVER_4_102_MAC,
+	# seihai-gs2lib #19).
 	GIT_REPOSITORY https://github.com/squirelworks/seihai-gs2lib.git
-	GIT_TAG        65e0e09b75865fc1fd75af74be0b12ca19232281
+	GIT_TAG        f412de13cd1e9425dc54cac6bbdb5a7577867170
 )
 FetchContent_MakeAvailable(gs2lib)
 add_dependencies(${TARGET_NAME} gs2lib)

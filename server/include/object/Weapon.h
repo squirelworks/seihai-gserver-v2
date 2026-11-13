@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <ranges>
 #include <string_view>
 #include <string>
@@ -48,6 +49,10 @@ public:
 	void registerWeaponWithPlayer(const std::shared_ptr<Player>& player) const;
 	void sendByteCodeToPlayer(const std::shared_ptr<Player>& player) const;
 
+	// Seihai: the bytecode a client after 5.07 gets. That is the NPC-server's compiled clientside script; without one,
+	// a GS1 clientside script is translated to GS2 and compiled here (gs1::compileClientScript), as for level NPCs.
+	[[nodiscard]] const ScriptByteCode& getClientByteCode() const;
+
 public:
 	std::string getJoinedClassesList() const;
 	[[a::inline]] std::generator<std::shared_ptr<ScriptClass>> getJoinedClasses() const;
@@ -64,7 +69,7 @@ public:
 	[[a::inline]] Script& getScript() noexcept;
 	[[a::inline]] const Script& getScript() const noexcept;
 	// Seihai: the PLO_LOADSCRIPT header (type,name,cacheflag,key,crc), for tests.
-	[[nodiscard]] const std::string& getHeaderWithCRC() const noexcept { return m_headerWithCRC; }
+	[[nodiscard]] const std::string& getHeaderWithCRC() const { (void)getClientByteCode(); return m_headerWithCRC; }
 	// Seihai (#26): PLO_WEAPONHASH (193) for 4.04r2 to 4.20r8: GINT5 CRC32 of the plain bytecode, then the name.
 	[[nodiscard]] CString getWeaponHashPacket() const;
 
@@ -81,18 +86,21 @@ public:
 
 protected:
 	std::string getClientSideScript() const;
-	void calculateHeaderChecksum();
+	void calculateHeaderChecksum(const ScriptByteCode& bytecode) const;
 	void updateScriptClass(ScriptClass* scriptClass) const;
 
 protected:
 	Server* m_server;
 	LevelItemType m_weaponDefault;
 	Script m_script;
-	uint32_t m_checksum = 0;
-	uint32_t m_plainChecksum = 0;	// Seihai (#26): CRC32 of the bytecode as sent in PLO_WEAPONBYTECODE (132).
-	std::string m_desKey;
-	std::string m_header;
-	std::string m_headerWithCRC;
+	// Seihai: mutable because the GS1 bytecode is compiled on first use, and the header follows it.
+	mutable uint32_t m_checksum = 0;
+	mutable uint32_t m_plainChecksum = 0;	// Seihai (#26): CRC32 of the bytecode as sent in PLO_WEAPONBYTECODE (132).
+	mutable std::string m_desKey;
+	mutable std::string m_header;
+	mutable std::string m_headerWithCRC;
+	mutable std::optional<std::string> m_gs1ByteCodeSource;
+	mutable ScriptByteCode m_gs1ByteCode;
 
 	mutable std::vector<std::pair<EventHandle, std::weak_ptr<ScriptClass>>> m_joinedClasses;
 };

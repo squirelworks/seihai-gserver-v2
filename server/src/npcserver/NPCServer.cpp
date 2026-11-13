@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-13: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
@@ -216,16 +217,12 @@ void NPCServer::run(const TimeoutGenerator::time_delta delta)
 	// Send all queued movements.
 	if (!m_playerList.empty())
 	{
-		CString propsPacket;
 		for (const auto& npc : m_server->getNPCList() | std::views::values)
 		{
 			if (auto level = npc->getLevel(); level != nullptr)
 			{
 				// Send props packet.
-				propsPacket.clear();
-				propsPacket.writeGChar((char)PLO_NPCPROPS) >> (int)npc->id << npc->getModifiedPropsPacket();
-				if (propsPacket.length() > 4)
-					m_server->sendPacketToNearby(propsPacket, npc->getGlobalPosition(), level);
+				npc->sendModifiedPropsToNearby(level);
 
 				// Send movements.
 				npc->sendMoveQueueUpdatesToLevel(level);
