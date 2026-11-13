@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-13: see CHANGES-SEIHAI.md.
 #include <any>
 #include <cstdint>
 #include <exception>
@@ -31,6 +32,7 @@
 #include <scripting/ScriptTypes.h>
 #include <scripting/gs1/GS1ErrorListener.h>
 #include <scripting/gs1/GS1Flags.h>
+#include <scripting/gs1/GS1ToGS2.h>
 #include <scripting/gs1/GS1Variables.h>
 #include <scripting/gs1/GS1Visitor.h>
 #include <scripting/gs1/ScriptEngineGS1.h>
@@ -276,6 +278,24 @@ void ScriptEngineGS1::loadConfiguration(const std::filesystem::path& file)
 
 CompiledScriptResult ScriptEngineGS1::compileScript(const ScriptCompilationTarget target, std::string_view who, std::string_view script)
 {
+	// Seihai: clientside GS1 goes to the client as GS2 bytecode, translated by GS1ToGS2 (#27). Before, a modern server
+	// rejected it here and dropped the clientside code, so a GS1 NPC did nothing on 4.x and later clients.
+	if (target == ScriptCompilationTarget::CLIENT)
+	{
+		auto compiled = compileClientScript(script);
+		if (!compiled.ok())
+		{
+			std::string errors;
+			for (const auto& error : compiled.errors)
+				errors += (errors.empty() ? "" : "\n") + error;
+			log::printLine(log::script, "GS1 clientside script of {} was not compiled to GS2:\n{}", who, errors);
+			// Rejected, not a syntax error: the GS2 engine must not then read the GS1 text as GS2.
+			return std::make_pair(ScriptCompilationFailureType::REJECTED, std::move(errors));
+		}
+		ScriptExecutionContext clientResult{.engine = this};
+		clientResult.script = std::make_shared<std::any>(std::make_any<std::vector<uint8_t>>(std::move(compiled.bytecode)));
+		return clientResult;
+	}
 	if (target != ScriptCompilationTarget::SERVER)
 		return std::make_pair(ScriptCompilationFailureType::REJECTED, ""s);
 

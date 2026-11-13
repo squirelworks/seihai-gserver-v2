@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-13: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <format>
 #include <memory>
@@ -288,8 +289,7 @@ void Server::initFilesystemCallbacks()
 			if (const auto npc = m_npcServer->addNPCFromFile(file.file); npc != nullptr)
 			{
 				// TODO(refactor): Generic prop sending function NPCs.
-				const CString packet = CString() >> (char)PLO_NPCPROPS >> (int)npc->id << npc->getAllPropsPacket();
-				sendPacketToNearby(packet, npc->getGlobalPosition(), npc->getLevel());
+				npc->sendAllPropsToNearby();
 
 				log::printLine(log::server, "NPC added to filesystem: [{}] {}", npc->id, file.file.stem().generic_string());
 			}
