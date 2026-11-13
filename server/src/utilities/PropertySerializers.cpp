@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-13: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -19,6 +19,7 @@
 
 #include <Server.h>
 #include <object/Character.h>
+#include <object/Weapon.h>
 #include <scripting/ScriptContainers.h>
 #include <utilities/CommonTypes.h>
 #include <utilities/Extents.h>
@@ -569,7 +570,10 @@ CString PropertyGS1Script::serialize() const
 	if (server->Generation == ServerGeneration::MODERN)
 		return CString() >> (short)0;
 
-	return CString() >> (short)(script.length() > 0x705F ? 0x705F : script.length()) << std::string_view{script}.substr(0, 0x705F);
+	// Seihai: a line break would end the packet, and the client would read every later script line as a packet of its
+	// own. Without an NPC-server nothing turned the level file's newlines into \xa7 (as for weapons, #27).
+	const auto text = Weapon::gs1WireText(script);
+	return CString() >> (short)(text.length() > 0x705F ? 0x705F : text.length()) << std::string_view{text}.substr(0, 0x705F);
 }
 
 void PropertyGS1Script::deserialize(CString& data)

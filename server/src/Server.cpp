@@ -1669,10 +1669,7 @@ std::shared_ptr<NPC> Server::addNPC(NPCPtr npc, const bool sendToPlayers)
 
 	// Send the NPC's props to everybody in range.
 	if (sendToPlayers)
-	{
-		const CString packet = CString() >> (char)PLO_NPCPROPS >> (int)npc->id << npc->getAllPropsPacket();
-		sendPacketToNearby(packet, npc->getGlobalPosition(), npc->getLevel());
-	}
+		npc->sendAllPropsToNearby();
 
 	return npc;
 }

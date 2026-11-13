@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-13: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <bit>
 #include <cassert>
@@ -1470,9 +1470,14 @@ void Level::sendNPCToPlayer(const std::shared_ptr<NPC>& npc, const std::shared_p
 	if (npc == nullptr)
 		return;
 
-	if (const auto packet = npc->getAllPropsPacket(time); !packet.isEmpty())
+	// Seihai: clients after 5.07 run GS1 client scripts only as GS2 bytecode (#27).
+	const bool gs1ByteCode = npc->sendsGS1ByteCodeTo(*player);
+	if (const auto packet = npc->getAllPropsPacket(time, gs1ByteCode); !packet.isEmpty())
 	{
 		player->sendPacket(CString() >> (char)PLO_NPCPROPS >> (int)npc->id << packet);
+
+		if (gs1ByteCode && npc->modTime[PROPID(NPCProp::SCRIPT)].has_value() && npc->modTime[PROPID(NPCProp::SCRIPT)].value() >= time.value_or(clock::time_point::min()))
+			npc->sendGS1ByteCodeTo(*player);
 
 		if (m_server->Generation == ServerGeneration::MODERN && !npc->getScript().getClientByteCode().empty())
 		{

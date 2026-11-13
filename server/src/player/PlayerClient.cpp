@@ -1613,7 +1613,10 @@ bool PlayerClient::sendDynamicLevelData(const std::shared_ptr<Level>& level, std
 			if (!level->isSinglePlayer)
 			{
 				const CString carryNPCProps = CString() >> (char)PLO_NPCPROPS >> (int)m_carryNPC << npc->getAllPropsPacket();
-				m_server->sendPacketToNearby(carryNPCProps, getGlobalPosition(), level, {m_id});
+				m_server->sendPacketToNearby(carryNPCProps, getGlobalPosition(), level, {m_id}, [&npc](const Player* p) { return !npc->sendsGS1ByteCodeTo(*p); });
+				// Seihai: clients that run the script as bytecode get the prop with no text (#27).
+				const CString carryNPCPropsNoScript = CString() >> (char)PLO_NPCPROPS >> (int)m_carryNPC << npc->getAllPropsPacket(std::nullopt, true);
+				m_server->sendPacketToNearby(carryNPCPropsNoScript, getGlobalPosition(), level, {m_id}, [&npc](const Player* p) { return npc->sendsGS1ByteCodeTo(*p); });
 			}
 		}
 	}

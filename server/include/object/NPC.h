@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-13: see CHANGES-SEIHAI.md.
 #ifndef NPC_H
 #define NPC_H
 
@@ -423,8 +424,24 @@ public:
 	/// @param source Indicates who is setting the properties.
 	void setPropsFromPacket(CString& packet, const PlayerPtr& source = nullptr);
 
-	CString getModifiedPropsPacket() const;
-	CString getAllPropsPacket(std::optional<clock::time_point> newTime = std::nullopt) const;
+	// Seihai: skipScript leaves the script prop out, for clients that get the script as bytecode.
+	CString getModifiedPropsPacket(bool skipScript = false) const;
+	/// @param emptyScript Seihai: send the script prop with no text (for clients that get GS2 bytecode instead).
+	CString getAllPropsPacket(std::optional<clock::time_point> newTime = std::nullopt, bool emptyScript = false) const;
+
+	// Seihai: GS1 client scripts for clients that only run GS2 bytecode (five-client lab, #27).
+	// On a server that is not generation = modern, an NPC's clientside GS1 goes to the client as text in the script
+	// prop. Clients after 5.07 run only bytecode, so they get the prop with no text and the script translated to GS2
+	// and compiled (scripting/gs1/GS1ToGS2.h) as PLO_NPCBYTECODE.
+	[[nodiscard]] bool sendsGS1ByteCodeTo(const Player& player) const;
+	/// @brief The clientside script compiled for bytecode clients, or empty when it did not compile.
+	[[nodiscard]] const std::vector<uint8_t>& getGS1ClientByteCode() const;
+	/// @brief Sends PLO_NPCBYTECODE with the compiled clientside script, if there is one.
+	void sendGS1ByteCodeTo(Player& player) const;
+	/// @brief Sends all props to the players in range, each in the form its client runs.
+	void sendAllPropsToNearby() const;
+	// Seihai: PLO_NPCPROPS with the modified props, without the GS1 script text for bytecode clients.
+	void sendModifiedPropsToNearby(const std::shared_ptr<Level>& npcLevel) const;
 
 	template<NPCProp... Props>
 	[[a::inline]] CString getPropsPacketFor() const;
@@ -477,6 +494,10 @@ private:
 
 	Script m_script;
 	mutable std::vector<std::pair<EventHandle, std::weak_ptr<ScriptClass>>> m_joinedClasses;
+
+	// Seihai: the clientside script compiled for bytecode clients, keyed by the text it was compiled from.
+	mutable std::optional<std::string> m_gs1ByteCodeSource;
+	mutable std::vector<uint8_t> m_gs1ByteCode;
 
 	std::optional<size_t> m_initialIndexInLevelFile;
 	std::string m_initialLevel;

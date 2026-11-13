@@ -21,6 +21,7 @@
 #include <Server.h>
 #include <object/Weapon.h>
 #include <scripting/ScriptClass.h>
+#include <scripting/gs1/GS1ToGS2.h>
 #include <utilities/Log.h>
 #include <utilities/ScriptCacheDes.h>
 #include <utilities/StringUtils.h>
@@ -54,6 +55,28 @@ namespace
 			server->getSettings().set("serverside", true);
 			server->getSettings().set("default_scriptengine", "gs2"s);
 			server->loadNPCServer();
+		}
+
+		Server* server = nullptr;
+	};
+
+	// A newmain server with no NPC-server: GS1 weapons as most 2.x-era worlds have them.
+	struct NewmainServer
+	{
+		NewmainServer()
+		{
+			log::networkdump.disabled = true;
+			log::npc.disabled = true;
+			log::rc.disabled = true;
+			log::script.disabled = true;
+			log::server.disabled = true;
+
+			BabyDI_RELEASE(ITranslationManager);
+			BabyDI_PROVIDE(ITranslationManager, new TranslationManagerClassic());
+
+			BabyDI_RELEASE(Server);
+			server = BabyDI_PROVIDE(Server, new Server("test"));
+			server->Generation = ServerGeneration::NEWMAIN;
 		}
 
 		Server* server = nullptr;
@@ -196,4 +219,31 @@ TEST_CASE("GS1 weapon text carries no raw line breaks", "[weapon][gs1]")
 	CHECK(Weapon::gs1WireText("//#CLIENTSIDE\nif (created) {\r\n  timeout=0.05;\r}\n") == "//#CLIENTSIDE\xa7if (created) {\xa7  timeout=0.05;\xa7}\xa7");
 	CHECK(Weapon::gs1WireText("a\xa7" "b") == "a\xa7" "b");
 	CHECK(Weapon::gs1WireText("") == "");
+}
+
+// Seihai, 2026-11-13: without an NPC-server, a GS1 weapon is compiled for clients after 5.07 by the GS1 to GS2
+// translator, and PLO_LOADSCRIPT announces that bytecode's cache CRC.
+TEST_CASE_METHOD(NewmainServer, "a GS1 weapon has bytecode for 5.12 and later clients without an NPC-server", "[weapon][gs1]")
+{
+	const Weapon weapon{"GS1Weapon"sv, "block.png"sv, "//#CLIENTSIDE\nif (playerchats && strequals(#c,hi)) {\n  setplayerprop #c,hello;\n}\n"sv};
+	REQUIRE(weapon.getScript().getClientByteCode().empty());
+	REQUIRE_FALSE(weapon.getScript().getClientSide().empty());
+
+	const auto& bytecode = weapon.getClientByteCode();
+	REQUIRE_FALSE(bytecode.empty());
+	const auto expected = gs1::compileClientScript(weapon.getScript().getClientSide());
+	REQUIRE(expected.ok());
+	CHECK(bytecode == expected.bytecode);
+
+	const auto parts = string::fromCSV(weapon.getHeaderWithCRC());
+	REQUIRE(parts.size() == 5);
+	CHECK(parts[1] == "GS1Weapon");
+	const auto stored = seihai::scriptCacheEncrypt(std::string_view{reinterpret_cast<const char*>(bytecode.data()), bytecode.size()}, keyOf(parts[3]));
+	CHECK(readGInt5(parts[4]) == crcOf(stored));
+}
+
+TEST_CASE_METHOD(NewmainServer, "a weapon with no script has no bytecode", "[weapon][gs1]")
+{
+	const Weapon weapon{"NoScript"sv, "block.png"sv, ""sv};
+	CHECK(weapon.getClientByteCode().empty());
 }
