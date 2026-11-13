@@ -71,7 +71,12 @@ PLI_PONG = 162
 
 # Version labels as the server prints them ("[G3D20126 (4.208)]").
 PING_LABELS = {"4.208", "6.015", "6.034/6.035", "6.037", "6.037 (Linux)"}
-WEAPONCACHE_LABELS = {"4.0211", "4.034", "4.042", "4.110", "4.208", "5.07", "5.12"}
+# A bytecode weapon goes out as 193 (PLO_WEAPONHASH, plain-bytecode CRC) to 4.04r2 to 4.20r8 (#26, #60) and as
+# 197 (PLO_LOADSCRIPT, CRC of the encrypted GRESCR01 body) to 5.07 and later (#58). Older 4.x builds get the
+# bytecode itself (132).
+WEAPONHASH_LABELS = {"4.042", "4.110", "4.208"}
+LOADSCRIPT_LABELS = {"5.07", "5.12"}
+WEAPONCACHE_LABELS = WEAPONHASH_LABELS | LOADSCRIPT_LABELS
 
 TS = r"\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]"
 HEADER = re.compile(TS + r" ([<>]) (?:Out Packet to|In Packet from) (.*?) \[ID (\d+)\]: \[(\d+)(?: RAW)?\] (\S+) \((\d+) bytes\)")
@@ -153,7 +158,9 @@ class Logs:
         for p in self.packets:
             key = (p.account, p.player_id)
             s = by_key.get(key)
-            relogged = s is not None and s.packets and any(
+            # A guest that logs in again gets a new pc:<number>, so another "guest" login (a second guest client
+            # online at the same time) never ends a pc:<number> session.
+            relogged = s is not None and s.packets and not p.account.startswith("pc:") and any(
                 login_account_matches(l.account, p.account) and s.packets[-1].time < l.time <= p.time for l in self.logins)
             if s is None or relogged or (s.packets and (p.time - s.packets[-1].time).total_seconds() > 300):
                 s = Session(p.account, p.player_id)
@@ -332,8 +339,12 @@ def check_weaponcache(logs: Logs) -> Report:
                    f"33 x{len(adds)} ({sum(p.size for p in adds)} bytes), 140 x{len(s.out(PLO_WEAPONBYTECODE2))}, "
                    f"193 x{len(hashes)} [{', '.join(weapon_name_of(p) for p in hashes[:6])}], 197 x{len(s.out(PLO_LOADSCRIPT))}, "
                    f"158 asked x{len(asks)} [{', '.join(weapon_name_of(p) for p in asks[:6])}]")
-            if s.label in WEAPONCACHE_LABELS:
+            if s.label in WEAPONHASH_LABELS:
                 r.check(len(hashes) > 0, f"{describe(s)} login {n}: weapons go out as 193", f"{len(hashes)}")
+            elif s.label in LOADSCRIPT_LABELS:
+                loads = s.out(PLO_LOADSCRIPT)
+                r.check(len(loads) > 0 and not hashes, f"{describe(s)} login {n}: weapons go out as 197, not 193",
+                        f"197 x{len(loads)}, 193 x{len(hashes)}")
         if len(sessions) >= 2 and sessions[-1].label in WEAPONCACHE_LABELS:
             last = sessions[-1]
             r.check(not last.inn(PLI_UPDATESCRIPT), f"{account}: the last login asks no script back (cache used)",

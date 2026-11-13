@@ -1341,7 +1341,9 @@ std::shared_ptr<Level> Server::getLoadedLevel(std::string_view levelName, const 
 	{
 		if (!level->loaded && LevelLoader::loadLevelInto(level->levelName, level))
 			m_levelList.insert(std::make_pair(string::toLower(level->levelName), level));
-		return level;
+		// Seihai: a gmap that would not load (a classic-generation server refuses gmaps) is not a level to enter.
+		// Returning the unloaded stub let a warp to "x.gmap" crash the server (lab 2026-11-13, 1.41r1 on servers/classic).
+		return level->loaded ? level : nullptr;
 	}
 
 	return getLoadedLevelNoHint(levelName);
@@ -1357,7 +1359,7 @@ std::shared_ptr<Level> Server::getLoadedLevel(const std::string_view levelName, 
 	{
 		if (!hintLevel->loaded && LevelLoader::loadLevelInto(hintLevel->levelName, hintLevel))
 			m_levelList.insert(std::make_pair(string::toLower(hintLevel->levelName), hintLevel));
-		return hintLevel;
+		return hintLevel->loaded ? hintLevel : nullptr; // Seihai: see getLoadedLevel above.
 	}
 
 	// Check if the level belongs on a gmap.

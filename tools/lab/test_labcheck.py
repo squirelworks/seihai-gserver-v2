@@ -163,6 +163,28 @@ class SyntheticTests(unittest.TestCase):
         self.assertIn("193 x1 [-Wbow]", row(report, "login 2 |"))
         self.assertIn("PASS", row(report, "the last login asks no script back"))
 
+    def test_second_guest_does_not_split_a_guest_session(self):
+        # lab run 2026-11-13: 6.03r7 (guest, pc:281445) was still online when 5.12 logged in as another guest.
+        t1, t2, t3 = "2026-11-13 07:36:00", "2026-11-13 07:37:00", "2026-11-13 07:37:10"
+        dump = (out_packet(t1, "pc:281445", 2, 108, gchar(108) + gchar(0) + gchar(0) + gchar(1))
+                + out_packet(t3, "pc:281445", 2, 108, gchar(108) + gchar(0) + gchar(0) + gchar(2))
+                + out_packet(t3, "pc:6679871", 3, 25, gchar(25) + gchar(73)))
+        log = (f"[{t1}] :: New login: guest [New Client (2.22+)] [G3D0511C (6.037 (Linux))]\n"
+               f"[{t2}] :: New login: guest [New Client (2.22+)] [G3D14097 (5.12)]\n")
+        self.write(dump, log)
+        code, report = run("ping", self.dir)
+        self.assertIn("2 sent", row(report, "pc:281445 (6.037 (Linux)) is sent 108"))
+        self.assertNotIn("pc:281445 (5.12)", report)
+        self.assertIn("PASS", row(report, "pc:6679871 (5.12) is never sent 108"))
+
+    def test_512_weapon_goes_out_as_197(self):
+        t = "2026-11-13 07:37:00"
+        dump = out_packet(t, "pc:1", 2, 197, gchar(197) + b"header")
+        log = f"[{t}] :: New login: guest [New Client (2.22+)] [G3D14097 (5.12)]\n"
+        self.write(dump, log)
+        code, report = run("weaponcache", self.dir)
+        self.assertIn("PASS", row(report, "weapons go out as 197, not 193"))
+
     def test_milestone(self):
         names = ["a1", "b2", "c3", "d4", "e5"]
         start, end = "2026-11-12 03:00:00", "2026-11-12 03:01:05"
