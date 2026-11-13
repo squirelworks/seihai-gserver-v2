@@ -519,7 +519,20 @@ void Player::sendPacket(const CString& packet, const PacketQueue channel)
 	{
 		if (const auto packetId = static_cast<unsigned char>(packet[0]) - 32; packetId == PLO_PLAYERPROPS || packetId == PLO_OTHERPLPROPS)
 		{
-			const CString rewritten = legacy::rewritePacketForPre21(packet, m_versionId);
+			const auto alsoDrop = legacy::parseDropList(m_server->getSettings().get<std::string>("legacyprops_drop").value_or(""));
+			// Whose props these are: another 1.x player's status bit 4 means
+			// swimming and is kept; anyone else's means male and is cleared.
+			// The client's own is cleared too: it works out its own swimming
+			// from the tiles, and the stored status may be an account default.
+			bool fromPre21Client = false;
+			if (packetId == PLO_OTHERPLPROPS && packet.length() >= 3)
+			{
+				CString idBytes = packet.subString(1, 2);
+				idBytes.setRead(0);
+				const auto other = m_server->getPlayer(static_cast<PlayerID>(idBytes.readGUShort()));
+				fromPre21Client = other != nullptr && other->isClient() && legacy::isPre21Client(other->getVersion());
+			}
+			const CString rewritten = legacy::rewritePacketForPre21(packet, m_versionId, alsoDrop, fromPre21Client);
 			if (rewritten.length() <= (packetId == PLO_OTHERPLPROPS ? 3 : 1))
 				return;
 			return sendPacketUnchecked(rewritten, channel);

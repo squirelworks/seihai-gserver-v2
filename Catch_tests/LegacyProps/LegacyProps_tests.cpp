@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <set>
 #include <string_view>
 #include <vector>
 
@@ -160,6 +161,53 @@ TEST_CASE("1.x clients get player props in the pre-2.1 forms", "[legacy]")
 		packet >> (char)PLO_OTHERPLPROPS >> (short)7 << props;
 		const CString out = legacy::rewritePacketForPre21(packet, CLVER_1_39);
 		REQUIRE(out.subString(0, 3) == packet.subString(0, 3));
+	}
+
+	SECTION("legacyprops_drop leaves out more props")
+	{
+		REQUIRE(legacy::parseDropList("19, 30,31") == std::set<int>{19, 30, 31});
+		REQUIRE(legacy::parseDropList("").empty());
+		const auto got = ids(legacy::rewritePropsForPre21(props, CLVER_1_39, true, {PROPID(PlayerProp::SPRITE)}));
+		REQUIRE(std::ranges::find(got, PROPID(PlayerProp::SPRITE)) == got.end());
+		REQUIRE(std::ranges::find(got, PROPID(PlayerProp::ACCOUNTNAME)) != got.end());
+	}
+
+	SECTION("status bit 4 (male from 2.0, swimming for 1.x) is cleared")
+	{
+		CString status;
+		status >> (char)PROPID(PlayerProp::NICKNAME) << str("m222");
+		status >> (char)PROPID(PlayerProp::STATUS) >> (char)(PLSTATUS_MALE | PLSTATUS_ALLOWWEAPONS);
+		status >> (char)PROPID(PlayerProp::X) >> (char)60;
+
+		const auto statusOf = [](CString out) -> int
+		{
+			out.setRead(0);
+			while (out.bytesLeft() > 0)
+			{
+				const int id = out.readGUChar();
+				if (id == PROPID(PlayerProp::STATUS))
+					return out.readGUChar();
+				if (id == PROPID(PlayerProp::NICKNAME))
+					out.readChars(out.readGUChar());
+				else
+					out.readGUChar();
+			}
+			return -1;
+		};
+
+		// Another 2.x player, and the client's own props.
+		REQUIRE(statusOf(legacy::rewritePropsForPre21(status, CLVER_1_39, true)) == PLSTATUS_ALLOWWEAPONS);
+		REQUIRE(statusOf(legacy::rewritePropsForPre21(status, CLVER_1_39, false)) == PLSTATUS_ALLOWWEAPONS);
+		// Another 1.x player: bit 4 is its swimming, kept.
+		REQUIRE(statusOf(legacy::rewritePropsForPre21(status, CLVER_1_39, true, {}, true)) == (PLSTATUS_MALE | PLSTATUS_ALLOWWEAPONS));
+		// The props after it are still read.
+		const auto got = ids(legacy::rewritePropsForPre21(status, CLVER_1_39, true));
+		REQUIRE(got == std::vector<int>{PROPID(PlayerProp::NICKNAME), PROPID(PlayerProp::STATUS), PROPID(PlayerProp::X)});
+
+		// Through the packet path too.
+		CString packet;
+		packet >> (char)PLO_OTHERPLPROPS >> (short)6 << status;
+		REQUIRE(statusOf(legacy::rewritePacketForPre21(packet, CLVER_1_39).subString(3)) == PLSTATUS_ALLOWWEAPONS);
 	}
 
 	SECTION("only 1.20 to 1.41r1 are rewritten")
