@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-13: see CHANGES-SEIHAI.md.
 #ifndef PLAYERNC_H
 #define PLAYERNC_H
 
@@ -48,6 +49,8 @@ public:
 	HandlePacketResult msgPLI_NC_CLASSADD(CString& pPacket);
 	HandlePacketResult msgPLI_NC_LOCALNPCSGET(CString& pPacket);
 	HandlePacketResult msgPLI_NC_WEAPONLISTGET(CString& pPacket);
+	/// The whole weapon list as PLO_NC_WEAPONLISTGET (167).
+	CString weaponListPacket() const;
 	HandlePacketResult msgPLI_NC_WEAPONGET(CString& pPacket);
 	HandlePacketResult msgPLI_NC_WEAPONADD(CString& pPacket);
 	HandlePacketResult msgPLI_NC_WEAPONDELETE(CString& pPacket);

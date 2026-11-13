@@ -570,6 +570,12 @@ HandlePacketResult PlayerNC::msgPLI_NC_WEAPONLISTGET(CString& pPacket)
 		return HandlePacketResult::Handled;
 	}
 
+	sendPacket(weaponListPacket());
+	return HandlePacketResult::Handled;
+}
+
+CString PlayerNC::weaponListPacket() const
+{
 	// Start our packet.
 	CString ret;
 	ret >> (char)PLO_NC_WEAPONLISTGET;
@@ -583,8 +589,7 @@ HandlePacketResult PlayerNC::msgPLI_NC_WEAPONLISTGET(CString& pPacket)
 		ret >> (char)weaponName.length() << weaponName;
 	}
 
-	sendPacket(ret);
-	return HandlePacketResult::Handled;
+	return ret;
 }
 
 HandlePacketResult PlayerNC::msgPLI_NC_WEAPONGET(CString& pPacket)
@@ -680,9 +685,10 @@ HandlePacketResult PlayerNC::msgPLI_NC_WEAPONADD(CString& pPacket)
 		m_server->sendToNC(logMsg);
 	}
 
-	// Send the updated weapon list to the player.
+	// Send the updated weapon list to every NC. Seihai: it went only to the NC that added the
+	// weapon, so a second NC kept a stale list (lab 2026-11-13); 167 is always the whole list.
 	if (!existing)
-		msgPLI_NC_WEAPONLISTGET(pPacket);
+		m_server->sendPacketToType(PLTYPE_ANYNC, weaponListPacket());
 
 	return HandlePacketResult::Handled;
 }
@@ -714,9 +720,9 @@ HandlePacketResult PlayerNC::msgPLI_NC_WEAPONDELETE(CString& pPacket)
 	log::print(log::npc, logMsg.toString());
 	m_server->sendToNC(logMsg);
 
-	// Send the updated weapon list to the player.
+	// Send the updated weapon list to every NC (see the weapon add above).
 	if (deleted)
-		msgPLI_NC_WEAPONLISTGET(pPacket);
+		m_server->sendPacketToType(PLTYPE_ANYNC, weaponListPacket());
 
 	return HandlePacketResult::Handled;
 }

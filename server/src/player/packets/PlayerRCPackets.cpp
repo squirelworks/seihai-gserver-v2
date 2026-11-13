@@ -585,6 +585,9 @@ HandlePacketResult PlayerRC::msgPLI_RC_PLAYERPROPSRESET(CString& pPacket)
 	// Reset the player.
 	m_server->getAccountLoader().loadAccount("(defaultaccount)", p->account);
 	p->account.name = acc.toStringView();
+	// Seihai: the default account's COMMUNITYNAME, "(defaultaccount)", came along and was
+	// written into the reset account (real 2004 RC, lab 2026-11-13).
+	p->account.communityName = p->account.name;
 	m_server->getAccountLoader().saveAccount(p->account);
 
 	// Add the RC stuff back in.
