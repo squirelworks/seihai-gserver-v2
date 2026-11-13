@@ -105,9 +105,15 @@ TEST_CASE("GS1 commands become GS2 calls and statements", "[GS1ToGS2]")
 	// 5.24r4 and 6.03r7 have no set/unset and send a flag only for `client.` (lab probe, 2026-11-13).
 	CHECK(gs2("if (created) { set client.seen; unset client.seen; set this.open; }") ==
 		"function onCreated() {\n\tclient.seen = true;\n\tclient.seen = \"\";\n\tthis.open = true;\n}\n");
-	CHECK(refused("if (created) setstring quest,done;", "a player flag has no GS2 client form"));
-	CHECK(refused("if (created) set gotkey;", "a player flag has no GS2 client form"));
-	CHECK(refused("if (created) unset gotkey;", "a player flag has no GS2 client form"));
+	// A player flag goes to the server as a trigger (seihai-core #30); the server applies it and sends it back.
+	CHECK(gs2("if (created) { set gotKey; unset gotKey; setstring quest,done; setstring quest,; }") ==
+		"function onCreated() {\n\ttriggeraction(0, 0, \"gr.flagset\", \"gotKey\");\n\ttriggeraction(0, 0, \"gr.flagdel\", \"gotKey\");\n"
+		"\ttriggeraction(0, 0, \"gr.flagset\", \"quest=\" @ (\"done\"));\n"
+		"\ttriggeraction(0, 0, \"gr.flagset\", \"quest=\" @ (\"\"));\n}\n");
+	CHECK(gs2("if (created) setstring server.count,#v(playerrupees);") ==
+		"function onCreated() {\n\ttriggeraction(0, 0, \"gr.flagset\", \"server.count=\" @ ((player.rupees)));\n}\n");
+	CHECK(gs2("if (created) { set gotkey; if (gotkey) say2 yes; }") ==
+		"function onCreated() {\n\ttriggeraction(0, 0, \"gr.flagset\", \"gotkey\");\n\tif (player.gotkey) {\n\t\tsay2(\"yes\");\n\t}\n}\n");
 	CHECK(gs2("if (playerchats) tokenize #c;") == "function onPlayerChats() {\n\ttokens = (player.chat).tokenize();\n}\n");
 	CHECK(gs2("if (created) setcharprop #3,head3.png;") == "function onCreated() {\n\tthis.headimg = \"head3.png\";\n}\n");
 	CHECK(gs2("if (created) setplayerprop #c,Hello #n;") == "function onCreated() {\n\tplayer.chat = (\"Hello \" @ player.nick);\n}\n");
@@ -174,6 +180,21 @@ TEST_CASE("GS1 client scripts compile to the gs2-parser bytecode of their GS2 fo
 	CHECK(gs1::compileClientScript(gs2Script).bytecode == compileGS2(gs2Script));
 
 	// A script that cannot be lowered has no bytecode, and says why.
+	// The stock -gr_movement weapon (bin/servers/default/weapons) now compiles: its gr.x / gr.y strings are flags.
+	const auto grMovement = gs1::compileClientScript(R"(//#CLIENTSIDE
+if (playerenters || timeout) {
+  if (!gr.off) {
+    if (!gr.x.off) setstring gr.x,#v(int((playerx+0.25)*2)/2);
+    if (!gr.y.off) setstring gr.y,#v(int((playery+0.25)*2)/2);
+  }
+  timeout=0.05;
+}
+)");
+	for (const auto& e : grMovement.errors)
+		UNSCOPED_INFO(e);
+	CHECK(grMovement.ok());
+	CHECK(compileGS2(gs2("if (created) { set gotkey; unset gotkey; setstring quest,done; }")).size() > 0);
+
 	const auto refusedScript = gs1::compileClientScript("if (created) putnpc a.png,x.txt,1,2;");
 	CHECK_FALSE(refusedScript.ok());
 	CHECK_FALSE(refusedScript.errors.empty());

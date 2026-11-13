@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
 #ifndef PLAYERCLIENT_H
 #define PLAYERCLIENT_H
 
@@ -196,6 +196,10 @@ public:
 	HandlePacketResult msgPLI_HITOBJECTS(CString& pPacket);
 	HandlePacketResult msgPLI_TRIGGERACTION(CString& pPacket);
 	HandlePacketResult msgPLI_TAMPERCHECK(CString& pPacket);
+
+	// Seihai: a player flag written through `triggeraction` by a translated GS1 script (gr.flagset / gr.flagdel).
+	void applyScriptFlag(bool remove, const std::string& flagPair);
+
 	HandlePacketResult msgPLI_SHOOT(CString& pPacket);
 	HandlePacketResult msgPLI_SHOOT2(CString& pPacket);
 	HandlePacketResult msgPLI_SERVERWARP(CString& pPacket);
@@ -218,6 +222,11 @@ public:
 	// The echoed value of a game client's 162, or nullopt for an empty (RC-style) or odd body.
 	static std::optional<uint16_t> readPong(CString& packet);
 	static constexpr uint16_t MAX_PING_VALUE = 0x3FFF;	// Two GChars; below the client's 0x6FFF cap.
+
+	// Seihai: what a gr.flagset / gr.flagdel trigger sends back: PLO_FLAGSET name[=text] when the flag is held,
+	// PLO_FLAGDEL name when it is not. Nothing is sent for `this.`, `server.` and `gr.` names.
+	static bool echoesScriptFlag(std::string_view flagName) noexcept;
+	static CString scriptFlagState(std::string_view flagName, bool present, const std::optional<std::string>& text);
 
 protected:
 	uint16_t m_pingValue = 0;
