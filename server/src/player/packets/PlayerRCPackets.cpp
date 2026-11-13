@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-04, 2026-11-07: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-04, 2026-11-07, 2026-11-13: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
@@ -32,6 +32,7 @@
 #include <player/RCAccountFields.h>
 #include <player/RCBanMessage.h>
 #include <player/RCFolderRights.h>
+#include <player/RCText.h>
 #include <scripting/ScriptContainers.h>
 #include <utilities/CommonTypes.h>
 #include <utilities/Extents.h>
@@ -52,10 +53,11 @@ HandlePacketResult PlayerRC::msgPLI_RC_SERVEROPTIONSGET(CString& pPacket)
 	}
 
 	const auto settings = m_server->getFileSystemServer().openi(fs::FileCategory::CONFIG, "serveroptions.txt");
-	auto options = string::toCSV(settings->readAllLines());
+	// Seihai: quoted the way the RC tokenizes, or it splits each line at its spaces.
+	auto options = rcTokenizeLines(settings->readAllLines());
 
 	// RC will automatically add a newline after the last line, so remove the newline if it exists to prevent an extra blank line from showing up in RC.
-	if (options.back() == ',')
+	if (!options.empty() && options.back() == ',')
 		options.pop_back();
 
 	sendPacket(CString() >> (char)PLO_RC_SERVEROPTIONSGET << options);
@@ -145,7 +147,8 @@ HandlePacketResult PlayerRC::msgPLI_RC_FOLDERCONFIGGET(CString& pPacket)
 
 	if (const auto file = m_server->getFileSystemServer().open(fs::FileCategory::CONFIG, "foldersconfig.txt"); file != nullptr)
 	{
-		const auto foldersConfig = string::toCSV(file->readAllLines());
+		// Seihai: quoted the way the RC tokenizes, or "head    heads/*" shows as two lines.
+		const auto foldersConfig = rcTokenizeLines(file->readAllLines());
 		sendPacket(CString() >> (char)PLO_RC_FOLDERCONFIGGET << foldersConfig);
 	}
 
@@ -582,6 +585,9 @@ HandlePacketResult PlayerRC::msgPLI_RC_PLAYERPROPSRESET(CString& pPacket)
 	// Reset the player.
 	m_server->getAccountLoader().loadAccount("(defaultaccount)", p->account);
 	p->account.name = acc.toStringView();
+	// Seihai: the default account's COMMUNITYNAME, "(defaultaccount)", came along and was
+	// written into the reset account (real 2004 RC, lab 2026-11-13).
+	p->account.communityName = p->account.name;
 	m_server->getAccountLoader().saveAccount(p->account);
 
 	// Add the RC stuff back in.
@@ -1106,7 +1112,29 @@ HandlePacketResult PlayerRC::msgPLI_RC_FILEBROWSER_START(CString& pPacket)
 		account.lastFolderAccessed += '/';
 
 	// Create the file system.
-	std::filesystem::directory_iterator dirs{account.lastFolderAccessed};
+	// Seihai: a folder that cannot be opened (one an RC just removed with 160) threw here and
+	// disconnected the RC. Fall back to the first folder that opens, or list nothing.
+	std::error_code dirError;
+	std::filesystem::directory_iterator dirs{account.lastFolderAccessed, dirError};
+	if (dirError)
+	{
+		for (const auto& candidate : folderMap | std::views::keys)
+		{
+			std::string candidatePath{candidate.toStringView()};
+			if (!candidatePath.ends_with('/'))
+				candidatePath += '/';
+
+			std::error_code candidateError;
+			std::filesystem::directory_iterator candidateDirs{candidatePath, candidateError};
+			if (!candidateError)
+			{
+				account.lastFolderAccessed = candidatePath;
+				dirs = std::move(candidateDirs);
+				dirError.clear();
+				break;
+			}
+		}
+	}
 
 	// Construct the file list.
 	CString files;
@@ -1550,15 +1578,26 @@ HandlePacketResult PlayerRC::msgPLI_RC_FOLDERDELETE(CString& pPacket)
 		return HandlePacketResult::Handled;
 	}
 
-	// Try to remove folder.
-	if (!std::filesystem::remove(folder))
+	// Seihai: the throwing std::filesystem::remove ended in a disconnect (id 16) for a folder
+	// that was not empty, and the "\n" at the end of the reply split it in two. A real RC3
+	// sends the folder with a trailing '/' (lab 2026-11-13). A path that leaves the server
+	// folder is refused.
+	const auto folderText = folder.generic_string();
+	if (folder.is_absolute() || folderText.find("..") != std::string::npos)
 	{
-		sendPacket(CString() >> (char)PLO_RC_FILEBROWSER_MESSAGE << "Error removing " << folder.generic_string() << ".  Folder may not exist or may not be empty.");
+		sendPacket(CString() >> (char)PLO_RC_FILEBROWSER_MESSAGE << "Not allowed to remove " << folderText);
 		return HandlePacketResult::Handled;
 	}
 
-	log::printLine(log::rc, "{} removed folder {}", account.name, folder.generic_string());
-	sendPacket(CString() >> (char)PLO_RC_FILEBROWSER_MESSAGE << "Folder " << folder.generic_string() << " has been removed.\n");
+	std::error_code ec;
+	if (!std::filesystem::remove(folder, ec) || ec)
+	{
+		sendPacket(CString() >> (char)PLO_RC_FILEBROWSER_MESSAGE << "Error removing " << folderText << ".  Folder may not exist or may not be empty.");
+		return HandlePacketResult::Handled;
+	}
+
+	log::printLine(log::rc, "{} removed folder {}", account.name, folderText);
+	sendPacket(CString() >> (char)PLO_RC_FILEBROWSER_MESSAGE << "Folder " << folderText << " has been removed.");
 	msgPLI_RC_FILEBROWSER_START(CString() << "");
 
 	return HandlePacketResult::Handled;

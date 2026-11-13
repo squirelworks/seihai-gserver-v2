@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-07: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-07, 2026-11-13: see CHANGES-SEIHAI.md.
 #include <array>
 #include <cstdint>
 #include <format>
@@ -142,6 +142,11 @@ bool PlayerRC::handleLogin(CString& pPacket)
 #endif
 
 	m_type = (1 << pPacket.readGChar());
+
+	// Seihai: every RC ends a raw block (PLI_RAWDATA, 50) with a line feed that the raw count
+	// includes. Without this an upload (93) was stored one byte longer per piece: a real RC3
+	// put of 81200 bytes was saved as 81203 (lab 2026-11-13).
+	RemoveNewlinesFromRawPacket = true;
 
 	// Set the encryptions.
 	switch (m_type)

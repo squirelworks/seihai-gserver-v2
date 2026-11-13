@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-13: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <format>
 #include <memory>
@@ -17,6 +18,7 @@
 #include <object/NPC.h>
 #include <object/Weapon.h>
 #include <player/PlayerNC.h>
+#include <player/RCText.h>
 #include <scripting/ScriptContainers.h>
 #include <scripting/ScriptTypes.h>
 #include <utilities/CommonTypes.h>
@@ -54,7 +56,7 @@ HandlePacketResult PlayerNC::msgPLI_NC_NPCGET(CString& pPacket)
 		if (npc != nullptr)
 		{
 			auto dump = npc->getVariableDump();
-			sendPacket(CString() >> (char)PLO_NC_NPCATTRIBUTES << string::toCSV(dump));
+			sendPacket(CString() >> (char)PLO_NC_NPCATTRIBUTES << rcTokenizeLines(dump));
 		}
 	}
 
@@ -75,7 +77,11 @@ HandlePacketResult PlayerNC::msgPLI_NC_NPCDELETE(CString& pPacket)
 	if (npc != nullptr && npc->storageType == NPCStorageType::DATABASE)
 	{
 		m_server->getNPCServer()->deleteNPC(npcId);
-		m_server->sendPacketToType(PLTYPE_ANYNC, CString() >> (char)PLO_NC_NPCDELETE >> (int)npcId);
+
+		// Seihai: an NPC in a level is announced to NCs by Server::deleteNPC already, so a real
+		// 2004 RC got 159 twice (lab 2026-11-13). Announce here only one with no level.
+		if (npc->getLevel() == nullptr)
+			m_server->sendPacketToType(PLTYPE_ANYNC, CString() >> (char)PLO_NC_NPCDELETE >> (int)npcId);
 
 		const std::string logMsg = std::format("NPC {} deleted by {}", npc->name, account.name);
 		log::printLine(log::npc, logMsg);
@@ -123,7 +129,7 @@ HandlePacketResult PlayerNC::msgPLI_NC_NPCSCRIPTGET(CString& pPacket)
 	const auto npc = m_server->getNPC(npcId);
 	if (npc != nullptr)
 	{
-		const std::string tokenizedScript = string::toCSV(npc->getScript().getOriginalSource(), "\n");
+		const std::string tokenizedScript = rcTokenizeText(npc->getScript().getOriginalSource());
 		sendPacket(CString() >> (char)PLO_NC_NPCSCRIPT >> (int)npcId << tokenizedScript);
 	}
 
@@ -201,7 +207,7 @@ HandlePacketResult PlayerNC::msgPLI_NC_NPCFLAGSGET(CString& pPacket)
 				flagList.push_back(std::format("{}={}", flag, value->value.get<std::string>().value().get()));
 		}
 
-		sendPacket(CString() >> (char)PLO_NC_NPCFLAGS >> (int)npcId << string::toCSV(flagList));
+		sendPacket(CString() >> (char)PLO_NC_NPCFLAGS >> (int)npcId << rcTokenizeLines(flagList));
 	}
 
 	return HandlePacketResult::Handled;
@@ -449,7 +455,7 @@ HandlePacketResult PlayerNC::msgPLI_NC_CLASSEDIT(CString& pPacket)
 	// {112}{class}
 	CString className = pPacket.readString("");
 	if (const auto classObj = m_server->getNPCServer()->getClass(className.text()); classObj != nullptr)
-		sendPacket(CString() >> (char)PLO_NC_CLASSGET >> (char)className.length() << className << string::toCSV(classObj->getScript().getOriginalSource()));
+		sendPacket(CString() >> (char)PLO_NC_CLASSGET >> (char)className.length() << className << rcTokenizeText(classObj->getScript().getOriginalSource()));
 
 	return HandlePacketResult::Handled;
 }
@@ -564,6 +570,12 @@ HandlePacketResult PlayerNC::msgPLI_NC_WEAPONLISTGET(CString& pPacket)
 		return HandlePacketResult::Handled;
 	}
 
+	sendPacket(weaponListPacket());
+	return HandlePacketResult::Handled;
+}
+
+CString PlayerNC::weaponListPacket() const
+{
 	// Start our packet.
 	CString ret;
 	ret >> (char)PLO_NC_WEAPONLISTGET;
@@ -577,8 +589,7 @@ HandlePacketResult PlayerNC::msgPLI_NC_WEAPONLISTGET(CString& pPacket)
 		ret >> (char)weaponName.length() << weaponName;
 	}
 
-	sendPacket(ret);
-	return HandlePacketResult::Handled;
+	return ret;
 }
 
 HandlePacketResult PlayerNC::msgPLI_NC_WEAPONGET(CString& pPacket)
@@ -674,9 +685,10 @@ HandlePacketResult PlayerNC::msgPLI_NC_WEAPONADD(CString& pPacket)
 		m_server->sendToNC(logMsg);
 	}
 
-	// Send the updated weapon list to the player.
+	// Send the updated weapon list to every NC. Seihai: it went only to the NC that added the
+	// weapon, so a second NC kept a stale list (lab 2026-11-13); 167 is always the whole list.
 	if (!existing)
-		msgPLI_NC_WEAPONLISTGET(pPacket);
+		m_server->sendPacketToType(PLTYPE_ANYNC, weaponListPacket());
 
 	return HandlePacketResult::Handled;
 }
@@ -708,9 +720,9 @@ HandlePacketResult PlayerNC::msgPLI_NC_WEAPONDELETE(CString& pPacket)
 	log::print(log::npc, logMsg.toString());
 	m_server->sendToNC(logMsg);
 
-	// Send the updated weapon list to the player.
+	// Send the updated weapon list to every NC (see the weapon add above).
 	if (deleted)
-		msgPLI_NC_WEAPONLISTGET(pPacket);
+		m_server->sendPacketToType(PLTYPE_ANYNC, weaponListPacket());
 
 	return HandlePacketResult::Handled;
 }
