@@ -2385,9 +2385,11 @@ namespace preagonal
 
 bool PlayerClient::handlesPing(const int versionId) noexcept
 {
-	// 4.20r8 and the Mac 4.20r6 (its 108 handler answers with 162; seihai-core's 4.20r6 row);
-	// 6.015 (6.01r1) to 6.037 cover 6.x.
-	return versionId == CLVER_4_208 || versionId == CLVER_4_206_MAC || (versionId >= CLVER_6_015 && versionId <= CLVER_6_037_LINUX);
+	// 4.20r8 and the Mac build labelled 4.20r6 (G3D27076, a 4.10r2-era build, gs2lib
+	// CLVER_4_102_MAC; its 108 handler answers with 162; seihai-core's 4.20r6 row);
+	// 6.015 (6.01r1) to 6.037 cover 6.x. The real Mac 4.20r6 (G3D21126, CLVER_4_206_MAC)
+	// has not been run, so it gets no PLO_PING.
+	return versionId == CLVER_4_208 || versionId == CLVER_4_102_MAC || (versionId >= CLVER_6_015 && versionId <= CLVER_6_037_LINUX);
 }
 
 CString PlayerClient::pingPacket(const uint16_t value)
