@@ -12,6 +12,9 @@
 #ifndef LEGACYPLAYERPROPS_H
 #define LEGACYPLAYERPROPS_H
 
+#include <set>
+#include <string_view>
+
 #include <CString.h>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -32,11 +35,16 @@ bool pre21KnowsProp(int versionId, int propId, bool forOtherPlayer);
 /// A sword, shield or head that is a stock image (`sword1.png`, `head0.png`) goes
 /// as its preset number, so the client draws its own built-in GIF; any other
 /// `.png` image name becomes `.gif`. Colors keep the first five.
-CString rewritePropsForPre21(const CString& props, int versionId, bool forOtherPlayer);
+CString rewritePropsForPre21(const CString& props, int versionId, bool forOtherPlayer, const std::set<int>& alsoDrop = {});
 
 /// @brief Rewrite a whole PLO_PLAYERPROPS or PLO_OTHERPLPROPS packet for a 1.x
 /// client. Any other packet is returned unchanged.
-CString rewritePacketForPre21(const CString& packet, int versionId);
+CString rewritePacketForPre21(const CString& packet, int versionId, const std::set<int>& alsoDrop = {});
+
+/// @brief The serveroptions.txt `legacyprops_drop` list (prop ids, comma
+/// separated): props also left out for 1.x clients. A lab switch, to find
+/// which prop a 1.x build mishandles without a rebuild. Empty by default.
+std::set<int> parseDropList(std::string_view list);
 
 } // namespace preagonal::legacy
 

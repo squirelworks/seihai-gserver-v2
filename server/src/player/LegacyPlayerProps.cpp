@@ -183,7 +183,7 @@ bool pre21KnowsProp(const int versionId, const int propId, const bool forOtherPl
 	}
 }
 
-CString rewritePropsForPre21(const CString& props, const int versionId, const bool forOtherPlayer)
+CString rewritePropsForPre21(const CString& props, const int versionId, const bool forOtherPlayer, const std::set<int>& alsoDrop)
 {
 	CString in{props};
 	in.setRead(0);
@@ -195,7 +195,7 @@ CString rewritePropsForPre21(const CString& props, const int versionId, const bo
 		if (propId < 0 || propId >= PLAYERPROP_COUNT)
 			break;
 
-		const bool keep = pre21KnowsProp(versionId, propId, forOtherPlayer);
+		const bool keep = pre21KnowsProp(versionId, propId, forOtherPlayer) && !alsoDrop.contains(propId);
 		try
 		{
 			if (keep && propId == PROPID(PlayerProp::SWORDIMAGE))
@@ -237,19 +237,39 @@ CString rewritePropsForPre21(const CString& props, const int versionId, const bo
 	return out;
 }
 
-CString rewritePacketForPre21(const CString& packet, const int versionId)
+CString rewritePacketForPre21(const CString& packet, const int versionId, const std::set<int>& alsoDrop)
 {
 	if (packet.length() < 1)
 		return packet;
 
 	const int packetId = static_cast<unsigned char>(packet[0]) - 32;
 	if (packetId == PLO_PLAYERPROPS)
-		return CString() >> (char)PLO_PLAYERPROPS << rewritePropsForPre21(packet.subString(1), versionId, false);
+		return CString() >> (char)PLO_PLAYERPROPS << rewritePropsForPre21(packet.subString(1), versionId, false, alsoDrop);
 
 	if (packetId == PLO_OTHERPLPROPS && packet.length() >= 3)
-		return CString() >> (char)PLO_OTHERPLPROPS << packet.subString(1, 2) << rewritePropsForPre21(packet.subString(3), versionId, true);
+		return CString() >> (char)PLO_OTHERPLPROPS << packet.subString(1, 2) << rewritePropsForPre21(packet.subString(3), versionId, true, alsoDrop);
 
 	return packet;
+}
+
+std::set<int> parseDropList(const std::string_view list)
+{
+	std::set<int> ids;
+	int value = -1;
+	for (const char c : list)
+	{
+		if (c >= '0' && c <= '9')
+			value = (value < 0 ? 0 : value * 10) + (c - '0');
+		else
+		{
+			if (value >= 0 && value < 256)
+				ids.insert(value);
+			value = -1;
+		}
+	}
+	if (value >= 0 && value < 256)
+		ids.insert(value);
+	return ids;
 }
 
 } // namespace preagonal::legacy

@@ -519,7 +519,8 @@ void Player::sendPacket(const CString& packet, const PacketQueue channel)
 	{
 		if (const auto packetId = static_cast<unsigned char>(packet[0]) - 32; packetId == PLO_PLAYERPROPS || packetId == PLO_OTHERPLPROPS)
 		{
-			const CString rewritten = legacy::rewritePacketForPre21(packet, m_versionId);
+			const auto alsoDrop = legacy::parseDropList(m_server->getSettings().get<std::string>("legacyprops_drop").value_or(""));
+			const CString rewritten = legacy::rewritePacketForPre21(packet, m_versionId, alsoDrop);
 			if (rewritten.length() <= (packetId == PLO_OTHERPLPROPS ? 3 : 1))
 				return;
 			return sendPacketUnchecked(rewritten, channel);

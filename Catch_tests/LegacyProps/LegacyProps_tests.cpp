@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <set>
 #include <string_view>
 #include <vector>
 
@@ -160,6 +161,15 @@ TEST_CASE("1.x clients get player props in the pre-2.1 forms", "[legacy]")
 		packet >> (char)PLO_OTHERPLPROPS >> (short)7 << props;
 		const CString out = legacy::rewritePacketForPre21(packet, CLVER_1_39);
 		REQUIRE(out.subString(0, 3) == packet.subString(0, 3));
+	}
+
+	SECTION("legacyprops_drop leaves out more props")
+	{
+		REQUIRE(legacy::parseDropList("19, 30,31") == std::set<int>{19, 30, 31});
+		REQUIRE(legacy::parseDropList("").empty());
+		const auto got = ids(legacy::rewritePropsForPre21(props, CLVER_1_39, true, {PROPID(PlayerProp::SPRITE)}));
+		REQUIRE(std::ranges::find(got, PROPID(PlayerProp::SPRITE)) == got.end());
+		REQUIRE(std::ranges::find(got, PROPID(PlayerProp::ACCOUNTNAME)) != got.end());
 	}
 
 	SECTION("only 1.20 to 1.41r1 are rewritten")
