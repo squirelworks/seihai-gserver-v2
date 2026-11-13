@@ -9,6 +9,12 @@ Every change below was checked on a private loopback lab with real Graal
 clients and with the [Seihai](https://github.com/squirelworks/seihai) client.
 Each file we changed carries a one-line notice at its top.
 
+## 2026-11-14
+
+| Change | Files | Clients it fixes |
+|---|---|---|
+| The `default` and `modern` worlds ship default fonts. 5.24r4 and 6.03r7 bring none and ask the server for `arial.ttf`, `arialbd.ttf`, `tempsitc.ttf` and `tempsitcbd.ttf`; with every one answered "not found" they draw no text at all, so the lab NPC's `message` never showed, nor GS2 `this.chat`, NPC text on an image NPC, or the HUD's A/S/D letters (lab 2026-11-14: with the fonts, every variant drew on both clients; without, none did). The four files are Liberation Sans Regular and Bold (SIL OFL 1.1, unmodified, licence and a README beside them) saved under those names, in `world/fonts/`; `foldersconfig.txt` serves `fonts/*.ttf` and `*.ttf`. 5.24r4 uses a font as soon as it arrives; 6.03r7 uses only fonts already in its cache when it starts, so its very first visit still draws no chat text. | `bin/servers/default/world/fonts/`, `bin/servers/modern/world/fonts/`, `bin/servers/*/config/foldersconfig.txt` (default, modern), `bin/CMakeLists.txt`, `.gitattributes` (`*.ttf binary`, so `bin/servers/** text` does not rewrite the font bytes) | 5.24r4, 6.03r7 (lab 2026-11-14) |
+
 ## 2026-11-13
 
 | Change | Files | Clients it fixes |

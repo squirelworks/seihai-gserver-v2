@@ -1,4 +1,4 @@
-# Modified by the Seihai project, 2026-11-06: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-11-06, 2026-11-14: see CHANGES-SEIHAI.md.
 # Folder Configuration
 head    heads/*
 body    bodies/*.png
@@ -19,6 +19,8 @@ file    *.png
 file    *.mid
 file    *.mp3
 file    *.wav
+file    fonts/*.ttf
+file    *.ttf
 file    *.txt
 file    *.gmap
 level   *.graal

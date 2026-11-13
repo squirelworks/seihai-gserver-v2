@@ -5,3 +5,4 @@
 *.exe binary
 bin/servers/** text
 .gitignore text
+*.ttf binary

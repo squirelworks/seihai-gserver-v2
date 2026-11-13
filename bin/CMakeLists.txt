@@ -1,4 +1,4 @@
-# Modified by the Seihai project, 2026-10-31, 2026-11-11: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-10-31, 2026-11-11, 2026-11-14: see CHANGES-SEIHAI.md.
 #
 #  bin/CMakeLists.txt
 #
@@ -145,6 +145,8 @@ install(DIRECTORY DESTINATION "./servers/default/world/images")
 install(DIRECTORY DESTINATION "./servers/default/world/shields")
 install(DIRECTORY DESTINATION "./servers/default/world/sounds")
 install(DIRECTORY DESTINATION "./servers/default/world/swords")
+# Seihai: default fonts for 5.x and 6.x clients (Liberation Sans, SIL OFL 1.1).
+install(DIRECTORY "./servers/default/world/fonts" DESTINATION "./servers/default/world")
 
 # servers/default/world/global/*
 install(DIRECTORY DESTINATION "./servers/default/world/global")
