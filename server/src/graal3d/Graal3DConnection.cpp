@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
 // New file: one Graal 3D (Torque) UDP connection, server side. See Graal3DConnection.h.
 // The notify protocol follows Torque's ConnectionProtocol::processRawPacket and
 // NetConnection's event code (MIT-licensed Torque3D source), with Graal's 12-bit
@@ -7,6 +7,7 @@
 // class id and int14 length on every ghost update.
 
 #include <graal3d/Graal3DConnection.h>
+#include <graal3d/Graal3DTge.h>
 
 #include <algorithm>
 #include <string>
@@ -91,11 +92,16 @@ namespace graal3d
 	void Connection::onEstablished()
 	{
 		m_established = true;
-		if (!m_profile.gameObjectPackets)
+		if (!m_profile.gamePackets())
 			return;
 
-		// The 5.x client answers these natively and raises onGraal3DLoginStep.
-		sendCommand("MissionStartPhase1");
+		// The 5.x and 4.04r2 clients answer these natively and raise
+		// onGraal3DLoginStep. 3.153 runs the stock TorqueScript, which takes
+		// (sequence, mission name) and sends the sequence back in its ack.
+		if (m_profile.tgePackets)
+			sendCommand("MissionStartPhase1", {std::to_string(m_missionSeq), "Graal3D"});
+		else
+			sendCommand("MissionStartPhase1");
 		m_mission = MissionState::Phase1Sent;
 		if (m_cb.onMission)
 			m_cb.onMission(m_mission);
@@ -107,6 +113,8 @@ namespace graal3d
 			return false;
 
 		const auto sinceSend = nowMs - m_lastSend;
+		if (m_profile.tgePackets && m_established)
+			advanceTge();
 		if (sendsEvents() && m_established)
 		{
 			const bool work = !m_sendQueue.empty() || m_ackOwed || ghostWorkPending() || controlPending();
@@ -131,14 +139,54 @@ namespace graal3d
 		m_sendQueue.push_back(seq);
 	}
 
-	void Connection::sendCommand(std::string_view command)
+	void Connection::sendCommand(std::string_view command, const std::vector<std::string>& args)
 	{
 		// commandToClient sends the command name as a tagged string: the string
-		// first (NetStringEvent), then the command that refers to it.
+		// first (NetStringEvent), then the command that refers to it. Other
+		// arguments go as plain strings.
 		const uint32_t tag = m_nextLocalString;
 		m_nextLocalString = (m_nextLocalString + 1) % 32;
 		postEvent("NetStringEvent", netStringEvent(tag, command, m_packetStrings));
-		postEvent("RemoteCommandEvent", remoteCommandEvent({CommandArg{true, tag, {}}}, m_packetStrings));
+		std::vector<CommandArg> packed{CommandArg{true, tag, {}}};
+		for (const auto& a : args)
+			packed.push_back(CommandArg{false, 0, a});
+		postEvent("RemoteCommandEvent", remoteCommandEvent(packed, m_packetStrings));
+	}
+
+	void Connection::startTgeDatablocks()
+	{
+		// Stock TGE: the datablocks follow the phase 1 ack, then DataBlocksDone
+		// with the mission sequence. This server has one: the CameraData every
+		// Camera ghost uses.
+		if (m_datablocksSent)
+			return;
+		m_datablocksSent = true;
+		const auto classId = datablockClassId(m_profile, "CameraData");
+		if (classId)
+		{
+			const auto data = tge::cameraData("", m_packetStrings);
+			postEvent("SimDataBlockEvent", tge::simDataBlockEvent(tge::FirstDatablockId, *classId, 0, 1, data));
+		}
+		postEvent("ConnectionMessageEvent", tge::connectionMessageEvent(m_missionSeq, tge::message::DataBlocksDone, 0));
+		log("datablocks sent (1), then DataBlocksDone");
+	}
+
+	void Connection::advanceTge()
+	{
+		// Phase 3 once phase 2 is acked and every ghost is in: GhostAlwaysDone
+		// first (the client answers ReadyForNormalGhosts), then the command.
+		if (m_mission != MissionState::Phase2Sent || !m_phase2Acked)
+			return;
+		for (const auto& [key, g] : m_ghosts)
+		{
+			if (!g.created && !g.kill)
+				return;
+		}
+		postEvent("ConnectionMessageEvent", tge::connectionMessageEvent(m_missionSeq, tge::message::GhostAlwaysDone, 0));
+		sendCommand("MissionStartPhase3", {std::to_string(m_missionSeq), "Graal3D"});
+		m_mission = MissionState::Phase3Sent;
+		if (m_cb.onMission)
+			m_cb.onMission(m_mission);
 	}
 
 	void Connection::sendText(const TextMessage& message)
@@ -191,12 +239,30 @@ namespace graal3d
 		w.writeFlag(false);
 		w.writeFlag(false);
 
-		// GameConnection::writePacket, GameObject era: the control object, no
-		// camera, no field of view.
 		Notify note{m_lastSendSeq, {}, {}, false};
-		writeControlSection(w, note, nowMs);
-		writeCameraSection(w);
-		w.writeFlag(false);
+		if (m_profile.tgePackets)
+		{
+			// GameConnection::writePacket, protocol 19: move ack, then the control
+			// object with its packet data, no camera, no field of view.
+			std::optional<tge::ServerControl> control;
+			if (controlPending())
+			{
+				const auto& g = m_ghosts.at(*m_controlKey);
+				control = tge::ServerControl{static_cast<uint32_t>(nowMs), g.index, g.object.tgeCamera};
+				note.control = true;
+				m_controlInFlight = true;
+				log("control object (Camera ghost " + std::to_string(g.index) + ") sent in seq " + std::to_string(note.sequence));
+			}
+			tge::writeServerGame(w, m_lastMoveAck, control);
+		}
+		else
+		{
+			// GameConnection::writePacket, GameObject era: the control object, no
+			// camera, no field of view.
+			writeControlSection(w, note, nowMs);
+			writeCameraSection(w);
+			w.writeFlag(false);
+		}
 
 		// Events: no unguaranteed ones, then the guaranteed-ordered queue.
 		w.writeFlag(false);
@@ -286,7 +352,9 @@ namespace graal3d
 
 	void Connection::setGhost(ObjectKey key, const GhostObject& object)
 	{
-		if (!m_profile.gameObjectPackets)
+		// Each era ghosts only its own kinds: protocol 19 the TGE Camera, the
+		// GameObject era everything else.
+		if (!m_profile.gamePackets() || object.isTge() != m_profile.tgePackets)
 			return;
 
 		auto it = m_ghosts.find(key);
@@ -447,6 +515,14 @@ namespace graal3d
 			int order; // 0 delete, 1 create, 2 update
 		};
 
+		// Protocol 19: no ghost before the client has loaded the datablocks they
+		// name (an unknown datablock id drops the connection).
+		if (m_profile.tgePackets && !m_ghostingAllowed)
+		{
+			w.writeFlag(false);
+			return;
+		}
+
 		std::vector<Candidate> todo;
 		uint32_t maxIndex = 0;
 		for (auto& [key, g] : m_ghosts)
@@ -606,6 +682,29 @@ namespace graal3d
 		return true;
 	}
 
+	bool Connection::readTgeClientGameSection(BitReader& r)
+	{
+		const auto game = tge::readClientGame(r);
+		if (!game)
+		{
+			log("could not read the client's game section (protocol 19)");
+			return false;
+		}
+		if (!game->sendsState && !game->moves.empty())
+		{
+			// Ack every move the client has sent; the Camera is not simulated here,
+			// the client predicts its own control object.
+			const uint32_t next = game->firstMove + static_cast<uint32_t>(game->moves.size());
+			if (next > m_lastMoveAck)
+			{
+				m_movesReceived += next - std::max(m_lastMoveAck, game->firstMove);
+				m_lastMoveAck = next;
+				m_ackOwed = true;
+			}
+		}
+		return true;
+	}
+
 	void Connection::readDataPacket(BitReader& r)
 	{
 		// The client's string buffer lives for the length of one packet.
@@ -625,7 +724,12 @@ namespace graal3d
 			r.readInt(10);
 		}
 
-		if (!m_profile.gameObjectPackets || !readClientGameSection(r))
+		if (m_profile.tgePackets)
+		{
+			if (!readTgeClientGameSection(r))
+				return;
+		}
+		else if (!m_profile.gameObjectPackets || !readClientGameSection(r))
 			return;
 
 		bool unguaranteed = true;
@@ -773,6 +877,32 @@ namespace graal3d
 				return;
 
 			const auto& command = args[0];
+			if (m_profile.tgePackets)
+			{
+				// 3.153 echoes the sequence as the second argument; 4.04r2 sends none.
+				if (args.size() > 1 && args[1] != std::to_string(m_missionSeq))
+				{
+					log("remote command " + command + " for mission sequence " + args[1] + " ignored");
+					return;
+				}
+				if (command == "MissionStartPhase1Ack" && m_mission == MissionState::Phase1Sent)
+					startTgeDatablocks();
+				else if (command == "MissionStartPhase2Ack" && m_mission == MissionState::Phase2Sent)
+				{
+					m_phase2Acked = true;
+					advanceTge();
+				}
+				else if (command == "MissionStartPhase3Ack" && m_mission == MissionState::Phase3Sent)
+				{
+					m_mission = MissionState::Done;
+					if (m_cb.onMission)
+						m_cb.onMission(m_mission);
+				}
+				else
+					log("remote command ignored: " + command);
+				return;
+			}
+
 			if (command == "MissionStartPhase1Ack" && m_mission == MissionState::Phase1Sent)
 			{
 				sendCommand("MissionStartPhase2");
@@ -815,7 +945,29 @@ namespace graal3d
 		}
 
 		if (ev.name == "ConnectionMessageEvent")
-			return; // ReadyForNormalGhosts and the like: this server ghosts from the start
+		{
+			if (!m_profile.tgePackets)
+				return; // ReadyForNormalGhosts and the like: this server ghosts from the start
+
+			if (ev.id == tge::message::DataBlocksDownloadDone && ev.sequence == m_missionSeq && m_datablocksSent &&
+				m_mission == MissionState::Phase1Sent)
+			{
+				// The datablocks are loaded: phase 2, and the ghosts may go out.
+				log("datablocks loaded on the client");
+				sendCommand("MissionStartPhase2", {std::to_string(m_missionSeq), "Graal3D"});
+				postEvent("ConnectionMessageEvent", tge::connectionMessageEvent(m_missionSeq, tge::message::GhostAlwaysStarting,
+																			   static_cast<uint32_t>(m_ghosts.size())));
+				m_ghostingAllowed = true;
+				m_mission = MissionState::Phase2Sent;
+				if (m_cb.onMission)
+					m_cb.onMission(m_mission);
+			}
+			else if (ev.id == tge::message::ReadyForNormalGhosts)
+				log("client ready for normal ghosts");
+			else
+				log("connection message " + std::to_string(ev.id) + " (sequence " + std::to_string(ev.sequence) + ") ignored");
+			return;
+		}
 
 		log("event ignored: " + std::string(ev.name.empty() ? std::string_view{"(unknown class)"} : ev.name));
 	}

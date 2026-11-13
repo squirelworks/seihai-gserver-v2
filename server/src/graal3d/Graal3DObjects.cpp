@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
 // New file: GameObject and Sun updates for the Graal 3D world. See Graal3DObjects.h.
 
 #include <graal3d/Graal3DObjects.h>
@@ -346,6 +346,11 @@ namespace graal3d
 			writeSkyUpdate(w, sky);
 			return;
 		}
+		if (kind == Kind::TgeCamera)
+		{
+			tge::writeCameraUpdate(w, tgeCamera, datablockId, (mask & TgeDatablock) != 0);
+			return;
+		}
 		writeGameObjectUpdate(w, object, mask);
 		if (kind == Kind::Camera)
 		{
@@ -362,6 +367,12 @@ namespace graal3d
 			return sun == before.sun ? 0u : 1u;
 		if (kind == Kind::Sky)
 			return sky == before.sky ? 0u : 1u;
+		if (kind == Kind::TgeCamera)
+		{
+			const auto& a = tgeCamera;
+			const auto& b = before.tgeCamera;
+			return a.position == b.position && a.pitch == b.pitch && a.yaw == b.yaw ? 0u : TgeMove;
+		}
 		return gameObjectChanges(before.object, object);
 	}
 

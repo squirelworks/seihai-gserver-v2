@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
 // New file: the wire format of the Torque UDP connection that the Graal 3.153 to 5.x
 // clients open to a 3D server, on the gserver's port + 1. Out-of-band handshake
 // packets, the per-version profiles (protocol 19, 21, 24), the data packet header,
@@ -49,16 +49,20 @@ namespace graal3d
 		// 3.153 and 4.04r2 number class types object 0, datablock 1, event 2;
 		// 4.20r6 and 5.x have no datablocks: object 0, event 1.
 		bool hasDatablocks;
-		// The GameObject-era game packet (4.20r6, 5.x). The TGE layout of 3.153 and
-		// 4.04r2 (moves, datablocks) is not implemented, so those clients get the
-		// handshake and keep-alive only.
+		// The GameObject-era game packet (4.20r6, 5.x).
 		bool gameObjectPackets;
 		// Mission phases the server drives: 2 in the GameObject era, 3 before.
 		int missionPhases;
 		std::vector<std::string_view> objectClasses;
 		std::vector<std::string_view> eventClasses;
+		// Protocol 19 only: datablock classes (type 1 in the accept).
+		std::vector<std::string_view> datablockClasses{};
+		// The TGE game packet of 3.153 and 4.04r2 (move ack, moves, datablocks,
+		// three mission phases): see Graal3DTge.h.
+		bool tgePackets = false;
 
 		[[nodiscard]] uint32_t eventType() const { return hasDatablocks ? 2 : 1; }
+		[[nodiscard]] bool gamePackets() const { return gameObjectPackets || tgePackets; }
 	};
 
 	const Profile* profileForProtocol(uint32_t protocol);
@@ -67,6 +71,7 @@ namespace graal3d
 	std::optional<uint32_t> eventClassId(const Profile& profile, std::string_view name);
 	std::string_view eventClassName(const Profile& profile, uint32_t id);
 	std::optional<uint32_t> objectClassId(const Profile& profile, std::string_view name);
+	std::optional<uint32_t> datablockClassId(const Profile& profile, std::string_view name);
 
 	using Digest = std::array<uint32_t, 4>;
 
