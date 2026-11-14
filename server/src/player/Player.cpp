@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-01, 2026-11-04, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-01, 2026-11-04, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -41,6 +41,7 @@
 #include <object/Character.h>
 #include <object/Player.h>
 #include <object/Weapon.h>
+#include <player/FileSendLayout.h>
 #include <player/LegacyPlayerProps.h>
 #include <player/PlayerClient.h>
 #include <player/PlayerProps.h>
@@ -743,25 +744,22 @@ std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file, const 
 		sendPacket(CString() >> (char)PLO_LARGEFILESIZE >> (long long)fileData.size(), channel);
 	}
 
-	// Send the file now.
+	// Send the file now. A zero-byte file still gets one FILE body, so the client
+	// is not left waiting on a request that never receives a record.
 	std::span<char> fileDataSpan{fileData};
-	while (!fileDataSpan.empty())
+	do
 	{
 		int sendSize = std::clamp((int)fileDataSpan.size(), 0, 32000);
 		if (isClient() && m_versionId < CLVER_2_14) sendSize = static_cast<int>(fileDataSpan.size());
 
-		// Older client versions didn't send the modTime.
-		if (isClient() && m_versionId < CLVER_2_1)
-		{
-			sendRawPacket(CString() >> (char)PLO_FILE >> (char)filename.length() << filename << std::string_view{fileDataSpan.subspan(0, sendSize)}, channel);
-		}
+		const auto chunk = queueFileChunk(m_versionId, isClient(), static_cast<long long>(fileModTime), filename, std::string_view{fileDataSpan.subspan(0, sendSize)});
+		if (chunk.raw)
+			sendRawPacket(chunk.packet, channel);
 		else
-		{
-			sendRawPacket(CString() >> (char)PLO_FILE >> (long long)fileModTime >> (char)filename.length() << filename << std::string_view{fileDataSpan.subspan(0, sendSize)}, channel);
-		}
+			sendPacket(chunk.packet, channel);
 
 		fileDataSpan = fileDataSpan.subspan(sendSize);
-	}
+	} while (!fileDataSpan.empty());
 
 	// If we had sent a large file, let the client know we finished sending it.
 	if (isBigFile) sendPacket(CString() >> (char)PLO_LARGEFILEEND << filename, channel);

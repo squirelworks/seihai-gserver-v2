@@ -9,6 +9,12 @@ Every change below was checked on a private loopback lab with real Graal
 clients and with the [Seihai](https://github.com/squirelworks/seihai) client.
 Each file we changed carries a one-line notice at its top.
 
+## 2026-11-15
+
+| Change | Files | Clients it fixes |
+|---|---|---|
+| A file sent to a client before 2.1 no longer has the queue's line feed counted as file data, and a zero-byte file still sends one FILE body. Those clients keep every byte the RAWDATA count names, and their FILE body is the name and the bytes with no modtime and no trailing line feed. A raw packet is queued with a count one higher than the packet and a line feed after it, so that line feed was saved as the last byte of the file. The body now goes out as an ordinary packet whose RAWDATA count is the FILE body alone; the queue's line feed stays after the count. From 2.1 the body still goes out raw, with the modtime, and that counted line feed is the trailing line feed those clients expect. An unknown version stays on the pre-2.1 body, as before. `Catch_tests/FileSend` checks 1.39, 2.00, 2.05, 2.1 and 2.17, a file that itself contains a line feed, a zero-byte file, and a non-client. Not yet run with a real client. | `server/include/player/FileSendLayout.h`, `server/src/player/Player.cpp`, `Catch_tests/FileSend/`, `.github/workflows/seihai-release.yml` | clients before 2.1 (1.x through 2.05) |
+
 ## 2026-11-14
 
 | Change | Files | Clients it fixes |
