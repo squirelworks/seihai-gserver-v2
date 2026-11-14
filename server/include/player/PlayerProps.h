@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-14: see CHANGES-SEIHAI.md.
 #ifndef PLAYERPROPS_H
 #define PLAYERPROPS_H
 
@@ -226,10 +227,11 @@ inline constexpr PropList clientPropsSharedLocal =
 };
 
 // When the RC views a player's account, these props are sent.
+// Seihai (#83): bomb power (7) is listed, so an RC reads back what it set.
 inline constexpr PropList clientPropsForRCView =
 {
 	true, true, true, true, true, true,       // 0-5
-	true, false, true, true, true, true,      // 6-11
+	true, true, true, true, true, true,       // 6-11
 	false, true, false, true, true, false,    // 12-17
 	true, false, true, false, false, false,   // 18-23
 	false, false, true, true, true, true,     // 24-29

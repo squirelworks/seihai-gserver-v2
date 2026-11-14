@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31 and 2026-11-14: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -617,6 +617,14 @@ SetResults Player::setProp(PlayerProp prop, SetBy setBy, PropertyBase* base)
 				SETPROP_RETURN_IGNORE;
 			if (!restrictedPropAllowed)
 				SETPROP_RETURN_REVERT;
+
+			// Seihai (#83): an account that is not online (an RC props set by account) has no level to enter;
+			// Player::enterLevel does nothing there, so the new level was dropped. Store it, as its x and y are.
+			if (player == nullptr)
+			{
+				account.level = strProp->value;
+				break;
+			}
 
 			warp(strProp->value, getGlobalPosition());
 			break;
