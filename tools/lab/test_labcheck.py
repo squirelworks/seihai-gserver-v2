@@ -208,6 +208,24 @@ class SyntheticTests(unittest.TestCase):
         code, report = run("milestone", self.dir, "--accounts", ",".join(names), "--chat-prefix", "zz-")
         self.assertEqual(code, 1)
 
+    def test_milestone_bytecode_npc_with_relayed_message(self):
+        # lab run 2026-11-14: 5.24r4 and 6.03r7 got the NPC as 131, and their NPC props also carried the
+        # marker in the NPC's message prop (set by 1.39 and relayed). That is bytecode, not GS1 text.
+        names = ["a1", "b2", "c3", "d4", "e5"]
+        start, end = "2026-11-14 01:36:18", "2026-11-14 01:37:30"
+        dump, log = "", ""
+        for i, me in enumerate(names):
+            pid = i + 1
+            log += f"[{start}] :: New login: {me} [New Client (2.22+)] [G3D15010 (5.24)]\n"
+            dump += out_packet(start, me, pid, 3, gchar(3) + b"message lab27npc")
+            if me == "e5":
+                dump += out_packet(start, me, pid, 131, gchar(131) + b"bytecode")
+            dump += in_packet(end, me, pid, 2, gchar(2) + b"x")
+        self.write(dump, log)
+        code, report = run("milestone", self.dir, "--accounts", ",".join(names))
+        self.assertIn("as bytecode (131 x1)", row(report, "e5 gets the NPC"))
+        self.assertIn("as GS1 text", row(report, "a1 gets the NPC"))
+
 
 if __name__ == "__main__":
     unittest.main()

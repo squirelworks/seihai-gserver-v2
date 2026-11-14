@@ -384,10 +384,13 @@ def check_milestone(logs: Logs, accounts: list[str], chat_prefix: str, npc_marke
         npc = s.out(PLO_NPCPROPS)
         text = any(npc_marker in p.text() for p in npc)
         code = s.out(PLO_NPCBYTECODE)
-        if text:
+        # Bytecode first: since #72 a 5.12+ client gets the NPC as 131, and its NPC props can still carry the
+        # marker in a relayed message prop (the NPC's `message lab27npc`, set by another client), which is not
+        # the script. Only a client that gets no 131 has the NPC as GS1 text.
+        if code:
+            r.check(True, f"{a} gets the NPC", f"as bytecode (131 x{len(code)})")
+        elif text:
             r.check(True, f"{a} gets the NPC", "as GS1 text")
-        elif code:
-            r.info(f"{a} gets the NPC", f"as bytecode (131 x{len(code)}); no GS1 text with '{npc_marker}'")
         else:
             r.info(f"{a} gets the NPC", f"FINDING: no NPC text with '{npc_marker}' and no bytecode ({len(npc)} NPC prop messages)")
 
