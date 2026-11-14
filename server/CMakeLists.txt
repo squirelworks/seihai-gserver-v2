@@ -1,4 +1,4 @@
-# Modified by the Seihai project, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15: see CHANGES-SEIHAI.md.
 #
 #  server/src/CMakeLists.txt
 #
@@ -73,6 +73,7 @@ set(
 	"include/object/Player.h"
 	"include/object/ShowImg.h"
 	"include/object/Weapon.h"
+	"include/player/FileSendLayout.h"
 	"include/player/LegacyPlayerProps.h"
 	"include/player/PlayerClient.h"
 	"include/player/PlayerClientOriginal.h"
