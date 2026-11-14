@@ -2,7 +2,7 @@
 
 This file is part of the Seihai fork (GPL-3.0, see `LICENSE.md` and `CHANGES-SEIHAI.md`).
 
-The Graal clients from 3.153 to 5.x can play on a 3D server. That is not the
+The Graal clients from 3.151 (Linux) and 3.153 to 5.x can play on a 3D server. That is not the
 February 2000 Graal3D program: it is a Torque engine 3D world built into the normal
 client (`Graal3DEngine.dll` in 4.x and 5.x). Graal 6 removed it.
 
@@ -144,9 +144,9 @@ too. The server never sends a player's position back to that player.
 | Scripts in 3D mode | with `weapon3d` lines: `addweapon` and `weaponscript` over the 3D text channel. A 5.12 lab client compiled and ran one, and its `keydown2` saw the arrow keys. |
 | Walking | a script's `triggerserver(..., "g3dpos", x, y, z)` and the gserver moves the player's object. Lab 15 showed the trigger reaching the gserver; the move is not yet run with a real client. |
 | `TerrainBlock`, `movetype` | **not sent.** |
-| 3.153 and 4.04r2 game packets | done, not yet run with a real client. See "Protocol 19" below. |
+| 3.15x and 4.04r2 game packets | done up to the control object. Real 3.151 (Linux) and 3.153 (Mac) clients crash on their first frame after it (lab 2026-11-14). See "Protocol 19" below. |
 
-## Protocol 19 (3.153, 4.04r2)
+## Protocol 19 (3.151 Linux, 3.153, 4.04r2)
 
 These clients run the stock Torque game layer: datablocks, `Camera` / `Player`
 ghosts and moves, with a three-phase mission start. The layouts come from a static
@@ -168,6 +168,18 @@ objects (they are `GameObject`s, a 4.20r6 and later class), `Sun` and `Sky`, ter
 and anything that comes from a `Player` control object (damage flash, white-out).
 Flags and `weapon3d` scripts go over the 3D text channel as for 5.x.
 
+Lab 2026-11-14, with real clients:
+
+| Client | How far it gets |
+|---|---|
+| Linux 3.151, Mac 3.153 | Every step above, up to the control object, and their moves are acked. Then each crashes on its first frame (a null read while drawing). Not yet known: what that frame needs which a shapeless `Camera` alone does not give it. |
+| Windows 4.04r2 | Crashes while starting its own 3D engine, before it opens the UDP port (on Windows 10, and under Wine, where a 2D server works). |
+| Seihai's Ato client, as 4.04r2 and 3.153 | Every step, and the server reads its moves. |
+| 4.20r8 | Not protocol 19: it speaks protocol 24 and plays a full 3D session. |
+
+3.15x clients join on a `newmain` world (`default` or `classic`), whose allowed versions
+already cover them; `modern` starts at 4.04r2.
+
 The server log shows each link: `Graal3D: <account> linked from <ip> (protocol 24, 5.x ...)`.
 
 ## Which client each finding comes from
@@ -177,7 +189,7 @@ nothing says the others match.
 
 | Client | Protocol | What is known |
 | --- | --- | --- |
-| 3.153, 4.04r2 (the first Graal 3D) | 19 | Handshake and keep-alive only. It is stock TGE underneath: datablocks, moves and TGE object classes, with no `GameObject` and no mission phases. Its events were read from the 4.04r2 `Graal3DEngine.dll`. Nothing in the ghosting, control-object or camera work applies to it. |
+| 3.151 (Linux), 3.153, 4.04r2 (the first Graal 3D) | 19 | Stock TGE underneath: datablocks, moves, TGE object classes and a three-phase mission start, with no `GameObject`. Its layouts were read from the 4.04r2 `Graal3DEngine.dll`. The real 3.151 and 3.153 clients follow them up to the control object (see "Protocol 19"). The `GameObject` ghosting, control-object and camera work above does not apply to it. |
 | 4.20r6 | 21 | Its class table (read from 4.20r6) has `GameObject`, `Camera` and `Sun`, so the server ghosts to it. The layouts of those classes were not read from 4.20r6: they are assumed to match 5.00r7. |
 | 5.00r7, 5.12 | 24 | The `GameObject`, `Camera`, `Sun`, control-object and ghost layouts were read from the 5.00r7 dll. The handshake was checked against a real 5.12 client. |
 
