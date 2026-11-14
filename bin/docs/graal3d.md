@@ -1,10 +1,15 @@
 # Graal 3D (Seihai)
 
+<!-- Modified by the Seihai project, 2026-11-14: reconcile recorded lab coverage. -->
+
 This file is part of the Seihai fork (GPL-3.0, see `LICENSE.md` and `CHANGES-SEIHAI.md`).
 
-The Graal clients from 3.151 (Linux) and 3.153 to 5.x can play on a 3D server. That is not the
-February 2000 Graal3D program: it is a Torque engine 3D world built into the normal
-client (`Graal3DEngine.dll` in 4.x and 5.x). Graal 6 removed it.
+The Graal clients from 3.151 (Linux) and 3.153 to 5.x include a Torque engine
+3D mode (`Graal3DEngine.dll` in 4.x and 5.x), separate from the February 2000
+Graal3D program. Graal 6 removed it. Server support and real-client results vary
+by protocol: the 2026-11-14 lab reached the control object on 3.151 and 3.153,
+but both crashed on their first frame; 4.20r8 played a full 3D session. See
+"Protocol 19" and "Lab coverage and remaining checks" below.
 
 ## How a client joins a 3D server
 
@@ -140,7 +145,7 @@ too. The server never sends a player's position back to that player.
 | From the client: its own object | read in every packet: the position, and the client's changes to the object (moves, chat, shape). Other players see them. |
 | "Connecting..." window | The 5.x client builds its 3D view itself (`GUIContainer`, `GraalControl3D`, from GS2 built into the client) and shows it at login step 6. Its "Connecting..." window stays on top until the TCP side sends `PLO_SERVERLISTCONNECTED`, so with `graal3d` on, every 3.153 to 5.x client gets that packet at login, with or without a listserver. |
 | Camera | with a `camera` line in the world file: one `Camera` per client, named as its camera in every packet once its ghost is in |
-| `Sky` | with a `sky` line: init and material list, the later sections (storm, wind, fog changes) left clear. Layout from the 5.12 client; not yet run with a real client. |
+| `Sky` | with a `sky` line: init and material list, the later sections (storm, wind, fog changes) left clear. Layout from the 5.12 client; a real 5.12 client drew the sky box in the lab (see "The world"). |
 | Scripts in 3D mode | with `weapon3d` lines: `addweapon` and `weaponscript` over the 3D text channel. A 5.12 lab client compiled and ran one, and its `keydown2` saw the arrow keys. |
 | Walking | a script's `triggerserver(..., "g3dpos", x, y, z)` and the gserver moves the player's object. Lab 15 showed the trigger reaching the gserver; the move is not yet run with a real client. |
 | `TerrainBlock`, `movetype` | **not sent.** |
@@ -196,10 +201,18 @@ nothing says the others match.
 The camera is off unless the world file has a `camera` line, so a client whose
 `Camera` layout differs is only affected when it is turned on.
 
-## Not checked with a real client yet
+## Lab coverage and remaining checks
 
 The handshake bytes are tested against the packets a real 5.12 client sent in a
-2026-10-30 lab (`Catch_tests/Graal3D`). The mission phases, the text channel, the
-flag bridge and the ghosting were written from static reads of the 4.04r2 and 5.00r7
-`Graal3DEngine.dll` (the ghost, control-object and `GameObject` layouts from 5.00r7,
-which also uses protocol 24) and have not been run against a real client.
+2026-10-30 lab (`Catch_tests/Graal3D`). Later lab results recorded above include a
+5.12 client running a 3D weapon script and drawing the sky box, and the
+2026-11-14 protocol 19 run reaching the control object on real Linux 3.151 and
+Mac 3.153 clients before their first-frame crashes. That run also records a
+full 3D session on 4.20r8 (protocol 24). These results supersede the earlier
+blanket statement that the game layer had never run against a real client.
+
+They do not establish parity across all builds. The protocol 21 object layouts
+are still assumed to match 5.00r7, the Walking row above still lacks a real-client
+move check, and protocol 19 still lacks the objects listed in its section.
+The first-frame crash cause remains unknown; Windows 4.04r2 crashed before UDP
+connection. Keep those limits separate from the successful individual checks.
