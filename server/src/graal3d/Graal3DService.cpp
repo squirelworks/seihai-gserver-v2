@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-14: see CHANGES-SEIHAI.md.
 // New file: the gserver's Graal 3D UDP side. See Graal3DService.h.
 
 #include <graal3d/Graal3DService.h>
@@ -81,9 +81,11 @@ namespace graal3d
 	} // namespace
 
 	// 3.04 speaks the stock TGE demo protocol and is refused by the game string check.
+	// The Linux 3.151 build (CLVER_3_151_LINUX, ordered just below 3.153) speaks
+	// protocol 19 too.
 	bool Service::clientHasGraal3D(int version)
 	{
-		return version >= CLVER_3_153 && version < CLVER_6_015;
+		return version >= CLVER_3_151_LINUX && version < CLVER_6_015;
 	}
 
 	Service::Service(Server& server)
