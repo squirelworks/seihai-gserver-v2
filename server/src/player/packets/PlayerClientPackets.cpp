@@ -25,6 +25,7 @@
 #include <filesystem/FileSystem.h>
 #include <filesystem/FileSystemTypes.h>
 #include <level/Level.h>
+#include <misc/ScriptPacketGuards.h>
 #include <level/LevelArrow.h>
 #include <level/LevelBaddy.h>
 #include <level/LevelChest.h>
@@ -1643,7 +1644,7 @@ HandlePacketResult PlayerClient::msgPLI_UPDATECLASS(CString& pPacket)
 	}
 	else
 	{
-		if (getVersion() >= CLVER_5_07)
+		if (scriptPackets::usesModernScriptCache(getVersion()))
 		{
 			constexpr std::array<const char, 10> empty = {0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20};
 			std::string_view des{empty.data(), 10};
@@ -1658,7 +1659,7 @@ HandlePacketResult PlayerClient::msgPLI_UPDATECLASS(CString& pPacket)
 			// This seems to fix it by sending an empty bytecode.
 			sendPacket(CString() >> (char)PLO_WEAPONBYTECODE2 >> (short)header.length() << header);
 		}
-		// v4
+		// Classic (through 5.12): empty class as name-only 133. Never 140/197 to pure 4.x.
 		else
 		{
 			sendRawPacket(CString() >> (char)PLO_CLASSBYTECODE >> (char)className.length() << className);
