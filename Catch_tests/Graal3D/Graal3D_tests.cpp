@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15: see CHANGES-SEIHAI.md.
 // New file: tests for the Graal 3D (Torque) UDP side. The client bytes are from the
 // 2026-10-30 Wine lab, where the real 5.12 client joined a test 3D server
 // (Graal_analysis torque/network.md, "The full handshake, live").
@@ -1028,5 +1028,59 @@ SCENARIO("A ghost can be sent whole again")
 			PayloadReader p(pkt.ghosts[0].payload);
 			REQUIRE(readSkyUpdate(p.r) == sky.sky);
 		}
+	}
+}
+
+SCENARIO("Bit counts and patches stay inside the stream")
+{
+	// 32 bits each way is the widest value the stream stores.
+	BitWriter exact;
+	exact.writeInt(0xFFFFFFFFu, 32);
+	REQUIRE(exact.bitPosition() == 32);
+	BitReader exactRead(exact.bytes().data(), exact.bytes().size());
+	REQUIRE(exactRead.readInt(32) == 0xFFFFFFFFu);
+
+	// A wider count used to shift a 32-bit value by 32.
+	BitWriter wide;
+	wide.writeInt(0xFFFFFFFFu, 40);
+	REQUIRE(wide.bitPosition() == 40);
+	BitReader wideRead(wide.bytes().data(), wide.bytes().size());
+	REQUIRE(wideRead.readInt(40) == 0xFFFFFFFFu);
+	REQUIRE(wideRead.bitPosition() == 40);
+
+	unsigned char ones[8] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+	BitReader onesRead(ones, sizeof ones);
+	REQUIRE(onesRead.readInt(40) == 0xFFFFFFFFu);
+
+	// Patching a position the buffer does not have used to index an empty vector.
+	BitWriter empty;
+	empty.patchInt(0, 1, 8);
+	REQUIRE(empty.byteSize() == 0);
+	empty.patchInt(0, 1, -3);
+	REQUIRE(empty.byteSize() == 0);
+
+	BitWriter patched;
+	patched.writeInt(0, 8);
+	patched.patchInt(0, 0xA5u, 8);
+	patched.patchInt(0, 0xFFFFFFFFu, 16);
+	REQUIRE(patched.byteSize() == 1);
+	BitReader patchedRead(patched.bytes().data(), patched.bytes().size());
+	REQUIRE(patchedRead.readInt(8) == 0xFFu);
+
+	uint32_t state = 0xA5A5u;
+	for (int n = 0; n < 64; ++n)
+	{
+		state = state * 1664525u + 1013904223u;
+		unsigned char raw[16];
+		const int len = static_cast<int>(state % 16);
+		for (int i = 0; i < len; ++i)
+		{
+			state = state * 1664525u + 1013904223u;
+			raw[i] = static_cast<unsigned char>(state);
+		}
+		BitReader fuzz(raw, static_cast<size_t>(len));
+		fuzz.readInt(static_cast<int>(state % 48));
+		fuzz.readString();
+		fuzz.readBytes(static_cast<size_t>(state % 32));
 	}
 }

@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-15: see CHANGES-SEIHAI.md.
 // New file: Torque bit stream and Huffman strings for the Graal 3D UDP connection.
 // The frequency table and the tree construction follow the MIT-licensed Torque3D
 // source (core/stream/bitStream.cpp, HuffmanProcessor), which matches the strings
@@ -160,8 +160,14 @@ namespace graal3d
 
 	void BitWriter::writeInt(uint32_t value, int bits)
 	{
+		if (bits < 0)
+			return;
 		for (int i = 0; i < bits; ++i)
-			writeBit(((value >> i) & 1u) != 0);
+		{
+			// A uint32_t has no bit 32 or higher. Those positions are zero.
+			const uint32_t bit = i < 32 ? ((value >> i) & 1u) : 0u;
+			writeBit(bit != 0);
+		}
 	}
 
 	void BitWriter::writeF32(float value)
@@ -219,14 +225,20 @@ namespace graal3d
 
 	void BitWriter::patchInt(size_t bitPos, uint32_t value, int bits)
 	{
+		if (bits <= 0)
+			return;
 		for (int i = 0; i < bits; ++i)
 		{
 			const size_t pos = bitPos + static_cast<size_t>(i);
+			const size_t byte = pos >> 3;
+			if (byte >= m_data.size())
+				return;
 			const auto mask = static_cast<uint8_t>(1u << (pos & 7));
-			if (((value >> i) & 1u) != 0)
-				m_data[pos >> 3] |= mask;
+			const uint32_t bit = i < 32 ? ((value >> i) & 1u) : 0u;
+			if (bit != 0)
+				m_data[byte] |= mask;
 			else
-				m_data[pos >> 3] &= static_cast<uint8_t>(~mask);
+				m_data[byte] &= static_cast<uint8_t>(~mask);
 		}
 	}
 
@@ -244,10 +256,14 @@ namespace graal3d
 
 	uint32_t BitReader::readInt(int bits)
 	{
+		if (bits < 0)
+			return 0;
 		uint32_t value = 0;
 		for (int i = 0; i < bits; ++i)
 		{
-			if (readFlag())
+			if (!readFlag())
+				continue;
+			if (i < 32)
 				value |= (1u << i);
 		}
 		return value;
