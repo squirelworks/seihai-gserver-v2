@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-12, 2026-11-13, 2026-11-16: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -23,6 +23,7 @@
 #include <filesystem/File.h>
 #include <filesystem/FileSystemTypes.h>
 #include <level/LevelItem.h>
+#include <misc/ScriptPacketGuards.h>
 #include <npcserver/NPCServer.h>
 #include <object/NPC.h>
 #include <object/Player.h>
@@ -185,8 +186,9 @@ void Weapon::registerWeaponWithPlayer(const std::shared_ptr<Player>& player) con
 	CString weaponPacket;
 	weaponPacket >> (char)PLO_NPCWEAPONADD >> (char)name.length() << name >> (char)NPCProp::IMAGE >> (char)image.length() << image;
 
-	// Classic weapons.
-	if (m_script.getClientByteCode().empty() && player->getVersion() <= CLVER_5_07)
+	// Classic GS1-as-text weapons (no bytecode): keep the text form for builds
+	// that still take classic script packets; modern builds need bytecode.
+	if (m_script.getClientByteCode().empty() && !scriptPackets::usesModernScriptCache(player->getVersion()))
 	{
 		// Seihai: without an NPC-server nothing turned the weapon file's newlines into \xa7.
 		const std::string script = gs1WireText(getClientSideScript());
@@ -212,13 +214,13 @@ void Weapon::registerWeaponWithPlayer(const std::shared_ptr<Player>& player) con
 		// Seihai: only when there is bytecode to load. A GS1-only weapon has none, so the header carried the CRC of
 		// nothing (0); 6.03 then skips its cache check, asks for the script with PLI_UPDATESCRIPT, and
 		// sendByteCodeToPlayer has nothing to send (#23, lead 1).
+		// Hard guards: classic 193/132 only through 5.12; modern 197/140 from 5.24/6.00β1
+		// (Graal_analysis protocol/script-packet-guards.md). Prefer classic while both exist.
 		if (!getClientByteCode().empty() && !m_headerWithCRC.empty())
 		{
-			if (player->getVersion() >= CLVER_5_07)
+			if (scriptPackets::usesModernScriptCache(player->getVersion()))
 				player->sendPacket(CString() >> (char)PLO_LOADSCRIPT << m_headerWithCRC);
-			// Seihai (#26): 193 carries the CRC of the plain bytecode, not the GRESCR01 one, and only 4.04r2 and later
-			// handle it. Older builds get the bytecode itself (132), as they would after a cache miss.
-			else if (player->getVersion() >= CLVER_4_042)
+			else if (scriptPackets::usesClassicScriptBytecode(player->getVersion()))
 				player->sendPacket(getWeaponHashPacket());
 			else sendByteCodeToPlayer(player);
 		}
@@ -233,9 +235,10 @@ void Weapon::sendByteCodeToPlayer(const std::shared_ptr<Player>& player) const
 		const auto bytecodePtr = reinterpret_cast<const char*>(bytecode.data());
 		const std::string_view bytecodeView(bytecodePtr, bytecode.size());
 
-		if (player->getVersion() >= CLVER_5_07)
+		if (scriptPackets::usesModernScriptCache(player->getVersion()))
 			player->sendRawPacket(CString() >> (char)PLO_WEAPONBYTECODE2 >> (short)m_header.length() << m_header << bytecodeView);
-		else player->sendRawPacket(CString() >> (char)PLO_WEAPONBYTECODE >> (char)name.length() << name << bytecodeView);
+		else
+			player->sendRawPacket(CString() >> (char)PLO_WEAPONBYTECODE >> (char)name.length() << name << bytecodeView);
 	}
 }
 

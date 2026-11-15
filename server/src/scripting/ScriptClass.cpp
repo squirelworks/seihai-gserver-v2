@@ -14,6 +14,7 @@
 
 #include <BabyDI.h>
 #include <Server.h>
+#include <misc/ScriptPacketGuards.h>
 #include <object/Player.h>
 #include <scripting/ScriptClass.h>
 #include <utilities/ScriptCacheDes.h>
@@ -51,9 +52,10 @@ ScriptClass& ScriptClass::setScript(std::string_view classScript)
 		const CString key = CString() >> (long long)(hashBytes[0]) >> (long long)(hashBytes[1]);
 		m_desKey = key.toString();
 
-		// 4.x caches the plain bytecode (PLO_WEAPONHASH). 5.07 and later cache the DES-encrypted
-		// body (PLO_LOADSCRIPT), the same split weapons use. The DES is the client's script-cache
-		// cipher: whole 8-byte blocks, each key byte bit-reversed.
+		// Classic clients cache plain weapon bytecode under PLO_WEAPONHASH; classes use
+		// PLO_CLASSBYTECODE on ask. Modern clients (5.24 / 6.00β1 on) cache the DES-encrypted
+		// body under PLO_LOADSCRIPT, the same split weapons use. The DES is the client's
+		// script-cache cipher: whole 8-byte blocks, each key byte bit-reversed.
 		std::array<uint8_t, 8> keyBytes{};
 		for (size_t i = 0; i < 4; ++i)
 		{
@@ -99,15 +101,13 @@ void ScriptClass::registerWithPlayer(const std::shared_ptr<Player>& player) cons
 	if (m_server->Generation != ServerGeneration::MODERN)
 		return;
 
-	// Tell the client to load the script.
-	if (!m_headerWithCRC.empty())
-	{
-		if (player->getVersion() >= CLVER_5_07)
-			player->sendPacket(CString() >> (char)PLO_LOADSCRIPT << m_headerWithCRC);
-		else if (player->getVersion() >= CLVER_4_042)
-			player->sendPacket(CString() >> (char)PLO_WEAPONHASH >> (long long)m_plainChecksum << name);
-		else sendByteCodeToPlayer(player);
-	}
+	// Matching CRC: modern clients get a LOADSCRIPT refresh. Classic clients
+	// already hold the class (161 CRC matched) — stay silent. Never announce
+	// a class with PLO_WEAPONHASH (193 is the weapon path only).
+	if (m_headerWithCRC.empty())
+		return;
+	if (scriptPackets::usesModernScriptCache(player->getVersion()))
+		player->sendPacket(CString() >> (char)PLO_LOADSCRIPT << m_headerWithCRC);
 }
 
 void ScriptClass::sendByteCodeToPlayer(const std::shared_ptr<Player>& player) const
@@ -117,9 +117,10 @@ void ScriptClass::sendByteCodeToPlayer(const std::shared_ptr<Player>& player) co
 		const auto bytecodePtr = reinterpret_cast<const char*>(bytecode.data());
 		const std::string_view bytecodeView(bytecodePtr, bytecode.size());
 
-		if (player->getVersion() >= CLVER_5_07)
+		if (scriptPackets::usesModernScriptCache(player->getVersion()))
 			player->sendRawPacket(CString() >> (char)PLO_WEAPONBYTECODE2 >> (short)m_header.length() << m_header << bytecodeView);
-		else player->sendRawPacket(CString() >> (char)PLO_CLASSBYTECODE >> (char)name.length() << name << bytecodeView);
+		else if (scriptPackets::usesClassicScriptBytecode(player->getVersion()) || player->getVersion() >= CLVER_3_153)
+			player->sendRawPacket(CString() >> (char)PLO_CLASSBYTECODE >> (char)name.length() << name << bytecodeView);
 	}
 }
 
