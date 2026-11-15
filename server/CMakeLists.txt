@@ -1,4 +1,4 @@
-# Modified by the Seihai project, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16: see CHANGES-SEIHAI.md.
 #
 #  server/src/CMakeLists.txt
 #
@@ -315,9 +315,10 @@ FetchContent_Declare(gs2lib
 	# label for 5.00r7, + the Mac PowerPC 4.04r2, 4.20r6 and 5.12 version ids,
 	# + the 5.24 version id G3D15010, seihai-gs2lib #18, + version ids for the
 	# 13 catalogue game tokens it lacked and G3D27076 renamed CLVER_4_102_MAC,
-	# seihai-gs2lib #19).
+	# seihai-gs2lib #19, + the bounds and socket fixes of seihai-gs2lib #22 to
+	# #26 and #30).
 	GIT_REPOSITORY https://github.com/squirelworks/seihai-gs2lib.git
-	GIT_TAG        f412de13cd1e9425dc54cac6bbdb5a7577867170
+	GIT_TAG        df5b9a661b229949ebd4fe612a76e67f2920863f
 )
 FetchContent_MakeAvailable(gs2lib)
 add_dependencies(${TARGET_NAME} gs2lib)

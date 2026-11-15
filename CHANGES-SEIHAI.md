@@ -9,6 +9,12 @@ Every change below was checked on a private loopback lab with real Graal
 clients and with the [Seihai](https://github.com/squirelworks/seihai) client.
 Each file we changed carries a one-line notice at its top.
 
+## 2026-11-16
+
+| Change | Files | Clients it fixes |
+|---|---|---|
+| gs2lib moves from `f412de1` to the current `seihai` tip of seihai-gs2lib, `df5b9a6`, so the server picks up the library's crash and bounds fixes. Sockets are created with the address family the name resolved to (#22); RC/NC version labels are bounded by the selected token table (#23); bytes still queued after a short or blocked send are drained (#24); cipher generations are clamped to the iterator table (#26); out-of-range reads in the string, codec and websocket helpers are stopped (#30). #25 changes only build-option notes, and #21 adds the version id for iPhone Classic+ 1.13 (`G3D0208A`). No server code changes; the pin is the only edit. | `server/CMakeLists.txt` | none (robustness) |
+
 ## 2026-11-15
 
 | Change | Files | Clients it fixes |
