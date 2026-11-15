@@ -1282,9 +1282,12 @@ bool PlayerClient::warp(const std::shared_ptr<Level>& level, const PixelPosition
 	// Tell the client their new level.
 	if (level->isGmap())
 	{
-		// If the player has not seen this gmap, force it to be sent FIRST.
-		// If we don't, the client will fail to warp.
-		if (!hasSeenFile(level->levelName))
+		// Pre-3.0 clients parse the .gmap from disk when they handle 49. A
+		// once-per-session send fails when saveimages is off or maps/ was
+		// wiped: hasSeenFile is true but the file is not on disk. Always
+		// re-send for those builds; from CLVER_3 keep the once-per-session
+		// gate. (Graal_analysis protocol/gmap-file-on-warp.md)
+		if (m_versionId < CLVER_3 || !hasSeenFile(level->levelName))
 		{
 			sendFile(level->levelName, PacketQueue::NORMAL);
 			m_fileQueue.sendCompress();
