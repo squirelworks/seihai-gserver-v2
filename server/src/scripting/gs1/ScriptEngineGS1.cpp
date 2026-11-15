@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-14: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-14, 2026-11-16: see CHANGES-SEIHAI.md.
 #include <any>
 #include <cstdint>
 #include <exception>
@@ -450,7 +450,6 @@ bool ScriptEngineGS1::execute(ScriptEvent& event, std::vector<ScriptEventType>* 
 			npc->level = level->levelName;
 	}
 
-	bool dropScript = false;
 	try
 	{
 		// Execute the script.
@@ -464,8 +463,8 @@ bool ScriptEngineGS1::execute(ScriptEvent& event, std::vector<ScriptEventType>* 
 		throw;
 #endif
 		// If we had a terminal error, remove the script from the context so it doesn't get executed again.
-		// This is done after cleanup(): context->script owns the wrapper, so dropping it here frees it.
-		dropScript = true;
+		// context->script owns the wrapper, so dropping it here frees it. cleanup() must not run after that.
+		context->script = nullptr;
 	}
 
 	// Fix the control-NPC level.
@@ -476,9 +475,8 @@ bool ScriptEngineGS1::execute(ScriptEvent& event, std::vector<ScriptEventType>* 
 	if (npc != nullptr && hasCreated)
 		npc->setPropWith<NPCProp::VISFLAGS>(SetBy::SERVER, static_cast<uint8_t>(npc->visFlags | PROPID(NPCVisFlags::CREATED)));
 
-	cleanup(*wrapper);
-	if (dropScript)
-		context->script = nullptr;
+	if (context->script != nullptr)
+		cleanup(*wrapper);
 	return true;
 }
 
@@ -507,7 +505,6 @@ bool ScriptEngineGS1::executeFunction(const std::string_view function, ScriptEve
 	if (!prepare(*wrapper, event, additionalEventTypes, source, npc, level))
 		return false;
 
-	bool dropScript = false;
 	try
 	{
 		// Execute the script.
@@ -521,13 +518,12 @@ bool ScriptEngineGS1::executeFunction(const std::string_view function, ScriptEve
 		throw;
 #endif
 		// If we had a terminal error, remove the script from the context so it doesn't get executed again.
-		// This is done after cleanup(): context->script owns the wrapper, so dropping it here frees it.
-		dropScript = true;
+		// context->script owns the wrapper, so dropping it here frees it. cleanup() must not run after that.
+		context->script = nullptr;
 	}
 
-	cleanup(*wrapper);
-	if (dropScript)
-		context->script = nullptr;
+	if (context->script != nullptr)
+		cleanup(*wrapper);
 	return true;
 }
 

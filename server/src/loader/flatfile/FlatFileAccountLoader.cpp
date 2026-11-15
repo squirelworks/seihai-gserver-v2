@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-04, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-04, 2026-11-12, 2026-11-16: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -9,12 +9,13 @@
 #include <filesystem>
 #include <format>
 #include <limits>
-#include <random>
 #include <ranges>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
+
+#include <zlib.h>
 
 #include <CString.h>
 #include <IEnums.h>
@@ -41,9 +42,17 @@ namespace preagonal
 {
 ///////////////////////////////////////////////////////////////////////////////
 
-// Helper to avoid having to write uint8_t everywhere.
-const auto& toByte = static_cast<uint8_t (*)(std::string_view)>(string::toNumber);
-const auto& toSByte = static_cast<int8_t (*)(std::string_view)>(string::toNumber);
+// Integer fields in account files are often written with a decimal point ("3.00").
+static uint8_t toByte(const std::string_view value)
+{
+	const auto result = string::toFloat(value);
+	return static_cast<uint8_t>(result);
+}
+static int8_t toSByte(const std::string_view value)
+{
+	const auto result = string::toFloat(value);
+	return static_cast<int8_t>(result);
+}
 
 static bool setIfEmpty(std::string& str, const std::string_view value, const std::string_view defaultValue = {})
 {
@@ -79,8 +88,8 @@ chestPair FlatFileAccountLoader::decomposeChest(const std::string_view chest)
 	const auto tokens = string::splitToVector(chest, ":"sv);
 	if (tokens.size() == 3)
 	{
-		result.second.x() = string::toNumber<uint8_t>(tokens[0]);
-		result.second.y() = string::toNumber<uint8_t>(tokens[1]);
+		result.second.x() = toByte(tokens[0]);
+		result.second.y() = toByte(tokens[1]);
 		result.first = string::trim(tokens[2]);
 	}
 	return result;
@@ -227,8 +236,9 @@ bool FlatFileAccountLoader::loadAccount(const std::string_view accountName, Acco
 		}
 		else if (section == "MAXHP")
 		{
-			// Seihai: stock account files write "MAXHP 3.00"; toNumber read that as 0.
-			const auto num = static_cast<uint8_t>(string::toFloat(val));
+			auto num = toByte(val);
+			num = std::min(num, static_cast<uint8_t>(server->cached.maxHeartLimit.getValue()));
+
 			if (account.maxHitpoints != num)
 			{
 				account.maxHitpoints = num;
@@ -237,7 +247,9 @@ bool FlatFileAccountLoader::loadAccount(const std::string_view accountName, Acco
 		}
 		else if (section == "HP")
 		{
-			const auto num = static_cast<uint8_t>(string::toFloat(val) * 2);
+			auto num = static_cast<uint8_t>(string::toFloat(val) * 2);
+			num = std::clamp(num, 1_ui8, static_cast<uint8_t>(server->cached.maxHeartLimit.getValue() * 2));
+
 			if (account.character.hitpointsInHalves != num)
 			{
 				account.character.hitpointsInHalves = num;
@@ -246,7 +258,7 @@ bool FlatFileAccountLoader::loadAccount(const std::string_view accountName, Acco
 		}
 		else if (section == "GRALATS" || section == "RUPEES")
 		{
-			const auto num = string::toNumber<uint32_t>(val);
+			const auto num = static_cast<uint32_t>(string::toFloat(val));
 			if (account.character.gralats != num)
 			{
 				account.character.gralats = num;
@@ -387,9 +399,10 @@ bool FlatFileAccountLoader::loadAccount(const std::string_view accountName, Acco
 		}
 		else if (section == "STATUS")
 		{
-			// Lab: never log in hidden. A client that closed while hiding under a carried
-			// object saved bit 0x02, and the player stayed invisible until the first step.
-			const auto num = static_cast<uint8_t>(toByte(val) & ~PLSTATUS_HIDDEN);
+			// Hidden, sword-hidden, dead and paused are not kept across a load. A client that
+			// closed while hiding saved the hidden bit and stayed invisible until the first step.
+			auto num = toByte(val);
+			num &= static_cast<uint8_t>(~(PLSTATUS_HIDDEN | PLSTATUS_HIDESWORD | PLSTATUS_DEAD | PLSTATUS_PAUSED));
 			if (account.status != num)
 			{
 				account.status = num;
@@ -425,7 +438,7 @@ bool FlatFileAccountLoader::loadAccount(const std::string_view accountName, Acco
 		}
 		else if (section == "ONSECS")
 		{
-			const auto num = string::toNumber<uint32_t>(val);
+			const auto num = static_cast<uint32_t>(string::toFloat(val));
 			if (account.onlineSeconds != num)
 			{
 				account.onlineSeconds = num;
@@ -435,7 +448,7 @@ bool FlatFileAccountLoader::loadAccount(const std::string_view accountName, Acco
 		}
 		else if (section == "KILLS")
 		{
-			const auto num = string::toNumber<uint32_t>(val);
+			const auto num = static_cast<uint32_t>(string::toFloat(val));
 			if (account.kills != num)
 			{
 				account.kills = num;
@@ -444,7 +457,7 @@ bool FlatFileAccountLoader::loadAccount(const std::string_view accountName, Acco
 		}
 		else if (section == "DEATHS")
 		{
-			const auto num = string::toNumber<uint32_t>(val);
+			const auto num = static_cast<uint32_t>(string::toFloat(val));
 			if (account.deaths != num)
 			{
 				account.deaths = num;
@@ -531,19 +544,33 @@ bool FlatFileAccountLoader::loadAccount(const std::string_view accountName, Acco
 	if (string::equalsi(accountName, "guest"sv))
 	{
 		account.loadOnly = true;
-		// Seihai: the number came from rand() * rand(), which overflows int, so guests got names such as
-		// "pc:-4187584" (lab run 2026-11-12, a 6.03r7 guest), and the free-name check looked up only the
-		// first six characters, not the name it then gave. Draw 0 to 9999998 and check the name that is used.
-		static std::mt19937 guestNumbers{std::random_device{}()};
-		std::uniform_int_distribution<uint32_t> number(0, 9999998);
+
+		// The same client identity keeps the same guest number: crc32 of its hash fields.
+		// An empty identity starts at 0, and a number that is already online takes the next one.
+		unsigned long pcid = 0;
+		if (player != nullptr && !player->getIdentity().empty())
+		{
+			pcid = crc32(0L, Z_NULL, 0);
+			std::vector<std::string_view> identity;
+			for (const auto part : string::tokenize(std::string_view{player->getIdentity()}))
+				identity.push_back(part);
+			for (size_t i = 1; i <= std::min(3ZU, identity.size()); ++i)
+			{
+				if (i >= identity.size() || identity[i].empty())
+					continue;
+				pcid = crc32(pcid, reinterpret_cast<const uint8_t*>(identity[i].data()), static_cast<uInt>(identity[i].length()));
+			}
+		}
+
 		while (true)
 		{
-			auto name = std::format("pc:{}", number(guestNumbers));
+			auto name = std::format("pc:{}", pcid);
 			if (server->getPlayer(CString(name), PLTYPE_ANYPLAYER) == nullptr)
 			{
 				account.name = std::move(name);
 				break;
 			}
+			++pcid;
 		}
 
 		account.communityName = "guest";
@@ -669,7 +696,10 @@ bool FlatFileAccountLoader::forceSaveAccount(const Account& account)
 		writeLine(newFile, "COLORS", colorStrEx, defaultColorStrEx);
 	else writeLine(newFile, "COLORS", colorStr, defaultColorStr);
 
-	writeLine(newFile, "STATUS", account.status);
+	// Hidden, sword-hidden, dead and paused are not written back.
+	auto status = account.status;
+	status &= static_cast<uint8_t>(~(PLSTATUS_HIDDEN | PLSTATUS_HIDESWORD | PLSTATUS_DEAD | PLSTATUS_PAUSED));
+	writeLine(newFile, "STATUS", status);
 	writeLine(newFile, "MP", account.character.mp, 0_ui8);
 	writeLine(newFile, "AP", account.character.ap);
 	writeLine(newFile, "APCOUNTER", account.apCounter, 0_ui8);

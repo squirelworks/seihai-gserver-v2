@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-11, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-16: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -2049,7 +2049,7 @@ void Server::hitPlayer(const PlayerID playerId, const int8_t power, const float 
 	// Client ignores if PLO_DISABLECLASSICMODE was sent.
 	// Client ignores if the source wasn't within 10 tiles.
 
-	auto tilePosition = toTilePosition(player->getEventBoundingBox().center());
+	auto tilePosition = toTilePosition(player->getCenterPosition());
 	auto dx = tilePosition.x() - fromX;
 	auto dy = tilePosition.y() - fromY;
 
@@ -2603,21 +2603,11 @@ void Server::updateWeaponForPlayers(const std::shared_ptr<Weapon>& weapon)
 // TODO(refactor): This should probably be in the NPCServer class.
 void Server::updateClassForPlayers(const std::shared_ptr<ScriptClass>& scriptClass)
 {
-	const CString classPacket4 = scriptClass->getClassPacket(CLVER_4_208);
-	if (classPacket4.isEmpty())
-		return;
-
-	const CString classPacket5 = scriptClass->getClassPacket(CLVER_5_07);
-
-	// Update players.
 	for (const auto& player : m_playerList | std::views::values)
 	{
 		if (!player->isClient())
 			continue;
-
-		if (player->getVersion() >= CLVER_5_07)
-			player->sendRawPacket(classPacket5);
-		else player->sendRawPacket(classPacket4);
+		scriptClass->sendByteCodeToPlayer(player);
 	}
 }
 

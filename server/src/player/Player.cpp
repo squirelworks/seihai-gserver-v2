@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-01, 2026-11-04, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-01, 2026-11-04, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -623,18 +623,6 @@ bool Player::isGraal3DClient() const
 
 std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file, const PacketQueue channel)
 {
-	// Don't let the client request level files. An RC still downloads them from its
-	// file browser (upstream 1b9b992 means non-RC players only, but blocked RCs too).
-	if (!isRC() && inList(fs::getANSIFileName(file.extension()), ".nw"s, ".graal"s, ".zelda"s))
-		return {false, false};
-
-	// Add the filename to the list of known files so we can resend the file
-	// to the client if it gets changed after it was originally sent
-	if (const auto client = std::dynamic_pointer_cast<PlayerClient>(shared_from_this()); isClient() && client != nullptr)
-	{
-		client->m_knownFiles.insert(fs::getANSIFileName(file));
-	}
-
 	const auto& filesystem = m_server->getFileSystem();
 	std::string filename = fs::getANSIFileName(file);
 
@@ -645,6 +633,17 @@ std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file, const 
 		sendPacket(CString() >> (char)PLO_FILESENDFAILED << filename, channel);
 		return false;
 	};
+
+	// Don't let a game client request level files. An RC still downloads them from its
+	// file browser. A silent refusal makes the client ask again, so answer with a failure.
+	if (!isRC() && inList(fs::getANSIFileName(file.extension()), ".nw"s, ".graal"s, ".zelda"s))
+		return {sendFailure({}), false};
+
+	// Add the filename to the list of known files so we can resend the file
+	// to the client if it gets changed after it was originally sent.
+	// Recorded after the level-file refusal, so a refused level is not a known file.
+	if (const auto client = std::dynamic_pointer_cast<PlayerClient>(shared_from_this()); isClient() && client != nullptr)
+		client->m_knownFiles.insert(fs::getANSIFileName(file));
 
 	std::vector<char> fileData;
 
@@ -679,12 +678,9 @@ std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file, const 
 				return {sendFailure("File not found when trying to send to player"), false};
 			if (isGraal3DClient())
 				return {sendFailure("Graal3D: file not found, told the client"), false};
-			// Seihai: a game client always hears that a file is missing (PLO_FILESENDFAILED), as for
-			// 1.x's PLI_UPDATEFILE above; warnonmissingfiles only decides whether it is logged. With no
-			// answer a 5.12 client kept asking for pics1.png, head0.png and the rest and drew nothing.
-			if (isClient())
-				return {sendFailure(""), false};
-			return {false, false};
+			// A missing file always gets an answer. warnonmissingfiles only decides whether it is logged.
+			// With no answer the client keeps asking.
+			return {sendFailure({}), false};
 		}
 
 		// Open the file and read the data.
@@ -694,7 +690,7 @@ std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file, const 
 			{
 				if (m_server->cached.warnOnFilesystemIssues.getValue() == true)
 					return {sendFailure("File failed to load"), false};
-				return {false, false};
+				return {sendFailure({}), false};
 			}
 
 			fileData = openedFile->read();
