@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-13, 2026-11-16: see CHANGES-SEIHAI.md.
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch_all.hpp>
 #include <catch2/catch_message.hpp>
@@ -672,9 +672,30 @@ TEST_CASE_METHOD(ServerFixture, "ScriptEngineGS1 executes basic expressions", "[
 #ifdef DEBUG
 		REQUIRE_THROWS_AS(execute_script(*engine, created, source::FromNPC(testNPC), result), script_error);
 #else
-		// Seihai: outside a DEBUG build the engine catches the script_error and drops the script, so it is not run again.
+		// A throw drops the script, which frees the wrapper. cleanup() is skipped, and a second run does not touch it.
 		execute_script(*engine, created, source::FromNPC(testNPC), result);
-		REQUIRE(std::get<ScriptExecutionContext>(result).script == nullptr);
+		auto& context = std::get<ScriptExecutionContext>(result);
+		REQUIRE(context.script == nullptr);
+		const auto contextPtr = std::shared_ptr<ScriptExecutionContext>(&context, [](ScriptExecutionContext*) {});
+		CHECK_FALSE(engine->execute(created, source::FromNPC(testNPC), contextPtr));
+#endif
+	}
+
+	SECTION("a throw inside a function drops the script before cleanup")
+	{
+		constexpr std::string_view script = R"(
+			function boom() { pi = 1; }
+		)";
+		auto result = engine->compileScript(ScriptCompilationTarget::SERVER, "test_script", script);
+		REQUIRE(std::holds_alternative<ScriptExecutionContext>(result));
+		auto& context = std::get<ScriptExecutionContext>(result);
+		const auto contextPtr = std::shared_ptr<ScriptExecutionContext>(&context, [](ScriptExecutionContext*) {});
+#ifdef DEBUG
+		REQUIRE_THROWS_AS(engine->executeFunction("boom", created, source::FromNPC(testNPC), contextPtr), script_error);
+#else
+		REQUIRE(engine->executeFunction("boom", created, source::FromNPC(testNPC), contextPtr));
+		REQUIRE(context.script == nullptr);
+		CHECK_FALSE(engine->executeFunction("boom", created, source::FromNPC(testNPC), contextPtr));
 #endif
 	}
 

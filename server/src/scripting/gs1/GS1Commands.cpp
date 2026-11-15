@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-16: see CHANGES-SEIHAI.md.
 // ReSharper disable CppParameterMayBeConstPtrOrRef
 #include <algorithm>
 #include <any>
@@ -1541,28 +1541,24 @@ void fn_hurt(GS1Visitor* visitor, const std::vector<GS1ScriptValue*>& arguments)
 	if (const auto source = visitor->findNearestScriptObjectSourceFromStack(ScriptObjectType::PLAYER); source.has_value())
 	{
 		const auto halfhearts = DoubleAsIntegralFloor<int8_t>(GS1Visitor::getScriptValueAsCopy<double>(*arguments[0]).value_or(0.0));
-		auto npcId = visitor->getOriginalSource().first;
+		std::optional<NPCID> npcId = static_cast<NPCID>(visitor->getOriginalSource().first);
 		if (visitor->getOriginalSource().second != ScriptObjectType::NPC)
-			npcId = 0;
+			npcId = std::nullopt;
 
 		const auto server = BabyDI::Get<Server>();
 		if (const auto player = server->getNPCServer()->getPlayer(source.value().first); player != nullptr)
 		{
-			// Seihai: the player is knocked away from the NPC's centre, as on the original client; before this the hit
-			// came from the player's own centre, a zero vector. Without an NPC the player's centre is still used.
-			auto tilePos = toTilePosition(player->account.character.getLocalPosition());
-			float fromX = tilePos.x() + 1.5f;
-			float fromY = tilePos.y() + 2;
-			const auto npc = server->getNPC(npcId);
-			if (npc != nullptr)
+			// The knock comes from the NPC's centre (or the player's, when the script has no NPC).
+			// 1.x to 2.31 still take the hearts as a prop inside hitPlayer.
+			NPCPtr npc = nullptr;
+			auto tilePos = toTilePosition(player->getCenterPosition());
+			if (npcId.has_value())
 			{
-				const auto npcPos = toTilePosition(npc->getGlobalPosition());
-				const auto halfWidth = npc->isCharacter() ? 1.5f : static_cast<float>(npc->shape.width()) / 32.0f;
-				const auto halfHeight = npc->isCharacter() ? 2.0f : static_cast<float>(npc->shape.height()) / 32.0f;
-				fromX = npcPos.x() + halfWidth;
-				fromY = npcPos.y() + halfHeight;
+				if (npc = server->getNPC(npcId.value()); npc != nullptr)
+					tilePos = toTilePosition(npc->getCenterPosition());
 			}
-			server->hitPlayer(player->getId(), halfhearts, fromX, fromY, npc);
+
+			server->hitPlayer(player->getId(), halfhearts, tilePos.x(), tilePos.y(), npc);
 		}
 	}
 }

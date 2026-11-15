@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-12, 2026-11-13, 2026-11-16: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -1633,10 +1633,13 @@ HandlePacketResult PlayerClient::msgPLI_UPDATECLASS(CString& pPacket)
 	const auto npcServer = m_server->getNPCServer();
 	if (const auto classObj = npcServer->getClass(className); classObj != nullptr)
 	{
-		if (classObj->getCheckSum() == checkSum)
+		if (classObj->hasChecksum(checkSum))
+		{
+			classObj->registerWithPlayer(shared_from_this());
 			return HandlePacketResult::Handled;
+		}
 
-		sendRawPacket(classObj->getClassPacket(getVersion()));
+		classObj->sendByteCodeToPlayer(shared_from_this());
 	}
 	else
 	{

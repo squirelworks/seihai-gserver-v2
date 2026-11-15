@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-16: see CHANGES-SEIHAI.md.
 // New file: issue #24. The CRC the server announces for a cached weapon or class must be
 // the CRC32 of the body the client caches, or the client's cache check never matches and every
 // login downloads every script again. For a weapon that body is the bytecode DES-encrypted with
@@ -170,25 +170,31 @@ TEST_CASE_METHOD(ModernServer, "a weapon's PLO_LOADSCRIPT CRC is the CRC32 of th
 	CHECK(readGInt5(parts[4]) != crcOf(bytecode));
 }
 
-TEST_CASE_METHOD(ModernServer, "a class's checksum is the CRC32 of the bytecode its class packet carries", "[issue24]")
+TEST_CASE_METHOD(ModernServer, "a class checksum matches the encrypted body and the plain bytecode", "[issue24]")
 {
 	const ScriptClass scriptClass{"cachetestclass"sv, script};
 	const auto& bytecode = scriptClass.getScript().getClientByteCode();
 	REQUIRE_FALSE(bytecode.empty());
 
-	// PLI_UPDATECLASS sends the CRC of the client's cached body; the server compares it with this.
-	CHECK(scriptClass.getCheckSum() == crcOf(bytecode));
+	// 5.07 and later cache the DES-encrypted body and compare that CRC (PLO_LOADSCRIPT).
+	const auto withCrc = string::fromCSV(scriptClass.getHeaderWithCRC());
+	REQUIRE(withCrc.size() == 5);
+	CHECK(withCrc[0] == "class");
+	CHECK(withCrc[1] == "cachetestclass");
+	CHECK(withCrc[2] == "1");
+	const auto stored = seihai::scriptCacheEncrypt(std::string_view{reinterpret_cast<const char*>(bytecode.data()), bytecode.size()}, keyOf(withCrc[3]));
+	CHECK(readGInt5(withCrc[4]) == crcOf(stored));
+	CHECK(readGInt5(withCrc[4]) != crcOf(bytecode));
 
-	// The 5.07+ class packet: id, GCHAR header length, header (class,name,cacheflag,key,crc), bytecode.
-	auto packet = scriptClass.getClassPacket(CLVER_6_037);
-	REQUIRE(packet.length() > 2);
-	CHECK(packet.readGUChar() == PLO_LOADSCRIPT);
-	const auto headerLength = packet.readGUChar();
-	const auto parts = string::fromCSV(packet.readChars(headerLength).toString());
-	REQUIRE(parts.size() == 5);
-	CHECK(readGInt5(parts[4]) == crcOf(bytecode));
-	const auto body = packet.readChars(packet.bytesLeft());
-	CHECK(static_cast<size_t>(body.length()) == bytecode.size());
+	// 4.04r2 to 4.20r8 compare the plain bytecode (PLO_WEAPONHASH). Either CRC is accepted.
+	CHECK(scriptClass.hasChecksum(crcOf(bytecode)));
+	CHECK(scriptClass.hasChecksum(readGInt5(withCrc[4])));
+	CHECK_FALSE(scriptClass.hasChecksum(0));
+
+	// The body header has no CRC. The client stores the body and checksums that.
+	const auto header = string::fromCSV(scriptClass.getHeader());
+	REQUIRE(header.size() == 4);
+	CHECK(header[2] == "1");
 }
 
 TEST_CASE_METHOD(ModernServer, "PLO_WEAPONHASH carries the CRC32 of the bytecode that PLO_WEAPONBYTECODE sends", "[issue26]")

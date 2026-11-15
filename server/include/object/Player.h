@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-01, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-01, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-16: see CHANGES-SEIHAI.md.
 #ifndef PLAYER_H
 #define PLAYER_H
 
@@ -181,6 +181,7 @@ public:
 	CString getGuild() const { return m_guild; }
 	int getVersion() const { return m_versionId; }
 	const std::string& getVersionStr() const { return m_version; }
+	const std::string& getIdentity() const { return m_identity; }
 	// Seihai: the login came through SEI00001 (secure login); m_version is the inner token.
 	bool isSecureLogin() const { return m_secureLogin; }
 	void setSecureLogin(bool secure) { m_secureLogin = secure; }
@@ -200,6 +201,7 @@ public:
 	[[a::inline]] PixelPosition getGlobalPosition() const noexcept;
 	[[a::inline]] LocalPixelPosition getLocalPosition() const noexcept;
 	[[a::inline]] TilePosition getTilePosition() const noexcept;
+	[[a::inline]] PixelPosition getCenterPosition() const noexcept;
 	[[a::inline]] PixelPosition getSubLevelOrigin() const noexcept;
 	[[a::inline]] MapPosition getMapPosition() const noexcept;
 	virtual double getCalculatedTileZ() const noexcept;
@@ -502,6 +504,7 @@ protected:
 	int m_type = PLTYPE_AWAIT;
 	int m_versionId = CLVER_UNKNOWN;
 	std::string m_version;
+	std::string m_identity;
 	std::string m_serverName;
 	uint8_t m_statusMsg = 0;
 	uint8_t m_additionalFlags = 0;
@@ -662,6 +665,11 @@ inline TilePosition Player::getTilePosition() const noexcept
 	auto pos = account.character.getTilePosition();
 	pos.z() = static_cast<float>(getCalculatedTileZ());
 	return pos;
+}
+
+inline PixelPosition Player::getCenterPosition() const noexcept
+{
+	return getGlobalPosition().translate(24, 32);
 }
 
 inline PixelPosition Player::getSubLevelOrigin() const noexcept

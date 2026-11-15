@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-16: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <any>
 #include <array>
@@ -417,14 +417,14 @@ GS1ScriptValue mc_E(const GS1Visitor* visitor, const std::string_view messageCod
 	std::array<uint8_t, 32> hash{};
 	hash_state sha256state{};
 	sha256_init(&sha256state);
-	sha256_process(&sha256state, reinterpret_cast<const unsigned char*>(password.data()), password.size());
+	sha256_process(&sha256state, reinterpret_cast<const uint8_t*>(password.data()), password.size());
 	sha256_done(&sha256state, hash.data());
 
 	// Calculate the length of the resulting base64 string.
 	constexpr unsigned long SHA256BASE64 = 4 * ((hash.size() + 2) / 3) + 1;
 	unsigned long outputLength = SHA256BASE64;
 	std::array<char, SHA256BASE64> output{};
-	base64_encode(reinterpret_cast<const unsigned char*>(hash.data()), static_cast<unsigned long>(hash.size()), output.data(), &outputLength);
+	base64_encode(reinterpret_cast<const uint8_t*>(hash.data()), static_cast<unsigned long>(hash.size()), reinterpret_cast<uint8_t*>(output.data()), &outputLength);
 
 	return makeGS1ScriptValue(std::string{output.data(), outputLength});
 }

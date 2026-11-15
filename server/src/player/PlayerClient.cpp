@@ -1,10 +1,11 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-07, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-07, 2026-11-12, 2026-11-13, 2026-11-16: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
 #include <format>
 #include <limits>
 #include <memory>
@@ -375,7 +376,7 @@ bool PlayerClient::handleLogin(CString& pPacket)
 
 	// Client Identity: win,"",02e2465a2bf38f8a115f6208e9938ac8,ff144a9abb9eaff4b606f0336d6d8bc5,"6.2 9200 "
 	//					{platform}, {mobile provides 'dc:id2'}, {md5hash:harddisk-id}, {md5hash:network-id}, {uname(release, version)}, {android-id}
-	const CString identity = pPacket.readString("");
+	m_identity = pPacket.readString("").toString();
 
 	// Print the login.
 	log::print(log::server, "New login: {} ", account.name);
@@ -400,11 +401,11 @@ bool PlayerClient::handleLogin(CString& pPacket)
 	else log::printLine(log::server, " [{} ({})]", m_version, getVersionString(m_version, m_type));
 
 	// Identity parsing.
-	if (!identity.isEmpty())
+	if (!m_identity.empty())
 	{
 		auto indent = log::server.indent();
-		DEBUGPRINT("Identity:  {}", identity);
-		const auto identityTokens = identity.tokenize(",", true);
+		DEBUGPRINT("Identity:  {}", m_identity);
+		const auto identityTokens = CString(m_identity).tokenize(",", true);
 		account.platform = identityTokens[0];
 	}
 
@@ -445,6 +446,7 @@ bool PlayerClient::handleLogin(CString& pPacket)
 
 	if (m_server->cached.localhostMode.getValue())
 	{
+		account.name = fs::getANSIFileName(std::filesystem::path{account.name});
 		log::printLine(log::server, "[Login] Localhost mode: accepting '{}' without listserver verification.", account.name);
 		return sendLogin();
 	}
@@ -456,7 +458,7 @@ bool PlayerClient::handleLogin(CString& pPacket)
 		return false;
 	}
 
-	m_server->getServerList().sendLoginPacketForPlayer(shared_from_this(), password, identity);
+	m_server->getServerList().sendLoginPacketForPlayer(shared_from_this(), password, m_identity);
 	return true;
 }
 
