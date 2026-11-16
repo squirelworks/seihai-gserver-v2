@@ -651,9 +651,8 @@ inline PixelPosition Level::convertToMapPosition(const std::string_view levelPar
 {
 	if (isGmap())
 	{
-		auto mapPosition = getSubLevelPositionInMap(levelPart).value_or(MapPosition{});
-		auto pixelPerPart = pixelsPerSubLevel();
-		return { position.x() + static_cast<int32_t>(mapPosition.x()) * static_cast<int32_t>(pixelPerPart.width()), position.y() + static_cast<int32_t>(mapPosition.y()) * static_cast<int32_t>(pixelPerPart.height()), static_cast<int32_t>(position.z()) };
+		const auto mapPosition = getSubLevelPositionInMap(levelPart).value_or(MapPosition{});
+		return toGlobalPixelPosition(mapPosition, position);
 	}
 	return { position.x(), position.y(), position.z() };
 }
@@ -667,11 +666,7 @@ inline PixelPosition Level::convertToMapPosition(const std::string_view levelPar
 inline PixelPosition Level::convertToMapPosition(const MapPosition& mapPosition, const LocalPixelPosition& position) const noexcept
 {
 	if (isGmap())
-	{
-		auto pixelPerPart = pixelsPerSubLevel();
-		auto correctMapPosition = clampMapPosition(mapPosition);
-		return { static_cast<int32_t>(position.x()) + (correctMapPosition.x() * static_cast<int32_t>(pixelPerPart.width())), static_cast<int32_t>(position.y()) + (correctMapPosition.y() * static_cast<int32_t>(pixelPerPart.height())), static_cast<int32_t>(position.z()) };
-	}
+		return toGlobalPixelPosition(clampMapPosition(mapPosition), position);
 	return { static_cast<int32_t>(position.x()), static_cast<int32_t>(position.y()), static_cast<int32_t>(position.z()) };
 }
 
