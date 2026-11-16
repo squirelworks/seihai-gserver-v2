@@ -95,7 +95,7 @@ HandlePacketResult PlayerClient::msgPLI_LEVELWARP(CString& pPacket)
 	if (!success)
 	{
 		if (const auto level = getLevel(); level != nullptr)
-			success = warp(level->levelName, account.character.getLocalPosition());
+			success = warp(level->levelName, account.character.getGlobalPosition());
 	}
 	if (!success)
 	{
