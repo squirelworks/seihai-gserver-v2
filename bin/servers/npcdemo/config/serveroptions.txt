@@ -405,7 +405,8 @@ startap = 50
 npcrights = true
 
 # Percentage of data packets over an internal limit a player is allowed to send before being suspected of hacking.
-# speedhacktolerance = 90
+# Stub: accepted/tracked; detector not wired yet (#97).
+speedhacktolerance = 90
 
 # Reports to RC if a level is saved.
 # savelevelsmessage = true

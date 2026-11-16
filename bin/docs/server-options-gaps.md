@@ -10,7 +10,7 @@ reference but gserver-v2 previously lacked or ignored. Each key is tagged
 | `npcrights` | **implement** | #97 — when true (default), NC login still needs `PLPERM_NPCCONTROL`; when false, any RC receives the NC address. |
 | `ghostmodeenabled`, `ghostmodefornotstaff` | **stub** | #97 — accepted and tracked; ghost/trial gameplay remains unimplemented (`server-unimplemented.md`). |
 | `startap` | **implement** | #97 — when set, overrides `(defaultaccount)` AP for newly created accounts (same path as `startlevel` / `startx` / `starty`). |
-| `speedhacktolerance` | pending | #97 — packet-rate tolerance. |
+| `speedhacktolerance` | **stub** | #97 — accepted and tracked (default 90); no packet-rate / speedhack detector consumes it yet. |
 | `scriptstyle` | pending | #97 — script-engine style alias. |
 | `translatedlanguages`, `defaultlanguage` | pending | #97 — translation load / default language. |
 

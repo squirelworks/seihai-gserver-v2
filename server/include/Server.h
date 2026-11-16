@@ -178,6 +178,8 @@ struct ExternalServerCachedSettings
 	SettingCache<bool> ghostModeForNonStaff{"ghostmodefornotstaff", false};
 	// AP given to accounts created from (defaultaccount) when startap is set (#97).
 	SettingCache<uint8_t> startAP{"startap", 50};
+	// Packet-rate tolerance stub (#97). Accepted/tracked; no speedhack detector yet.
+	SettingCache<uint16_t> speedHackTolerance{"speedhacktolerance", 90};
 	// player
 	SettingCache<bool> enableDefaultWeapons{"defaultweapons", true};
 	SettingCache<uint8_t> maxHeartLimit{"heartlimit", 3};
