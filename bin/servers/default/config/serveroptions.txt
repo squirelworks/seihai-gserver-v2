@@ -406,6 +406,8 @@ runallscriptevents = false
 # default_scriptengine = gs1
 # default_scriptengine_client =
 # default_scriptengine_server =
+# scriptstyle is a stock-style alias for default_scriptengine when that key is unset (#97).
+# scriptstyle = gs1
 
 # Diagnostics
 # warnonmissingfiles = false

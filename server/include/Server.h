@@ -180,6 +180,8 @@ struct ExternalServerCachedSettings
 	SettingCache<uint8_t> startAP{"startap", 50};
 	// Packet-rate tolerance stub (#97). Accepted/tracked; no speedhack detector yet.
 	SettingCache<uint16_t> speedHackTolerance{"speedhacktolerance", 90};
+	// Alias for default_scriptengine used by some stock-style configs (#97 scriptstyle).
+	SettingCache<std::string> scriptStyle{"scriptstyle", "gs1"};
 	// player
 	SettingCache<bool> enableDefaultWeapons{"defaultweapons", true};
 	SettingCache<uint8_t> maxHeartLimit{"heartlimit", 3};

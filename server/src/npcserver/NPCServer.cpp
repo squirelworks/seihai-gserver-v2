@@ -57,8 +57,14 @@ void NPCServer::initialize()
 {
 	const auto& settings = m_server->getSettings();
 
-	// Default script engine.
-	auto defaultScriptEngine = settings.get<std::string>("default_scriptengine").value_or(std::string{gs1::ScriptEngineGS1::EngineName});
+	// Default script engine. scriptstyle is a stock-style alias when default_scriptengine is unset (#97).
+	std::string defaultScriptEngine;
+	if (const auto engine = settings.get<std::string>("default_scriptengine"); engine.has_value())
+		defaultScriptEngine = *engine;
+	else if (const auto style = settings.get<std::string>("scriptstyle"); style.has_value())
+		defaultScriptEngine = *style;
+	else
+		defaultScriptEngine = std::string{gs1::ScriptEngineGS1::EngineName};
 	scripting.defaultScriptEngineClient = settings.get<std::string>("default_scriptengine_client").value_or(defaultScriptEngine);
 	scripting.defaultScriptEngineServer = settings.get<std::string>("default_scriptengine_server").value_or(defaultScriptEngine);
 
