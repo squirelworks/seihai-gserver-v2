@@ -122,6 +122,7 @@ void ExternalServerCachedSettings::bind(Server* server)
 	// security
 	settings.track(normalAdminsCanChangeGralats, protectedWeapons, jailLevels, enableNpcRights);
 	settings.track(ghostModeEnabled, ghostModeForNonStaff, startAP, speedHackTolerance, scriptStyle);
+	settings.track(defaultLanguage, translatedLanguages);
 
 	// player
 	settings.track(enableDefaultWeapons, maxHeartLimit, enableExBodyColors, playerTouchesMeNoZ, lockPlayerZ);
@@ -992,6 +993,12 @@ void Server::loadTranslations() const
 	// Load the translation files.
 	if (manager != nullptr)
 		manager->loadTranslations(std::filesystem::current_path() / "translations");
+
+	// Acknowledge translation keys (#97). Filtering by translatedlanguages is not applied yet.
+	if (const auto langs = m_settings.get<std::vector<std::string>>("translatedlanguages"); langs.has_value() && !langs->empty())
+		log::printLine(log::server, "translatedlanguages set ({} entries); all translation files still load.", langs->size());
+	if (const auto defLang = m_settings.get<std::string>("defaultlanguage"); defLang.has_value())
+		log::printLine(log::server, "defaultlanguage = {} (translation default; listserver still uses language).", *defLang);
 }
 
 void Server::loadWordFilter()

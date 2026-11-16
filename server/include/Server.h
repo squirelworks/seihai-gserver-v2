@@ -182,6 +182,10 @@ struct ExternalServerCachedSettings
 	SettingCache<uint16_t> speedHackTolerance{"speedhacktolerance", 90};
 	// Alias for default_scriptengine used by some stock-style configs (#97 scriptstyle).
 	SettingCache<std::string> scriptStyle{"scriptstyle", "gs1"};
+	// Translation keys (#97). defaultlanguage is the translation default; language remains the listserver label.
+	// translatedlanguages lists domains to prefer; load still reads all files in translations/ until filtering lands.
+	SettingCache<std::string> defaultLanguage{"defaultlanguage", "en"};
+	SettingCache<std::vector<std::string>> translatedLanguages{"translatedlanguages", {}};
 	// player
 	SettingCache<bool> enableDefaultWeapons{"defaultweapons", true};
 	SettingCache<uint8_t> maxHeartLimit{"heartlimit", 3};

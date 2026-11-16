@@ -12,7 +12,7 @@ reference but gserver-v2 previously lacked or ignored. Each key is tagged
 | `startap` | **implement** | #97 — when set, overrides `(defaultaccount)` AP for newly created accounts (same path as `startlevel` / `startx` / `starty`). |
 | `speedhacktolerance` | **stub** | #97 — accepted and tracked (default 90); no packet-rate / speedhack detector consumes it yet. |
 | `scriptstyle` | **implement** (alias) | #97 — stock-style alias for `default_scriptengine` when that key is unset. Tracked; NPC-server init prefers `default_scriptengine`, then `scriptstyle`, then `gs1`. |
-| `translatedlanguages`, `defaultlanguage` | pending | #97 — translation load / default language. |
+| `translatedlanguages`, `defaultlanguage` | **stub** (partial) | #97 — tracked; load still reads every file under `translations/`. `defaultlanguage` is the translation default (listserver label stays `language`). Logged at load so operators see the keys are not ignored. |
 
 Silent no-ops are avoided: tracked keys either drive behaviour or are documented
 stubs that operators can set without the value disappearing into the void.

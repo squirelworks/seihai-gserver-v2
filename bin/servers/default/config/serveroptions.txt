@@ -436,10 +436,11 @@ ghostmodefornotstaff = false
 startap = 50
 
 # Loads translations into the server for server-side translations.
-# translatedlanguages = en,dn
+# Stub/partial: tracked; all translation files in translations/ still load (#97).
+translatedlanguages = en
 
-# The default language of the server.
-# defaultlanguage = en
+# The default language for translation lookups (distinct from listserver `language`).
+defaultlanguage = en
 
 # The order in which weapons will be sent to the player.
 # weaponorder =

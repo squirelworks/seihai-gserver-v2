@@ -1,3 +1,4 @@
+<!-- Modified by the Seihai project, 2026-11-16: see CHANGES-SEIHAI.md. -->
 # Translation - Classic Mode
 
 ## Overview
@@ -46,7 +47,15 @@ and server generated PMs (jail message, `sendpm` command, and `setpm` replies) a
 
 Translation happens before strings are fully processed so message codes can be included.
 
+## Server options (#97)
+
+- `defaultlanguage` — tracked translation default (distinct from listserver `language`).
+- `translatedlanguages` — tracked list of language codes; filtering is not applied yet (all files in `translations/` still load).
+
+See `server-options-gaps.md`.
+
 ## Missing features
 
 For full compliance:
 - NPC chat/messages need to be translated.
+- `translatedlanguages` should limit which domains load.
