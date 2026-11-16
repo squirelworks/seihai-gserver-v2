@@ -988,7 +988,7 @@ bool PlayerClient::processChat(const CString& pChat)
 			auto player = m_server->getPlayer<PlayerClient>(chatParse[1], PLTYPE_ANYCLIENT);
 			LevelPtr level;
 			if (player && (level = player->getLevel()) != nullptr)
-				warp(level->levelName, player->getLocalPosition());
+				warp(level->levelName, player->getGlobalPosition());
 		}
 		// To location
 		else
