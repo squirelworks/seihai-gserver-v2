@@ -47,3 +47,9 @@ TEST_CASE("ghost-mode appearance matrix", "[ghostmode][serveroptions]")
 		CHECK(playerAppearsAsGhost(true, false, true));
 	}
 }
+
+TEST_CASE("ghost appearance uses ghostani gani name", "[ghostmode][serveroptions]")
+{
+	CHECK(GhostAppearanceGani == "ghostani");
+	CHECK_FALSE(GhostAppearanceGani.ends_with(".gani"));
+}

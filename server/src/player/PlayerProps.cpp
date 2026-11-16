@@ -29,6 +29,7 @@
 #include <scripting/ScriptTypes.h>
 #include <utilities/CommonTypes.h>
 #include <utilities/Extents.h>
+#include <utilities/GhostMode.h>
 #include <utilities/Log.h>
 #include <utilities/PropertySerializers.h>
 #include <utilities/std/inplace_vector.h>
@@ -1242,12 +1243,12 @@ void Player::sendPropsFromResults(PropertySendResults& results)
 		return this->getProp(static_cast<PlayerProp>(propId));
 	});
 
-	// Send the buffers out.
+	// Send the buffers out. Ghost players keep the ghostani override on OTHERPLPROPS.
 	if (sendAll.length() > 0)
-		m_server->sendPacketToAll(CString() >> (char)PLO_OTHERPLPROPS >> (short)m_id << sendAll, {m_id});
+		m_server->sendPacketToAll(CString() >> (char)PLO_OTHERPLPROPS >> (short)m_id << withGhostAppearanceOverride(sendAll), {m_id});
 
 	if (const auto player = std::dynamic_pointer_cast<PlayerClient>(shared_from_this()); player != nullptr && sendLevel.length() > 0)
-		m_server->sendNonLevelBoundPacketToNearby(CString() >> (char)PLO_OTHERPLPROPS >> (short)m_id << sendLevel, player->getGlobalPosition(), player->getLevel(), {m_id});
+		m_server->sendNonLevelBoundPacketToNearby(CString() >> (char)PLO_OTHERPLPROPS >> (short)m_id << withGhostAppearanceOverride(sendLevel), player->getGlobalPosition(), player->getLevel(), {m_id});
 
 	if (sendSource.length() > 0)
 		sendPacket(CString() >> (char)PLO_PLAYERPROPS << sendSource);
@@ -1363,6 +1364,21 @@ CString Player::getPropsPacketFromList(const PropList& props) const
 
 	DO_PACKETLOG(if (printedHeader) log::print(log::networkdump, "\n"));
 	return propPacket;
+}
+
+CString Player::withGhostAppearanceOverride(CString props) const
+{
+	if (!appearsAsGhost())
+		return props;
+
+	// Trailing GANI wins on the client so others keep seeing the ghost animation.
+	props >> (char)PlayerProp::GANI >> (char)GhostAppearanceGani.size() << GhostAppearanceGani;
+	return props;
+}
+
+CString Player::getOtherClientPropsPacket() const
+{
+	return withGhostAppearanceOverride(getPropsPacketFromList(loginPropsClientOthers));
 }
 
 CString Player::getPropsForRCPacket()

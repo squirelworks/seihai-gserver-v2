@@ -300,6 +300,12 @@ public:
 	/// @return A packet of properties.
 	CString getPropsPacketFromList(const PropList& props) const;
 
+	/// @brief Props for OTHERPLPROPS to game clients, with ghostani override when appearsAsGhost().
+	[[nodiscard]] CString getOtherClientPropsPacket() const;
+
+	/// @brief Append a trailing GANI=ghostani override when this player appears as a ghost.
+	[[nodiscard]] CString withGhostAppearanceOverride(CString props) const;
+
 	/// @brief Gets a packet containing properties for remote control profile viewing.
 	/// @return A packet of properties.
 	CString getPropsForRCPacket();

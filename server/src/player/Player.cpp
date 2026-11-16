@@ -904,7 +904,7 @@ void Player::exchangeMyPropsWithOthers()
 
 	const CString toOthers = CString() >> (char)PLO_OTHERPLPROPS >> (short)m_id;
 	const CString joinLevel = CString() >> (char)PlayerProp::JOINLEAVELVL >> (char)1;
-	const CString myClientProps = (isClient() ? getPropsPacketFromList(loginPropsClientOthers) : getPropsPacketFromList(loginPropsRC));
+	const CString myClientProps = (isClient() ? getOtherClientPropsPacket() : getPropsPacketFromList(loginPropsRC));
 
 	CString rcsOnline;
 	auto& playerList = m_server->getPlayerList();
@@ -928,7 +928,7 @@ void Player::exchangeMyPropsWithOthers()
 			// clang-format off
 			sendPacket(CString() >> (char)PLO_OTHERPLPROPS >> (short)player->getId()
 				<< (sameLevel ? joinLevel : "")
-				<< (player->isClient() ? player->getPropsPacketFromList(loginPropsClientOthers) : player->getPropsPacketFromList(loginPropsRC)));
+				<< (player->isClient() ? player->getOtherClientPropsPacket() : player->getPropsPacketFromList(loginPropsRC)));
 			// clang-format on
 		}
 		else

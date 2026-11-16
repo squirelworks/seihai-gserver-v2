@@ -1633,7 +1633,7 @@ bool PlayerClient::sendDynamicLevelData(const std::shared_ptr<Level>& level, std
 	// Send connecting player props to players in nearby levels.
 	if (!level->isSinglePlayer)
 	{
-		const CString myProps = CString() >> (char)PLO_OTHERPLPROPS >> (short)m_id >> (char)PlayerProp::JOINLEAVELVL >> (char)1 << getPropsPacketFromList(loginPropsClientOthers);
+		const CString myProps = CString() >> (char)PLO_OTHERPLPROPS >> (short)m_id >> (char)PlayerProp::JOINLEAVELVL >> (char)1 << getOtherClientPropsPacket();
 		for (const auto& playerId : level->findPlayersInRangeForSync(getGlobalPosition()))
 		{
 			if (playerId == m_id) continue;
@@ -1641,9 +1641,9 @@ bool PlayerClient::sendDynamicLevelData(const std::shared_ptr<Level>& level, std
 			{
 				if (!other->isClient()) continue;
 
-				// Exchange props.
+				// Exchange props (ghost players get ghostani for others).
 				other->sendPacket(myProps);
-				this->sendPacket(CString() >> (char)PLO_OTHERPLPROPS >> (short)other->getId() >> (char)PlayerProp::JOINLEAVELVL >> (char)1 << other->getPropsPacketFromList(loginPropsClientOthers));
+				this->sendPacket(CString() >> (char)PLO_OTHERPLPROPS >> (short)other->getId() >> (char)PlayerProp::JOINLEAVELVL >> (char)1 << other->getOtherClientPropsPacket());
 			}
 		}
 	}
