@@ -53,6 +53,7 @@
 #include <utilities/Extents.h>
 #include <utilities/Log.h>
 #include <utilities/PropertySerializers.h>
+#include <utilities/GhostMode.h>
 #include <utilities/StringUtils.h>
 #include <utilities/manager/GuildManager.h>
 #include <utilities/manager/ITranslationManager.h>
@@ -871,6 +872,9 @@ bool Player::sendLogin()
 
 		// This seems to inform the client that they have logged in.
 		sendPacket(CString() >> (char)PLO_ONLINEMODE);
+
+		// Put selected clients into ghost mode (ghostmodeenabled matrix).
+		sendGhostModeState();
 	}
 
 	// Tell the serverlist the player is logged in.
@@ -957,6 +961,26 @@ bool Player::isAdminIp() const
 bool Player::isStaff() const
 {
 	return m_server->isStaff(account.name);
+}
+
+bool Player::appearsAsGhost() const
+{
+	if (m_server == nullptr)
+		return false;
+	return playerAppearsAsGhost(
+		m_server->cached.ghostModeEnabled.getValue(),
+		m_server->cached.ghostModeForNonStaff.getValue(),
+		isStaff());
+}
+
+void Player::sendGhostModeState()
+{
+	if (!isClient() || !appearsAsGhost())
+		return;
+
+	// Empty mode packet, same pattern as PLO_KINGDOMSMODE / PLO_NEWWORLDMODE.
+	sendPacket(CString() >> (char)PLO_GHOSTMODE);
+	sendPacket(CString() >> (char)PLO_GHOSTTEXT << GhostModeCornerText);
 }
 
 bool Player::isJailed() const

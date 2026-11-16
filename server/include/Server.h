@@ -173,7 +173,7 @@ struct ExternalServerCachedSettings
 	SettingCache<std::vector<std::string>> jailLevels{"jaillevels", {"police2.graal", "police4.graal"}};
 	// When true (default), NC login requires PLPERM_NPCCONTROL. When false, any RC may get NC address (#97 npcrights).
 	SettingCache<bool> enableNpcRights{"npcrights", true};
-	// Ghost / trial mode (#97). Stubbed: values are accepted and tracked; gameplay not implemented (see server-unimplemented.md).
+	// Ghost mode (#97 follow-up). When enabled, selected players appear as ghosts (see utilities/GhostMode.h).
 	SettingCache<bool> ghostModeEnabled{"ghostmodeenabled", false};
 	SettingCache<bool> ghostModeForNonStaff{"ghostmodefornotstaff", false};
 	// AP given to accounts created from (defaultaccount) when startap is set (#97).

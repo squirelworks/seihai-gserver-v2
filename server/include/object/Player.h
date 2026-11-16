@@ -385,6 +385,10 @@ public:
 	void setGraal3DLinked(bool linked) { m_graal3dLinked = linked; }
 	bool isGraal3DLinked() const { return m_graal3dLinked; }
 	bool isGuest() const { return account.loadOnly && account.communityName == "guest"; }
+	/// @brief True when serveroptions put this player into ghost appearance (ghostmodeenabled matrix).
+	[[nodiscard]] bool appearsAsGhost() const;
+	/// @brief Send PLO_GHOSTMODE + PLO_GHOSTTEXT when this client should be in ghost mode; no-op otherwise.
+	void sendGhostModeState();
 	int getType() const { return m_type; }
 	void setType(const int val) { m_type = val; }
 	void setExternal(const bool val) { m_isExternal = val; }
