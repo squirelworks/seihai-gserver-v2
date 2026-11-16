@@ -429,8 +429,9 @@ ghostmodefornotstaff = false
 # Selects whether to disable adding of Bombs, Arrows, and Explosions for Trial accounts.
 # limitfreeplayers2 = false
 
-# How much AP new accounts are given (just update the defaultaccount).
-# startap = 50
+# How much AP new accounts are given when created from (defaultaccount).
+# Overrides the AP line from (defaultaccount).txt when set.
+startap = 50
 
 # Loads translations into the server for server-side translations.
 # translatedlanguages = en,dn

@@ -618,6 +618,10 @@ bool FlatFileAccountLoader::loadAccount(const std::string_view accountName, Acco
 		if (settings.exists("starty"))
 			account.character.localPixelY = static_cast<int16_t>(settings.get<float>("starty").value_or(30.5f) * 16);
 
+		// startap overrides the defaultaccount AP for newly created accounts (#97).
+		if (settings.exists("startap"))
+			account.character.ap = settings.get<uint8_t>("startap").value_or(50);
+
 		// Save our account now and add it to the file system.
 		if (!account.loadOnly)
 			saveAccount(account);

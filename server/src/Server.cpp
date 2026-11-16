@@ -121,7 +121,7 @@ void ExternalServerCachedSettings::bind(Server* server)
 
 	// security
 	settings.track(normalAdminsCanChangeGralats, protectedWeapons, jailLevels, enableNpcRights);
-	settings.track(ghostModeEnabled, ghostModeForNonStaff);
+	settings.track(ghostModeEnabled, ghostModeForNonStaff, startAP);
 
 	// player
 	settings.track(enableDefaultWeapons, maxHeartLimit, enableExBodyColors, playerTouchesMeNoZ, lockPlayerZ);

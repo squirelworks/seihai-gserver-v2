@@ -176,6 +176,8 @@ struct ExternalServerCachedSettings
 	// Ghost / trial mode (#97). Stubbed: values are accepted and tracked; gameplay not implemented (see server-unimplemented.md).
 	SettingCache<bool> ghostModeEnabled{"ghostmodeenabled", false};
 	SettingCache<bool> ghostModeForNonStaff{"ghostmodefornotstaff", false};
+	// AP given to accounts created from (defaultaccount) when startap is set (#97).
+	SettingCache<uint8_t> startAP{"startap", 50};
 	// player
 	SettingCache<bool> enableDefaultWeapons{"defaultweapons", true};
 	SettingCache<uint8_t> maxHeartLimit{"heartlimit", 3};
