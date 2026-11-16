@@ -171,6 +171,8 @@ struct ExternalServerCachedSettings
 	SettingCache<bool> normalAdminsCanChangeGralats{"normaladminscanchangegralats", true};
 	SettingCache<std::vector<std::string>> protectedWeapons{"protectedweapons", {}};
 	SettingCache<std::vector<std::string>> jailLevels{"jaillevels", {"police2.graal", "police4.graal"}};
+	// When true (default), NC login requires PLPERM_NPCCONTROL. When false, any RC may get NC address (#97 npcrights).
+	SettingCache<bool> enableNpcRights{"npcrights", true};
 	// player
 	SettingCache<bool> enableDefaultWeapons{"defaultweapons", true};
 	SettingCache<uint8_t> maxHeartLimit{"heartlimit", 3};

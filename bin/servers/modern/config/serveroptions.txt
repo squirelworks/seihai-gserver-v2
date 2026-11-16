@@ -442,7 +442,8 @@ default_scriptengine = gs1
 # weaponorder =
 
 # Enables or disables the checking of account rights for NC usage.
-# npcrights = true
+# When true (default), NC login requires the NPC Control right. When false, any RC may connect to NC.
+npcrights = true
 
 # Percentage of data packets over an internal limit a player is allowed to send before being suspected of hacking.
 # speedhacktolerance = 90

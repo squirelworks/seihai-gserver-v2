@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-13, 2026-11-16: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
@@ -122,8 +122,10 @@ void NPCServer::setRemoteIp(const std::string_view host)
 
 void NPCServer::sendNCLoginToPlayer(const std::shared_ptr<Player>& player)
 {
-	// RC's only!
-	if (!player->isRC() || !player->account.hasRight(PLPERM_NPCCONTROL))
+	// RC's only! npcrights (default true) requires PLPERM_NPCCONTROL; false skips that check (#97).
+	if (!player->isRC())
+		return;
+	if (m_server->cached.enableNpcRights.getValue() && !player->account.hasRight(PLPERM_NPCCONTROL))
 		return;
 
 	// Grab NPCServer & Send

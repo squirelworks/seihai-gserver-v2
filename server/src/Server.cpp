@@ -120,7 +120,7 @@ void ExternalServerCachedSettings::bind(Server* server)
 	settings.track(levelNPCScripts, serversideScriptLevels);
 
 	// security
-	settings.track(normalAdminsCanChangeGralats, protectedWeapons, jailLevels);
+	settings.track(normalAdminsCanChangeGralats, protectedWeapons, jailLevels, enableNpcRights);
 
 	// player
 	settings.track(enableDefaultWeapons, maxHeartLimit, enableExBodyColors, playerTouchesMeNoZ, lockPlayerZ);
