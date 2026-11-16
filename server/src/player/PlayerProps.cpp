@@ -1329,10 +1329,11 @@ void Player::setPropsFromRCPacket(CString& packet, const Player* rc)
 		sendPacket(CString() >> (char)PLO_NPCWEAPONDEL << "Bow");
 
 	// Warp the player to his new location now.
+	// Use gmap-global position so GMAPLEVELX/Y set in this same props packet are kept.
 	if (isLoaded() && isClient())
 	{
 		if (const auto player = std::dynamic_pointer_cast<PlayerClient>(shared_from_this()); player != nullptr)
-			player->warp(account.level, account.character.getLocalPosition(), std::nullopt);
+			player->warp(account.level, account.character.getGlobalPosition(), std::nullopt);
 	}
 }
 
