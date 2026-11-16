@@ -1020,7 +1020,7 @@ bool PlayerClient::processChat(const CString& pChat)
 		}
 
 		auto p = m_server->getPlayer<PlayerClient>(chatParse[1], PLTYPE_ANYCLIENT);
-		if (p) p->warp(account.level, getLocalPosition());
+		if (p) p->warp(account.level, getGlobalPosition());
 	}
 	else if (chatParse[0] == "unstick" || chatParse[0] == "unstuck")
 	{
