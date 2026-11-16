@@ -102,7 +102,7 @@ HandlePacketResult PlayerClient::msgPLI_LEVELWARP(CString& pPacket)
 		const auto& unstickLevel = m_server->cached.unstickMeLevel.getValue();
 		const auto& unstickX = m_server->cached.unstickMeTile[0].getValue();
 		const auto& unstickY = m_server->cached.unstickMeTile[1].getValue();
-		warp(unstickLevel, {static_cast<int16_t>(unstickX * 16.0f), static_cast<int16_t>(unstickY * 16.0f)});
+		warp(unstickLevel, LocalPixelPosition{static_cast<int16_t>(unstickX * 16.0f), static_cast<int16_t>(unstickY * 16.0f)});
 	}
 
 	return HandlePacketResult::Handled;

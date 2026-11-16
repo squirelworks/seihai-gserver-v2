@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31 and 2026-11-14: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-14, 2026-11-16: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -626,7 +626,9 @@ SetResults Player::setProp(PlayerProp prop, SetBy setBy, PropertyBase* base)
 				break;
 			}
 
-			warp(strProp->value, getGlobalPosition());
+			// setlevel semantics: keep level-local x/y. Passing getGlobalPosition() here
+			// double-applied a gmap sublevel origin inside the old name-based warp path.
+			warp(strProp->value, getLocalPosition());
 			break;
 		}
 

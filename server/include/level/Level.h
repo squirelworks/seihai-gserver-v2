@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-04, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-04, 2026-11-12, 2026-11-16: see CHANGES-SEIHAI.md.
 #ifndef LEVEL_H
 #define LEVEL_H
 
@@ -190,6 +190,8 @@ public:
 	[[a::inline]] StaticLevelDataPtr getStaticLevelDataByName(std::string_view levelPart) const noexcept;
 	[[a::inline]] StaticLevelDataPtr getStaticLevelDataAtPosition(const MapPosition& mapPosition) const noexcept;
 	[[a::inline]] std::pair<SubLevelPtr, StaticLevelDataPtr> getSubLevelAndStaticDataAtPosition(const MapPosition& position) const noexcept;
+	/// Level-local pixels → gmap-global pixels for `levelPart` (sublevel name or this level).
+	/// Use this (or Player::warp(name, LocalPixelPosition)) at every local→global warp boundary.
 	[[a::inline]] PixelPosition convertToMapPosition(std::string_view levelPart, const LocalPixelPosition& position) const noexcept;
 	[[a::inline]] PixelPosition convertToMapPosition(std::string_view levelPart, const LocalWholeTilePosition& position) const noexcept;
 	[[a::inline]] PixelPosition convertToMapPosition(const MapPosition& mapPosition, const LocalPixelPosition& position) const noexcept;

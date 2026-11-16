@@ -1338,8 +1338,16 @@ void Player::setPosition(const PixelPosition& position)
 
 bool Player::warp(const std::string_view levelName, const PixelPosition& position, const std::optional<time_t> clientCachedTime)
 {
+	// `position` is gmap-global. Callers with level-local pixels must use the LocalPixelPosition overload.
 	if (const auto level = m_server->getLoadedLevel(levelName, shared_from_this()); level != nullptr)
 		return enterLevel(level, position, clientCachedTime);
+	return false;
+}
+
+bool Player::warp(const std::string_view levelName, const LocalPixelPosition& position, const std::optional<time_t> clientCachedTime)
+{
+	if (const auto level = m_server->getLoadedLevel(levelName, shared_from_this()); level != nullptr)
+		return enterLevel(level, level->convertToMapPosition(levelName, position), clientCachedTime);
 	return false;
 }
 

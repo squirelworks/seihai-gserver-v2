@@ -323,7 +323,14 @@ public:
 
 public:
 	virtual void setPosition(const PixelPosition& position);
+	/// Warp by level name with a gmap-global pixel position (map cell * 1024 + local).
+	/// Do not pass level-local pixels here when the destination is a gmap sublevel name;
+	/// use the LocalPixelPosition overload instead.
 	virtual bool warp(std::string_view levelName, const PixelPosition& position, std::optional<time_t> clientCachedTime);
+	/// Warp by level name with level-local pixels. Resolves gmap/sublevel and applies the
+	/// sublevel origin via Level::convertToMapPosition before entering.
+	virtual bool warp(std::string_view levelName, const LocalPixelPosition& position, std::optional<time_t> clientCachedTime);
+	/// Warp into an already-resolved Level with a gmap-global pixel position.
 	virtual bool warp(const std::shared_ptr<Level>& level, const PixelPosition& position, std::optional<time_t> clientCachedTime);
 	virtual bool enterLevel(const std::shared_ptr<Level>& level, const PixelPosition& position, std::optional<time_t> clientCachedTime);
 	virtual bool enterLevel(const std::shared_ptr<Level>& level, const MapPosition& mapPosition, const LocalPixelPosition& position, std::optional<time_t> clientCachedTime);
@@ -336,6 +343,7 @@ public:
 
 public:
 	[[a::inline]] bool warp(std::string_view levelName, const PixelPosition& position);
+	[[a::inline]] bool warp(std::string_view levelName, const LocalPixelPosition& position);
 	[[a::inline]] bool warp(const std::shared_ptr<Level>& level, const PixelPosition& position);
 	[[a::inline]] bool enterLevel(const std::shared_ptr<Level>& level, const PixelPosition& position);
 	[[a::inline]] bool enterLevel(const std::shared_ptr<Level>& level, const MapPosition& mapPosition, const LocalPixelPosition& position);
@@ -546,6 +554,11 @@ using PlayerWeakPtr = std::weak_ptr<Player>;
 //----------------------------
 
 inline bool Player::warp(const std::string_view levelName, const PixelPosition& position)
+{
+	return warp(levelName, position, std::nullopt);
+}
+
+inline bool Player::warp(const std::string_view levelName, const LocalPixelPosition& position)
 {
 	return warp(levelName, position, std::nullopt);
 }
