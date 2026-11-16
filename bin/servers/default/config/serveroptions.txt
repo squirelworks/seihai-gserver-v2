@@ -424,7 +424,11 @@ runallscriptevents = false
 #   warptoforlowadmins - Allows Global Admin Level 1 to warp (not implemented).
 # warptoforlowadmins = true
 
-# Controls ghost mode (stub: accepted/tracked; gameplay not implemented — see bin/docs/server-unimplemented.md).
+# Ghost mode: who appears as a ghost to others.
+#   ghostmodeenabled=false → nobody
+#   ghostmodeenabled=true, ghostmodefornotstaff=true → non-staff only
+#   ghostmodeenabled=true, ghostmodefornotstaff=false → everybody (including staff)
+# Ghost clients get PLO_GHOSTMODE/GHOSTTEXT; others see ghostani and a truthful GHOSTICON.
 ghostmodeenabled = false
 ghostmodefornotstaff = false
 

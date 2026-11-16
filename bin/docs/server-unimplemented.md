@@ -15,8 +15,8 @@ Client authoritative:
 - Full support with official with no known limitations.
 
 Server authoritative (NPC-server):
-- No support for trial accounts or ghost mode.
-  - `ghostmodeenabled` / `ghostmodefornotstaff` are tracked stubs (#97) so configs are not silent no-ops; they do not enable ghost gameplay yet.
+- Trial accounts remain limited: guests map to script `"trial"` / `players[].trial`, but save-less trial accounts and `limitfreeplayers2` bomb/arrow limits are not fully stock-equivalent.
+- Ghost mode gameplay is implemented for `ghostmodeenabled` / `ghostmodefornotstaff` (appearance, icon, mode packets). Fine client-side collision/walk-through behaviour still depends on the client honouring those packets.
 - Translations for NPC messages in GS1 scripts are not supported.
 - Lacking some script commands / features that may or may not have been implemented on official servers (lack of documentation to make full judgement).
 - No support for the MUD commands used in Kingdoms.

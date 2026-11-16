@@ -300,6 +300,12 @@ public:
 	/// @return A packet of properties.
 	CString getPropsPacketFromList(const PropList& props) const;
 
+	/// @brief Props for OTHERPLPROPS to game clients, with ghostani override when appearsAsGhost().
+	[[nodiscard]] CString getOtherClientPropsPacket() const;
+
+	/// @brief Append a trailing GANI=ghostani override when this player appears as a ghost.
+	[[nodiscard]] CString withGhostAppearanceOverride(CString props) const;
+
 	/// @brief Gets a packet containing properties for remote control profile viewing.
 	/// @return A packet of properties.
 	CString getPropsForRCPacket();
@@ -385,6 +391,10 @@ public:
 	void setGraal3DLinked(bool linked) { m_graal3dLinked = linked; }
 	bool isGraal3DLinked() const { return m_graal3dLinked; }
 	bool isGuest() const { return account.loadOnly && account.communityName == "guest"; }
+	/// @brief True when serveroptions put this player into ghost appearance (ghostmodeenabled matrix).
+	[[nodiscard]] bool appearsAsGhost() const;
+	/// @brief Send PLO_GHOSTMODE + PLO_GHOSTTEXT when this client should be in ghost mode; no-op otherwise.
+	void sendGhostModeState();
 	int getType() const { return m_type; }
 	void setType(const int val) { m_type = val; }
 	void setExternal(const bool val) { m_isExternal = val; }

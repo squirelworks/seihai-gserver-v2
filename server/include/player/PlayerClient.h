@@ -131,6 +131,10 @@ public:
 
 	void checkAndInformIfLevelLeader();
 	void informPlayerIsLevelLeader();
+	/// @brief Send PLO_GHOSTICON 0/1 for whether any ghost-appearance players are in this level.
+	void sendGhostIconForLevel(const std::shared_ptr<Level>& level);
+	/// @brief Ask nearby clients to refresh their ghost icon for this level.
+	void notifyNearbyGhostIcon(const std::shared_ptr<Level>& level);
 
 public:
 	std::optional<time_t> getLevelLastEnteredTimeForWarping(const StaticLevelData* level) const;

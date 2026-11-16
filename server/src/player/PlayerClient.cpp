@@ -1432,6 +1432,10 @@ bool PlayerClient::leaveLevel(const bool keepLevelReference)
 		}
 	}
 
+	// Ghost presence may have changed for players who remain.
+	if (appearsAsGhost())
+		notifyNearbyGhostIcon(levelp);
+
 	// Clear the level.
 	if (!keepLevelReference)
 		m_currentLevel.reset();
@@ -1581,9 +1585,9 @@ bool PlayerClient::sendDynamicLevelData(const std::shared_ptr<Level>& level, std
 		level->sendBaddiesToPlayer(self);
 	}
 
-	// Tell the client if there are any ghost players in the level.
-	// We don't support trial accounts so pass 0 (no ghosts) instead of 1 (ghosts present).
-	sendPacket(CString() >> (char)PLO_GHOSTICON >> (char)0);
+	// Tell the client if any ghost-appearance players are in the level.
+	sendGhostIconForLevel(level);
+	notifyNearbyGhostIcon(level);
 
 	// If we are the leader, send it now.
 	checkAndInformIfLevelLeader();
@@ -1629,7 +1633,7 @@ bool PlayerClient::sendDynamicLevelData(const std::shared_ptr<Level>& level, std
 	// Send connecting player props to players in nearby levels.
 	if (!level->isSinglePlayer)
 	{
-		const CString myProps = CString() >> (char)PLO_OTHERPLPROPS >> (short)m_id >> (char)PlayerProp::JOINLEAVELVL >> (char)1 << getPropsPacketFromList(loginPropsClientOthers);
+		const CString myProps = CString() >> (char)PLO_OTHERPLPROPS >> (short)m_id >> (char)PlayerProp::JOINLEAVELVL >> (char)1 << getOtherClientPropsPacket();
 		for (const auto& playerId : level->findPlayersInRangeForSync(getGlobalPosition()))
 		{
 			if (playerId == m_id) continue;
@@ -1637,9 +1641,9 @@ bool PlayerClient::sendDynamicLevelData(const std::shared_ptr<Level>& level, std
 			{
 				if (!other->isClient()) continue;
 
-				// Exchange props.
+				// Exchange props (ghost players get ghostani for others).
 				other->sendPacket(myProps);
-				this->sendPacket(CString() >> (char)PLO_OTHERPLPROPS >> (short)other->getId() >> (char)PlayerProp::JOINLEAVELVL >> (char)1 << other->getPropsPacketFromList(loginPropsClientOthers));
+				this->sendPacket(CString() >> (char)PLO_OTHERPLPROPS >> (short)other->getId() >> (char)PlayerProp::JOINLEAVELVL >> (char)1 << other->getOtherClientPropsPacket());
 			}
 		}
 	}
@@ -1663,6 +1667,40 @@ void PlayerClient::checkAndInformIfLevelLeader()
 void PlayerClient::informPlayerIsLevelLeader()
 {
 	sendPacket(CString() >> (char)PLO_ISLEADER);
+}
+
+void PlayerClient::sendGhostIconForLevel(const std::shared_ptr<Level>& level)
+{
+	char ghostsPresent = 0;
+	if (level != nullptr && m_server->cached.ghostModeEnabled.getValue())
+	{
+		for (const auto playerId : level->getPlayers())
+		{
+			const auto other = m_server->getPlayer(playerId);
+			if (other == nullptr || !other->isClient())
+				continue;
+			if (other->appearsAsGhost())
+			{
+				ghostsPresent = 1;
+				break;
+			}
+		}
+	}
+	sendPacket(CString() >> (char)PLO_GHOSTICON >> ghostsPresent);
+}
+
+void PlayerClient::notifyNearbyGhostIcon(const std::shared_ptr<Level>& level)
+{
+	if (level == nullptr || !m_server->cached.ghostModeEnabled.getValue())
+		return;
+
+	for (const auto playerId : level->findPlayersInRangeForSync(getGlobalPosition()))
+	{
+		if (playerId == m_id)
+			continue;
+		if (auto other = m_server->getPlayer<PlayerClient>(playerId); other != nullptr)
+			other->sendGhostIconForLevel(level);
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////
