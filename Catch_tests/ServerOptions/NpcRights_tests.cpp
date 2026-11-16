@@ -2,14 +2,10 @@
 // npcrights SettingCache and NC rights gate (#97).
 #include "catch2/catch_all.hpp"
 
-#include <atomic>
-
 #include <BabyDI.h>
 #include <Server.h>
 
 using namespace preagonal;
-
-std::atomic_bool shutdownProgram{false};
 
 namespace
 {

@@ -2,15 +2,12 @@
 // speedhacktolerance stub (#97).
 #include "catch2/catch_all.hpp"
 
-#include <atomic>
 #include <cstdint>
 
 #include <BabyDI.h>
 #include <Server.h>
 
 using namespace preagonal;
-
-std::atomic_bool shutdownProgram{false};
 
 TEST_CASE("speedhacktolerance is a tracked stub", "[speedhacktolerance][serveroptions]")
 {

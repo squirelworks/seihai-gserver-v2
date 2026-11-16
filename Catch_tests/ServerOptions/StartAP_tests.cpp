@@ -2,7 +2,6 @@
 // startap overrides defaultaccount AP for new accounts (#97).
 #include "catch2/catch_all.hpp"
 
-#include <atomic>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -14,8 +13,6 @@
 #include <utilities/manager/TranslationManagerClassic.h>
 
 using namespace preagonal;
-
-std::atomic_bool shutdownProgram{false};
 
 namespace
 {

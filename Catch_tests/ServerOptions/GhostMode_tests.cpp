@@ -2,14 +2,10 @@
 // ghostmodeenabled / ghostmodefornotstaff stubs (#97).
 #include "catch2/catch_all.hpp"
 
-#include <atomic>
-
 #include <BabyDI.h>
 #include <Server.h>
 
 using namespace preagonal;
-
-std::atomic_bool shutdownProgram{false};
 
 TEST_CASE("ghost-mode keys are tracked stubs", "[ghostmode][serveroptions]")
 {

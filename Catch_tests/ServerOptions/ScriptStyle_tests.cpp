@@ -2,7 +2,6 @@
 // scriptstyle alias for default_scriptengine (#97).
 #include "catch2/catch_all.hpp"
 
-#include <atomic>
 #include <optional>
 #include <string>
 
@@ -11,8 +10,6 @@
 
 using namespace preagonal;
 using namespace std::string_literals;
-
-std::atomic_bool shutdownProgram{false};
 
 namespace
 {

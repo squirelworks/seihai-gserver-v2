@@ -2,7 +2,6 @@
 // translatedlanguages / defaultlanguage stubs (#97).
 #include "catch2/catch_all.hpp"
 
-#include <atomic>
 #include <string>
 #include <vector>
 
@@ -11,8 +10,6 @@
 
 using namespace preagonal;
 using namespace std::string_literals;
-
-std::atomic_bool shutdownProgram{false};
 
 TEST_CASE("translation keys are tracked", "[translation][serveroptions]")
 {
