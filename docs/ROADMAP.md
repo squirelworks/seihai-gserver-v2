@@ -1,7 +1,7 @@
 # seihai-gserver-v2 roadmap
 
 The live checklist is issue #35; the suite-wide plan is squirelworks/seihai#353.
-This page groups that work into three phases. Last checked 2026-11-15 against
+This page groups that work into three phases. Last checked 2026-11-16 against
 branch `seihai`.
 
 This fork is the server real 1.33 to 6.x clients use in the lab today, and the
@@ -18,9 +18,10 @@ for the clean-room repos.
 
 ## Phase 2: polish and release
 
-- [ ] Release `v4.0.0-seihai.1` from the draft (notes from #32), on the owner's go-ahead.
+- [x] Release `v4.0.0-seihai.1` from the draft (notes from #32); published 2026-11-11, with `v4.0.0-seihai.2` and `v4.0.0-seihai.3` following.
 - [ ] macOS build at release only, through `seihai-release.yml`, with the pinned gs2lib built for macOS (squirelworks/seihai-gs2lib#28).
-- [ ] Keep up with upstream `beta4`, keeping every Seihai row; offer the crash fixes upstream if the owner agrees (squirelworks/seihai-gs2lib#10).
+- [ ] Keep up with upstream `beta4`, keeping every Seihai row. Last merge: `2de276b` (#55).
+- [x] Offer the crash fixes upstream if the owner agrees (squirelworks/seihai-gs2lib#10).
 - [ ] Clear `docs/tobedone.txt` into issues or remove what is done.
 
 ## Phase 3: after it works
