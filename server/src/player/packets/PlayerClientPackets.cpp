@@ -476,16 +476,9 @@ HandlePacketResult PlayerClient::msgPLI_CLAIMPKER(CString& pPacket)
 			// If I have 20 or more AP, they lose AP.
 			if (oAp > 0 && account.character.ap > 19)
 			{
-				const int aptime[] =
-				{
-					m_server->cached.apSystemThresholdSeconds[0].getValue(), m_server->cached.apSystemThresholdSeconds[1].getValue(),
-					m_server->cached.apSystemThresholdSeconds[2].getValue(), m_server->cached.apSystemThresholdSeconds[3].getValue(),
-					m_server->cached.apSystemThresholdSeconds[4].getValue()
-				};
-
 				oAp -= (((oAp / 20) + 1) * (account.character.ap / 20));
 				if (oAp < 0) oAp = 0;
-				killer->account.apCounter = (oAp < 20 ? aptime[0] : (oAp < 40 ? aptime[1] : (oAp < 60 ? aptime[2] : (oAp < 80 ? aptime[3] : aptime[4]))));
+				killer->account.apCounter = m_server->cached.apSystemThresholdSeconds[apSystemThresholdIndex(static_cast<uint8_t>(oAp))].getValue();
 				killer->setPropsFromPacket(CString() >> (char)PlayerProp::ALIGNMENT >> (char)oAp, props::SetBy::SERVER);
 			}
 		}

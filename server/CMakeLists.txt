@@ -98,6 +98,7 @@ set(
 	"include/scripting/gs1/GS1Visitor.h"
 	"include/scripting/gs1/ScriptEngineGS1.h"
 	"include/scripting/gs2/ScriptEngineGS2.h"
+	"include/utilities/APSystem.h"
 	"include/utilities/CommandDispatcher.h"
 	"include/utilities/CommonTypes.h"
 	"include/utilities/Events.h"

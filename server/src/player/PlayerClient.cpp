@@ -269,16 +269,7 @@ bool PlayerClient::doTimedEvents()
 					if (account.character.ap < 100)
 						sendPropsFromResults(setPropWith<PlayerProp::ALIGNMENT>(props::SetBy::SERVER, static_cast<uint8_t>(account.character.ap + 1)));
 
-					if (account.character.ap < 20)
-						account.apCounter = m_server->cached.apSystemThresholdSeconds[0].getValue();
-					else if (account.character.ap < 40)
-						account.apCounter = m_server->cached.apSystemThresholdSeconds[1].getValue();
-					else if (account.character.ap < 60)
-						account.apCounter = m_server->cached.apSystemThresholdSeconds[2].getValue();
-					else if (account.character.ap < 80)
-						account.apCounter = m_server->cached.apSystemThresholdSeconds[3].getValue();
-					else
-						account.apCounter = m_server->cached.apSystemThresholdSeconds[4].getValue();
+					account.apCounter = m_server->cached.apSystemThresholdSeconds[apSystemThresholdIndex(account.character.ap)].getValue();
 				}
 			}
 		}
