@@ -27,6 +27,10 @@ Seihai also makes a new Rust server stack, separate from this fork:
 [seihai-rc](https://github.com/squirelworks/seihai-rc) and
 [seihai-npcserver](https://github.com/squirelworks/seihai-npcserver).
 
+Crash hunting (#87): a standalone Clang libFuzzer project lives under
+`fuzz/` (packet framing / decrypt / decompress via `processBuffer`). See
+`fuzz/README.md` and the weekly `.github/workflows/fuzz.yml` job.
+
 The upstream README follows.
 
 ---

@@ -11,7 +11,7 @@ for the clean-room repos.
 ## Phase 1: to functional (current priority: bugs and crashes)
 
 - [x] Merge proven on real clients (#34), built-in NPC-server (#33), 5.x/6.x (#23, #24), lab milestone (#27).
-- [ ] Crash hunting: sanitizer CI job, packet replay harness and a fuzz target (#87), together with squirelworks/seihai-gs2lib#27.
+- [ ] Crash hunting: sanitizer CI job, packet replay harness and a fuzz target (#87), together with squirelworks/seihai-gs2lib#27. Standalone `fuzz_process_buffer` + weekly smoke are in; full-server ASan CI, real-handler replay, and hour runs remain.
 - [ ] Every crash or hang seen in a lab run gets a regression case in the replay corpus and a `CHANGES-SEIHAI.md` row.
 - [ ] A real 6.1.1.3 client logging in and playing on the `modern` server (target build for squirelworks/graal-client-repro#373).
 - [ ] 3.153 real-client run if a Windows 3.x client turns up.

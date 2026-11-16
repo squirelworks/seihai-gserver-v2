@@ -1,0 +1,43 @@
+# Modified by the Seihai project, 2026-11-16: see CHANGES-SEIHAI.md.
+# Weekly libFuzzer smoke for #87. Standalone fuzz/ project (gs2lib only).
+name: fuzz
+
+on:
+  schedule:
+    - cron: '41 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-18 libclang-rt-18-dev libfuzzer-18-dev \
+            ninja-build zlib1g-dev libbz2-dev
+      - name: Configure
+        run: |
+          CC=clang-18 CXX=clang++-18 cmake -S fuzz -B build-fuzz -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build-fuzz -j
+      - name: Run fuzz_process_buffer
+        run: |
+          ./build-fuzz/fuzz_process_buffer -max_total_time=180 -max_len=65536 \
+            fuzz/corpus/process_buffer
+      - name: Upload crashers
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashers
+          path: |
+            crash-*
+            leak-*
+            timeout-*
+          if-no-files-found: ignore
