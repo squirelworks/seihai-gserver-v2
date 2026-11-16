@@ -988,7 +988,7 @@ bool PlayerClient::processChat(const CString& pChat)
 			auto player = m_server->getPlayer<PlayerClient>(chatParse[1], PLTYPE_ANYCLIENT);
 			LevelPtr level;
 			if (player && (level = player->getLevel()) != nullptr)
-				warp(level->levelName, player->getLocalPosition());
+				warp(level->levelName, player->getGlobalPosition());
 		}
 		// To location
 		else
@@ -1005,7 +1005,7 @@ bool PlayerClient::processChat(const CString& pChat)
 				setPropsFromPacket(CString() >> (char)PlayerProp::X >> (char)(strtofloat(chatParse[1]) * 2) >> (char)PlayerProp::Y >> (char)(strtofloat(chatParse[2]) * 2), props::SetBy::SERVER);
 			// x y level
 			else if (chatParse.size() == 4)
-				warp(chatParse[3], {static_cast<int16_t>(string::toFloat(chatParse[1].toString()) * 16.0f), static_cast<int16_t>(string::toFloat(chatParse[2].toString()) * 16.0f)});
+				warp(chatParse[3], LocalPixelPosition{static_cast<int16_t>(string::toFloat(chatParse[1].toString()) * 16.0f), static_cast<int16_t>(string::toFloat(chatParse[2].toString()) * 16.0f)});
 		}
 	}
 	else if (chatParse[0] == "summon" && chatParse.size() == 2)
@@ -1020,7 +1020,7 @@ bool PlayerClient::processChat(const CString& pChat)
 		}
 
 		auto p = m_server->getPlayer<PlayerClient>(chatParse[1], PLTYPE_ANYCLIENT);
-		if (p) p->warp(account.level, getLocalPosition());
+		if (p) p->warp(account.level, getGlobalPosition());
 	}
 	else if (chatParse[0] == "unstick" || chatParse[0] == "unstuck")
 	{
@@ -1041,7 +1041,7 @@ bool PlayerClient::processChat(const CString& pChat)
 				const auto& unstickLevel = m_server->cached.unstickMeLevel.getValue();
 				const auto& unstickX = m_server->cached.unstickMeTile[0].getValue();
 				const auto& unstickY = m_server->cached.unstickMeTile[1].getValue();
-				warp(unstickLevel, {static_cast<int16_t>(unstickX * 16.0f), static_cast<int16_t>(unstickY * 16.0f)});
+				warp(unstickLevel, LocalPixelPosition{static_cast<int16_t>(unstickX * 16.0f), static_cast<int16_t>(unstickY * 16.0f)});
 				setChat("Warped!");
 			}
 		}
@@ -1238,28 +1238,29 @@ void PlayerClient::setPosition(const PixelPosition& position)
 
 bool PlayerClient::warp(const std::string_view levelName, const PixelPosition& position, const std::optional<time_t> clientCachedTime)
 {
-	// Find the level.
+	// `position` is gmap-global (map cell * 1024 + local). No silent local→global rewrite here.
 	const auto newLevel = m_server->getLoadedLevel(levelName, shared_from_this());
 
-	// Check if the new level exists.
 	if (newLevel == nullptr)
 	{
 		sendPacket(CString() >> (char)PLO_WARPFAILED << levelName);
 		return false;
 	}
 
-	// If this is a gmap and the level names don't match, fix the position of the warp.
-	if (newLevel->isGmap() && newLevel->levelName != levelName)
+	return warp(newLevel, position, clientCachedTime);
+}
+
+bool PlayerClient::warp(const std::string_view levelName, const LocalPixelPosition& position, const std::optional<time_t> clientCachedTime)
+{
+	const auto newLevel = m_server->getLoadedLevel(levelName, shared_from_this());
+
+	if (newLevel == nullptr)
 	{
-		const auto subLevel = newLevel->getSubLevelByName(levelName);
-		if (subLevel != nullptr)
-		{
-			const auto origin = Level::getSubLevelOrigin(subLevel).value_or(PixelPosition{});
-			return warp(newLevel, position.translate(origin), clientCachedTime);
-		}
+		sendPacket(CString() >> (char)PLO_WARPFAILED << levelName);
+		return false;
 	}
 
-	return warp(newLevel, position, clientCachedTime);
+	return warp(newLevel, newLevel->convertToMapPosition(levelName, position), clientCachedTime);
 }
 
 bool PlayerClient::warp(const std::shared_ptr<Level>& level, const PixelPosition& position, const std::optional<time_t> clientCachedTime)

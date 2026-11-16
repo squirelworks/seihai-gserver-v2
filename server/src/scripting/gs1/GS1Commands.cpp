@@ -2617,7 +2617,7 @@ void fn_setlevel2(GS1Visitor* visitor, const std::vector<GS1ScriptValue*>& argum
 
 		const auto server = BabyDI::Get<Server>();
 		if (const auto player = server->getNPCServer()->getPlayer<PlayerClient>(source.value().first); player != nullptr)
-			player->warp(filename, {static_cast<int16_t>(x * 16), static_cast<int16_t>(y * 16)});
+			player->warp(filename, LocalPixelPosition{static_cast<int16_t>(x * 16), static_cast<int16_t>(y * 16)});
 	}
 }
 
@@ -3811,14 +3811,17 @@ void fn_warpto(GS1Visitor* visitor, const std::vector<GS1ScriptValue*>& argument
 		if (const auto npc = server->getNPC(source.value().first); npc != nullptr)
 		{
 			if (const auto level = server->getLoadedLevel(filename, npc->getLevel()); level != nullptr)
-				npc->warp(level, PixelPosition{static_cast<int32_t>(x * 16), static_cast<int32_t>(y * 16)});
+			{
+				const LocalPixelPosition local{static_cast<int16_t>(x * 16), static_cast<int16_t>(y * 16)};
+				npc->warp(level, level->convertToMapPosition(filename, local));
+			}
 		}
 	}
 }
 
 //----------------------------
 
-// enabledamagereactions;
+// enabledamagereeds;
 // Enables damage reactions for the NPC, allowing it to react to damage with animations and invincibility frames.
 void fn_enabledamagereactions(GS1Visitor* visitor, const std::vector<GS1ScriptValue*>& arguments)
 {

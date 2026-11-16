@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-04: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-04, 2026-11-16: see CHANGES-SEIHAI.md.
 #ifndef EXTENTS_H
 #define EXTENTS_H
 
@@ -212,7 +212,9 @@ struct Position
 	std::array<T, 3> data;
 };
 
+/// Gmap-global (or single-level) pixel position: map cell * 1024 + level-local.
 using PixelPosition = Position<int32_t>;
+/// Pixels within one 64x64-tile level cell (0..1023 on x/y for a normal level).
 using LocalPixelPosition = Position<int16_t>;
 
 using TilePosition = Position<float>;
@@ -220,6 +222,18 @@ using WholeTilePosition = Position<uint16_t>;
 using LocalWholeTilePosition = Position<uint8_t>;
 
 using MapPosition = Position<uint8_t>;
+
+/// Compose gmap-global pixels from a map cell and level-local pixels.
+/// Prefer this (or Level::convertToMapPosition) over passing LocalPixelPosition
+/// into APIs that take PixelPosition.
+inline constexpr PixelPosition toGlobalPixelPosition(const MapPosition& map, const LocalPixelPosition& local) noexcept
+{
+	return PixelPosition{
+		static_cast<int32_t>(map.x()) * 1024 + static_cast<int32_t>(local.x()),
+		static_cast<int32_t>(map.y()) * 1024 + static_cast<int32_t>(local.y()),
+		static_cast<int32_t>(local.z())
+	};
+}
 
 //----------------------------
 // MovingPosition

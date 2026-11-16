@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-12, 2026-11-13, 2026-11-16: see CHANGES-SEIHAI.md.
 #ifndef PLAYERCLIENT_H
 #define PLAYERCLIENT_H
 
@@ -107,7 +107,9 @@ public:
 	void setPosition(const PixelPosition& position) override;
 
 	// Forcibly move a player (the client doesn't know it is transitioning levels).
+	// PixelPosition is gmap-global; LocalPixelPosition is level-local (see Player).
 	bool warp(std::string_view levelName, const PixelPosition& position, std::optional<time_t> clientCachedTime) override;
+	bool warp(std::string_view levelName, const LocalPixelPosition& position, std::optional<time_t> clientCachedTime) override;
 	bool warp(const std::shared_ptr<Level>& level, const PixelPosition& position, std::optional<time_t> clientCachedTime) override;
 	using Player::warp;
 

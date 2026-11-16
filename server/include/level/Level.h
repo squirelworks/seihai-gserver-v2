@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-04, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-04, 2026-11-12, 2026-11-16: see CHANGES-SEIHAI.md.
 #ifndef LEVEL_H
 #define LEVEL_H
 
@@ -190,6 +190,8 @@ public:
 	[[a::inline]] StaticLevelDataPtr getStaticLevelDataByName(std::string_view levelPart) const noexcept;
 	[[a::inline]] StaticLevelDataPtr getStaticLevelDataAtPosition(const MapPosition& mapPosition) const noexcept;
 	[[a::inline]] std::pair<SubLevelPtr, StaticLevelDataPtr> getSubLevelAndStaticDataAtPosition(const MapPosition& position) const noexcept;
+	/// Level-local pixels → gmap-global pixels for `levelPart` (sublevel name or this level).
+	/// Use this (or Player::warp(name, LocalPixelPosition)) at every local→global warp boundary.
 	[[a::inline]] PixelPosition convertToMapPosition(std::string_view levelPart, const LocalPixelPosition& position) const noexcept;
 	[[a::inline]] PixelPosition convertToMapPosition(std::string_view levelPart, const LocalWholeTilePosition& position) const noexcept;
 	[[a::inline]] PixelPosition convertToMapPosition(const MapPosition& mapPosition, const LocalPixelPosition& position) const noexcept;
@@ -649,9 +651,8 @@ inline PixelPosition Level::convertToMapPosition(const std::string_view levelPar
 {
 	if (isGmap())
 	{
-		auto mapPosition = getSubLevelPositionInMap(levelPart).value_or(MapPosition{});
-		auto pixelPerPart = pixelsPerSubLevel();
-		return { position.x() + static_cast<int32_t>(mapPosition.x()) * static_cast<int32_t>(pixelPerPart.width()), position.y() + static_cast<int32_t>(mapPosition.y()) * static_cast<int32_t>(pixelPerPart.height()), static_cast<int32_t>(position.z()) };
+		const auto mapPosition = getSubLevelPositionInMap(levelPart).value_or(MapPosition{});
+		return toGlobalPixelPosition(mapPosition, position);
 	}
 	return { position.x(), position.y(), position.z() };
 }
@@ -665,11 +666,7 @@ inline PixelPosition Level::convertToMapPosition(const std::string_view levelPar
 inline PixelPosition Level::convertToMapPosition(const MapPosition& mapPosition, const LocalPixelPosition& position) const noexcept
 {
 	if (isGmap())
-	{
-		auto pixelPerPart = pixelsPerSubLevel();
-		auto correctMapPosition = clampMapPosition(mapPosition);
-		return { static_cast<int32_t>(position.x()) + (correctMapPosition.x() * static_cast<int32_t>(pixelPerPart.width())), static_cast<int32_t>(position.y()) + (correctMapPosition.y() * static_cast<int32_t>(pixelPerPart.height())), static_cast<int32_t>(position.z()) };
-	}
+		return toGlobalPixelPosition(clampMapPosition(mapPosition), position);
 	return { static_cast<int32_t>(position.x()), static_cast<int32_t>(position.y()), static_cast<int32_t>(position.z()) };
 }
 
