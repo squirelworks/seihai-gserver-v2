@@ -1,3 +1,4 @@
+<!-- Modified by the Seihai project, 2026-11-16: see CHANGES-SEIHAI.md. -->
 # GS2Emu Unimplemented Features
 
 ## Classic era
@@ -15,6 +16,7 @@ Client authoritative:
 
 Server authoritative (NPC-server):
 - No support for trial accounts or ghost mode.
+  - `ghostmodeenabled` / `ghostmodefornotstaff` are tracked stubs (#97) so configs are not silent no-ops; they do not enable ghost gameplay yet.
 - Translations for NPC messages in GS1 scripts are not supported.
 - Lacking some script commands / features that may or may not have been implemented on official servers (lack of documentation to make full judgement).
 - No support for the MUD commands used in Kingdoms.
