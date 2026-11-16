@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-13, 2026-11-16: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
@@ -57,8 +57,14 @@ void NPCServer::initialize()
 {
 	const auto& settings = m_server->getSettings();
 
-	// Default script engine.
-	auto defaultScriptEngine = settings.get<std::string>("default_scriptengine").value_or(std::string{gs1::ScriptEngineGS1::EngineName});
+	// Default script engine. scriptstyle is a stock-style alias when default_scriptengine is unset (#97).
+	std::string defaultScriptEngine;
+	if (const auto engine = settings.get<std::string>("default_scriptengine"); engine.has_value())
+		defaultScriptEngine = *engine;
+	else if (const auto style = settings.get<std::string>("scriptstyle"); style.has_value())
+		defaultScriptEngine = *style;
+	else
+		defaultScriptEngine = std::string{gs1::ScriptEngineGS1::EngineName};
 	scripting.defaultScriptEngineClient = settings.get<std::string>("default_scriptengine_client").value_or(defaultScriptEngine);
 	scripting.defaultScriptEngineServer = settings.get<std::string>("default_scriptengine_server").value_or(defaultScriptEngine);
 
@@ -122,8 +128,10 @@ void NPCServer::setRemoteIp(const std::string_view host)
 
 void NPCServer::sendNCLoginToPlayer(const std::shared_ptr<Player>& player)
 {
-	// RC's only!
-	if (!player->isRC() || !player->account.hasRight(PLPERM_NPCCONTROL))
+	// RC's only! npcrights (default true) requires PLPERM_NPCCONTROL; false skips that check (#97).
+	if (!player->isRC())
+		return;
+	if (m_server->cached.enableNpcRights.getValue() && !player->account.hasRight(PLPERM_NPCCONTROL))
 		return;
 
 	// Grab NPCServer & Send

@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-11, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-11, 2026-11-12, 2026-11-16: see CHANGES-SEIHAI.md.
 #ifndef SERVER_H
 #define SERVER_H
 
@@ -45,6 +45,7 @@
 #include <object/Player.h>
 #include <scripting/ScriptContainers.h>
 #include <scripting/ScriptTypes.h>
+#include <utilities/APSystem.h>
 #include <utilities/CommandDispatcher.h>
 #include <utilities/CommonTypes.h>
 #include <utilities/Extents.h>
@@ -170,6 +171,21 @@ struct ExternalServerCachedSettings
 	SettingCache<bool> normalAdminsCanChangeGralats{"normaladminscanchangegralats", true};
 	SettingCache<std::vector<std::string>> protectedWeapons{"protectedweapons", {}};
 	SettingCache<std::vector<std::string>> jailLevels{"jaillevels", {"police2.graal", "police4.graal"}};
+	// When true (default), NC login requires PLPERM_NPCCONTROL. When false, any RC may get NC address (#97 npcrights).
+	SettingCache<bool> enableNpcRights{"npcrights", true};
+	// Ghost / trial mode (#97). Stubbed: values are accepted and tracked; gameplay not implemented (see server-unimplemented.md).
+	SettingCache<bool> ghostModeEnabled{"ghostmodeenabled", false};
+	SettingCache<bool> ghostModeForNonStaff{"ghostmodefornotstaff", false};
+	// AP given to accounts created from (defaultaccount) when startap is set (#97).
+	SettingCache<uint8_t> startAP{"startap", 50};
+	// Packet-rate tolerance stub (#97). Accepted/tracked; no speedhack detector yet.
+	SettingCache<uint16_t> speedHackTolerance{"speedhacktolerance", 90};
+	// Alias for default_scriptengine used by some stock-style configs (#97 scriptstyle).
+	SettingCache<std::string> scriptStyle{"scriptstyle", "gs1"};
+	// Translation keys (#97). defaultlanguage is the translation default; language remains the listserver label.
+	// translatedlanguages lists domains to prefer; load still reads all files in translations/ until filtering lands.
+	SettingCache<std::string> defaultLanguage{"defaultlanguage", "en"};
+	SettingCache<std::vector<std::string>> translatedLanguages{"translatedlanguages", {}};
 	// player
 	SettingCache<bool> enableDefaultWeapons{"defaultweapons", true};
 	SettingCache<uint8_t> maxHeartLimit{"heartlimit", 3};
@@ -180,7 +196,8 @@ struct ExternalServerCachedSettings
 	SettingCache<bool> playerTouchesMeNoZ{"playertouchsmenoz", false};
 	SettingCache<bool> lockPlayerZ{"lockplayerz", false};
 	SettingCache<bool> enableAPSystem{"apsystem", true};
-	std::array<SettingCache<uint16_t>, 5> apSystemThresholdSeconds{{{"aptime0", 30}, {"aptime1", 90}, {"aptime2", 300}, {"aptime3", 600}, {"aptime4", 1200}}};
+	// aptime0..aptime5 (#96). Default aptime5 matches aptime4 so worlds that omit it keep the old 80..100 recharge pace.
+	std::array<SettingCache<uint16_t>, APSystemThresholdCount> apSystemThresholdSeconds{{{"aptime0", 30}, {"aptime1", 90}, {"aptime2", 300}, {"aptime3", 600}, {"aptime4", 1200}, {"aptime5", 1200}}};
 	SettingCache<std::vector<std::string>> playerProfileVariables{"profilevars", {"Kills:=playerkills", "Deaths:=playerdeaths", "Maxpower:=playerfullhearts", "Rating:=playerrating", "Alignment:=playerap", "Gralat:=playerrupees", "Swordpower:=playerswordpower", "Spin Attack:=canspin"}};
 	SettingCache<std::vector<std::string>> playerStatusList{"playerlisticons", {"Online", "Away", "DND", "Eating", "Hiding", "No PMs", "RPing", "Sparring", "PKing"}};
 	SettingCache<std::vector<std::string>> playerSwordGanis{"playerswordganis", {"sword"}};
