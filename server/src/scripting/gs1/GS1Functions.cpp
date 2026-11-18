@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-16: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-16, 2026-11-18: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <any>
 #include <array>
@@ -1707,7 +1707,7 @@ GS1ScriptValue fn_tiletype(GS1Visitor* visitor, const std::vector<GS1ScriptValue
 	{
 		const auto x = GS1Visitor::getScriptValueAsCopy<double>(*arguments[0]).value_or(0.0);
 		const auto y = GS1Visitor::getScriptValueAsCopy<double>(*arguments[1]).value_or(0.0);
-		return GameValue{static_cast<double>(ENUM(level->getTileTypeAt(toWholeTilePosition(TilePosition{x, y}))))};
+		return GameValue{static_cast<double>(ENUM(level->getTileTypeAt(toWholeTilePosition(TilePosition{static_cast<float>(x), static_cast<float>(y)}))))};
 	}
 
 	// Not found?  Default to blocking.

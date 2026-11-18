@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-13, 2026-11-16: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-13, 2026-11-16, 2026-11-18: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
@@ -417,8 +417,8 @@ std::shared_ptr<NPC> NPCServer::addNPC(const std::string_view name, const NPCID 
 		npc->level = level->levelName;
 		if (level->isGmap())
 		{
-			npc->setPropWith<NPCProp::GMAPLEVELX>(SetBy::SERVER, mapPosition.x());
-			npc->setPropWith<NPCProp::GMAPLEVELY>(SetBy::SERVER, mapPosition.y());
+			npc->setPropWith<NPCProp::GMAPLEVELX>(SetBy::SERVER, static_cast<uint8_t>(mapPosition.x()));
+			npc->setPropWith<NPCProp::GMAPLEVELY>(SetBy::SERVER, static_cast<uint8_t>(mapPosition.y()));
 		}
 	}
 

@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-01, 2026-11-04, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-01, 2026-11-04, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-18: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -1403,8 +1403,8 @@ bool Player::enterLevel(const std::shared_ptr<Level>& level, const MapPosition& 
 		sendPropsFromResults(
 			setPropWith<PlayerProp::X2>(props::SetBy::SERVER, position.x()),
 			setPropWith<PlayerProp::Y2>(props::SetBy::SERVER, position.y()),
-			setPropWith<PlayerProp::GMAPLEVELX>(props::SetBy::SERVER, mapPosition.x()),
-			setPropWith<PlayerProp::GMAPLEVELY>(props::SetBy::SERVER, mapPosition.y())
+			setPropWith<PlayerProp::GMAPLEVELX>(props::SetBy::SERVER, static_cast<uint8_t>(mapPosition.x())),
+			setPropWith<PlayerProp::GMAPLEVELY>(props::SetBy::SERVER, static_cast<uint8_t>(mapPosition.y()))
 		);
 		// clang-format on
 

@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12, 2026-11-16: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-16, 2026-11-18: see CHANGES-SEIHAI.md.
 // ReSharper disable CppParameterMayBeConstPtrOrRef
 #include <algorithm>
 #include <any>
@@ -3696,7 +3696,7 @@ void fn_triggeraction(GS1Visitor* visitor, const std::vector<GS1ScriptValue*>& a
 		if (const auto& [id, type] = visitor->getCurrentSource(); type == ScriptObjectType::NPC)
 			npcId = id;
 		if (const LevelPtr targetLevel = visitor->findCurrentLevel(); targetLevel != nullptr)
-			server->sendTriggerAction(targetLevel, npcId, toPixelPosition(TilePosition{x, y}), action, params);
+			server->sendTriggerAction(targetLevel, npcId, toPixelPosition(TilePosition{static_cast<float>(x), static_cast<float>(y)}), action, params);
 	}
 }
 

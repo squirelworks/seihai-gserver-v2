@@ -196,8 +196,8 @@ bool NPC::warp(const LevelPtr& destinationLevel, const std::optional<PixelPositi
 	// If the level is a gmap, include the map position.
 	if (destinationLevel->isGmap())
 	{
-		warpResults.push_back(setPropWith<NPCProp::GMAPLEVELX>(SetBy::SERVER, destMapPosition.x()));
-		warpResults.push_back(setPropWith<NPCProp::GMAPLEVELY>(SetBy::SERVER, destMapPosition.y()));
+		warpResults.push_back(setPropWith<NPCProp::GMAPLEVELX>(SetBy::SERVER, static_cast<uint8_t>(destMapPosition.x())));
+		warpResults.push_back(setPropWith<NPCProp::GMAPLEVELY>(SetBy::SERVER, static_cast<uint8_t>(destMapPosition.y())));
 	}
 
 	// If we are moving levels, change the current level.
@@ -491,9 +491,9 @@ void NPC::processMoveQueue(std::chrono::milliseconds deltaTime)
 			if (storageType == NPCStorageType::LEVEL && (mapX != character.mapX || mapY != character.mapY))
 				indexInLevelFile = std::nullopt;
 			if (mapX != character.mapX)
-				setPropWith<NPCProp::GMAPLEVELX>(SetBy::SERVER, mapX);
+				setPropWith<NPCProp::GMAPLEVELX>(SetBy::SERVER, static_cast<uint8_t>(mapX));
 			if (mapY != character.mapY)
-				setPropWith<NPCProp::GMAPLEVELY>(SetBy::SERVER, mapY);
+				setPropWith<NPCProp::GMAPLEVELY>(SetBy::SERVER, static_cast<uint8_t>(mapY));
 
 			// Set the current position.
 			auto localPosition = toLocalPixelPosition(potentialPosition);

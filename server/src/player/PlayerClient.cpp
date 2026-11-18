@@ -1220,8 +1220,8 @@ void PlayerClient::setPosition(const PixelPosition& position)
 		if (level->isGmap())
 		{
 			const auto destMapPosition = toMapPosition(position);
-			propResults.push_back(setPropWith<PlayerProp::GMAPLEVELX>(props::SetBy::SERVER, destMapPosition.x()));
-			propResults.push_back(setPropWith<PlayerProp::GMAPLEVELY>(props::SetBy::SERVER, destMapPosition.y()));
+			propResults.push_back(setPropWith<PlayerProp::GMAPLEVELX>(props::SetBy::SERVER, static_cast<uint8_t>(destMapPosition.x())));
+			propResults.push_back(setPropWith<PlayerProp::GMAPLEVELY>(props::SetBy::SERVER, static_cast<uint8_t>(destMapPosition.y())));
 		}
 
 		sendPropsFromResults(propResults);

@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-18: see CHANGES-SEIHAI.md.
 #include <cassert>
 #include <cmath>
 #include <cstdint>
@@ -486,7 +487,7 @@ std::shared_ptr<StaticLevelData> Map::getLevelDataAt(const PixelPosition& global
 
 std::generator<std::pair<std::shared_ptr<StaticLevelData>, MapPosition>> Map::getLevelDataInRange(const TilePosition& position, const int syncTilesX, const int syncTilesY) const noexcept
 {
-	const TileDimension syncTiles{syncTilesX, syncTilesY};
+	const TileDimension syncTiles{static_cast<float>(syncTilesX), static_cast<float>(syncTilesY)};
 	const auto searchPos = toMapPosition(position);
 	const auto levelSyncDistance = toMapDimension(syncTiles);
 	const Rectangle area{searchPos.translate(static_cast<int16_t>(-levelSyncDistance.width()), static_cast<int16_t>(-levelSyncDistance.height())), levelSyncDistance * 2};
