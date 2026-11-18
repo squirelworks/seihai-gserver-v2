@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-16: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-16, 2026-11-18: see CHANGES-SEIHAI.md.
 //
 // This file is part of the Seihai fork of GServer-v2 and is released under
 // the GNU General Public License version 3 or later (see LICENSE.md).
@@ -44,8 +44,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 	handler.Encryption.setGen(gen);
 	handler.Encryption.setGen5Steps(steps);
 	handler.Encryption.reset(key);
-	handler.LoginParsed = (data[2] & 2) != 0;
-	handler.PacketCount = handler.LoginParsed ? 1U : 0U;
+	handler.ProcessedLoginPacket = (data[2] & 2) != 0;
+	handler.PacketCount = handler.ProcessedLoginPacket ? 1U : 0U;
 
 	CString buffer;
 	buffer.write(reinterpret_cast<const char*>(data + 3), static_cast<int>(size - 3));

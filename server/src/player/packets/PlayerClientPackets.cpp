@@ -230,7 +230,7 @@ HandlePacketResult PlayerClient::msgPLI_BOMBADD(CString& pPacket)
 	{
 		if (m_server->hasNPCServer())
 		{
-			const auto position = toPixelPosition(getSubLevelOrigin(), loc[0], loc[1]);
+			const auto position = toPixelPosition(getSubLevelOrigin(), LocalTilePosition{loc[0], loc[1]});
 			if (level->addBombFromClient(position, power, m_id, timeToExplode) == nullptr)
 				sendPacket(CString() >> (char)PLO_BOMBDEL >> (char)(loc[0] * 2) >> (char)(loc[1] * 2));
 		}
@@ -250,7 +250,7 @@ HandlePacketResult PlayerClient::msgPLI_BOMBDEL(CString& pPacket)
 		m_server->sendPacketToOneLevelPart(CString() >> (char)PLO_BOMBDEL << (pPacket.text() + 1), getGlobalPosition(), level, {m_id});
 
 		const float loc[2] = {static_cast<float>(pPacket.readGUChar()) / 2.0f, static_cast<float>(pPacket.readGUChar()) / 2.0f};
-		level->removeBomb(toPixelPosition(getSubLevelOrigin(), loc[0], loc[1]));
+		level->removeBomb(toPixelPosition(getSubLevelOrigin(), LocalTilePosition{loc[0], loc[1]}));
 	}
 
 	return HandlePacketResult::Handled;
@@ -268,7 +268,7 @@ HandlePacketResult PlayerClient::msgPLI_HORSEADD(CString& pPacket)
 		const uint8_t hbushes = dir_bush >> 2;
 		const CString image = pPacket.readString("");
 
-		level->addHorse(image, toPixelPosition(getSubLevelOrigin(), loc[0], loc[1]), hdir, hbushes);
+		level->addHorse(image, toPixelPosition(getSubLevelOrigin(), LocalTilePosition{loc[0], loc[1]}), hdir, hbushes);
 	}
 
 	return HandlePacketResult::Handled;
@@ -281,7 +281,7 @@ HandlePacketResult PlayerClient::msgPLI_HORSEDEL(CString& pPacket)
 		m_server->sendPacketToOneLevelPart(CString() >> (char)PLO_HORSEDEL << (pPacket.text() + 1), getGlobalPosition(), level, {m_id});
 
 		const float loc[2] = {static_cast<float>(pPacket.readGUChar()) / 2.0f, static_cast<float>(pPacket.readGUChar()) / 2.0f};
-		level->removeHorse(toPixelPosition(getSubLevelOrigin(), loc[0], loc[1]));
+		level->removeHorse(toPixelPosition(getSubLevelOrigin(), LocalTilePosition{loc[0], loc[1]}));
 	}
 
 	return HandlePacketResult::Handled;
@@ -306,7 +306,7 @@ HandlePacketResult PlayerClient::msgPLI_ARROWADD(CString& pPacket)
 		if (m_server->hasNPCServer())
 		{
 			const PixelPosition speed = PixelPosition::playerDirectionVector(dir) * arrowSpeedInPixelsPer50ms;
-			level->addArrow(toPixelPosition(getSubLevelOrigin(), loc[0], loc[1]), speed, dir, power, fromPlayer ? source::FromPlayer(m_id) : source::FromServer());
+			level->addArrow(toPixelPosition(getSubLevelOrigin(), LocalTilePosition{loc[0], loc[1]}), speed, dir, power, fromPlayer ? source::FromPlayer(m_id) : source::FromServer());
 		}
 	}
 
@@ -367,7 +367,7 @@ HandlePacketResult PlayerClient::msgPLI_ITEMADD(CString& pPacket)
 		{
 			// Try to drop the item on the level.
 			// If the item was ultimately not dropped on the level (e.g., a gralats NPC was created), tell the client to delete it.
-			if (!dropItem(toPixelPosition(getSubLevelOrigin(), loc[0], loc[1]), itemType))
+			if (!dropItem(toPixelPosition(getSubLevelOrigin(), LocalTilePosition{loc[0], loc[1]}), itemType))
 			{
 				sendPacket(CString() >> (char)PLO_ITEMDEL >> (char)(loc[0] * 2) >> (char)(loc[1] * 2));
 				return HandlePacketResult::Handled;
@@ -375,7 +375,7 @@ HandlePacketResult PlayerClient::msgPLI_ITEMADD(CString& pPacket)
 		}
 		else
 		{
-			level->addItem(toPixelPosition(getSubLevelOrigin(), loc[0], loc[1]), itemType);
+			level->addItem(toPixelPosition(getSubLevelOrigin(), LocalTilePosition{loc[0], loc[1]}), itemType);
 		}
 
 		m_server->sendPacketToOneLevelPart(CString() >> (char)PLO_ITEMADD >> (char)(loc[0] * 2) >> (char)(loc[1] * 2) >> (char)item, getGlobalPosition(), level, {m_id});
@@ -393,7 +393,7 @@ HandlePacketResult PlayerClient::msgPLI_ITEMDEL(CString& pPacket)
 		const float loc[2] = {static_cast<float>(pPacket.readGUChar()) / 2.0f, static_cast<float>(pPacket.readGUChar()) / 2.0f};
 
 		// Remove the item from the level, getting the type of the item in the process.
-		const LevelItemType item = level->removeItem(toPixelPosition(getSubLevelOrigin(), loc[0], loc[1]));
+		const LevelItemType item = level->removeItem(toPixelPosition(getSubLevelOrigin(), LocalTilePosition{loc[0], loc[1]}));
 		if (item == LevelItemType::INVALID) return HandlePacketResult::Handled;
 
 		// If this is a PLI_ITEMTAKE packet, give the item to the player.
@@ -557,7 +557,7 @@ HandlePacketResult PlayerClient::msgPLI_BADDYADD(CString& pPacket)
 		bImage << ".gif";
 
 	// Add the baddy.
-	LevelBaddy* baddy = level->addBaddy(toLocalPixelPosition(loc[0], loc[1]), static_cast<BaddyType>(bType));
+	LevelBaddy* baddy = level->addBaddy(toLocalPixelPosition(LocalTilePosition{loc[0], loc[1]}), static_cast<BaddyType>(bType));
 	if (baddy == nullptr) return HandlePacketResult::Handled;
 
 	// Set the baddy props.
@@ -852,7 +852,7 @@ HandlePacketResult PlayerClient::msgPLI_EXPLOSION(CString& pPacket)
 
 		// Add it to the level.
 		if (m_server->hasNPCServer())
-			level->addExplosion(toPixelPosition(getSubLevelOrigin(), loc[0], loc[1]), source::FromPlayer(m_id), eradius, epower);
+			level->addExplosion(toPixelPosition(getSubLevelOrigin(), LocalTilePosition{loc[0], loc[1]}), source::FromPlayer(m_id), eradius, epower);
 	}
 
 	return HandlePacketResult::Handled;
@@ -1067,7 +1067,7 @@ HandlePacketResult PlayerClient::msgPLI_TRIGGERACTION(CString& pPacket)
 	[[maybe_unused]] const unsigned int npcId = pPacket.readGUInt();
 	const float loc[2] = {static_cast<float>(pPacket.readGUChar()) / 2.0f, static_cast<float>(pPacket.readGUChar()) / 2.0f};
 
-	PixelPosition pixelLoc{toPixelPosition(getSubLevelOrigin(), loc[0], loc[1])};
+	PixelPosition pixelLoc{toPixelPosition(getSubLevelOrigin(), LocalTilePosition{loc[0], loc[1]})};
 
 	// Tokenize the actions.
 	auto actionData = pPacket.readString("").toString();
@@ -1454,9 +1454,12 @@ HandlePacketResult PlayerClient::msgPLI_SHOOT(CString& pPacket)
 		newPacket.gravityInTiles = static_cast<float>(m_server->Scripting.variables.getValue<double>("gravity").value_or(2.0));
 		newPacket.gani = pPacket.readChars(pPacket.readGUChar());
 
+		if (newPacket.power == 0)
+			newPacket.gravityInTiles = 0;
+
 		// This seems to be the length of shootparams, but the client doesn't limit itself and sends the overflow anyway
 		[[maybe_unused]] unsigned char someParam = pPacket.readGUChar();
-		newPacket.shootParams = pPacket.readString("");
+		newPacket.shootParams = pPacket.readString("").toString();
 
 		const CString oldPacketBuf = CString() >> (char)PLO_SHOOT >> (short)m_id << newPacket.constructShootV1();
 		const CString newPacketBuf = CString() >> (char)PLO_SHOOT2 >> (short)m_id << newPacket.constructShootV2();
@@ -1467,7 +1470,7 @@ HandlePacketResult PlayerClient::msgPLI_SHOOT(CString& pPacket)
 		// clang-format on
 
 		if (m_server->hasNPCServer())
-			level->addShoot(newPacket.position, newPacket.sangle, newPacket.sanglez, newPacket.power, newPacket.gravityInTiles, newPacket.gani, source::FromPlayer(m_id));
+			level->addShoot(newPacket.position, newPacket.sangle, newPacket.sanglez, newPacket.power, newPacket.gravityInTiles, newPacket.gani, newPacket.shootParams, source::FromPlayer(m_id));
 	}
 
 	return HandlePacketResult::Handled;
@@ -1497,7 +1500,7 @@ HandlePacketResult PlayerClient::msgPLI_SHOOT2(CString& pPacket)
 
 		newPacket.gani = pPacket.readChars(pPacket.readGUShort());
 		[[maybe_unused]] unsigned char someParam = pPacket.readGUChar(); // This seems to be the length of shootparams, but the client doesn't limit itself and sends the overflow anyway
-		newPacket.shootParams = pPacket.readString("");
+		newPacket.shootParams = pPacket.readString("").toString();
 
 		const CString oldPacketBuf = CString() >> (char)PLO_SHOOT >> (short)m_id << newPacket.constructShootV1();
 		const CString newPacketBuf = CString() >> (char)PLO_SHOOT2 >> (short)m_id << newPacket.constructShootV2();
@@ -1508,7 +1511,7 @@ HandlePacketResult PlayerClient::msgPLI_SHOOT2(CString& pPacket)
 		// clang-format on
 
 		if (m_server->hasNPCServer())
-			level->addShoot(newPacket.position, newPacket.sangle, newPacket.sanglez, newPacket.power, newPacket.gravityInTiles, newPacket.gani, source::FromPlayer(m_id));
+			level->addShoot(newPacket.position, newPacket.sangle, newPacket.sanglez, newPacket.power, newPacket.gravityInTiles, newPacket.gani, newPacket.shootParams, source::FromPlayer(m_id));
 	}
 
 	return HandlePacketResult::Handled;
@@ -1619,21 +1622,21 @@ HandlePacketResult PlayerClient::msgPLI_UPDATECLASS(CString& pPacket)
 {
 	// Get the checksum and class name.
 	const uint32_t checkSum = pPacket.readGInt5();
-	std::string className = pPacket.readString("").toString();
+	const std::string className = pPacket.readString("").toString();
 
 	if (!m_server->hasNPCServer())
 		return HandlePacketResult::Handled;
 
 	const auto npcServer = m_server->getNPCServer();
-	if (const auto classObj = npcServer->getClass(className); classObj != nullptr)
+	if (const auto classObject = npcServer->getClass(className); classObject != nullptr)
 	{
-		if (classObj->hasChecksum(checkSum))
+		if (classObject->hasChecksum(checkSum))
 		{
-			classObj->registerWithPlayer(shared_from_this());
+			classObject->registerWithPlayer(shared_from_this());
 			return HandlePacketResult::Handled;
 		}
 
-		classObj->sendByteCodeToPlayer(shared_from_this());
+		classObject->sendByteCodeToPlayer(shared_from_this());
 	}
 	else
 	{
@@ -1647,9 +1650,6 @@ HandlePacketResult PlayerClient::msgPLI_UPDATECLASS(CString& pPacket)
 			// GRESCR01 file for it).
 			const auto header = string::toCSVFromPack("class"sv, std::string_view{className}, "0"sv, des, crc);
 
-			// Should technically be PLO_LOADSCRIPT but for some reason the client breaks player.join() scripts
-			// if a weapon decides to request an class that doesn't exist on the server.
-			// This seems to fix it by sending an empty bytecode.
 			sendPacket(CString() >> (char)PLO_WEAPONBYTECODE2 >> (short)header.length() << header);
 		}
 		// Classic (through 5.12): empty class as name-only 133. Never 140/197 to pure 4.x.

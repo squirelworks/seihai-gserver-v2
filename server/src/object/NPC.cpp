@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-18: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -196,8 +196,8 @@ bool NPC::warp(const LevelPtr& destinationLevel, const std::optional<PixelPositi
 	// If the level is a gmap, include the map position.
 	if (destinationLevel->isGmap())
 	{
-		warpResults.push_back(setPropWith<NPCProp::GMAPLEVELX>(SetBy::SERVER, destMapPosition.x()));
-		warpResults.push_back(setPropWith<NPCProp::GMAPLEVELY>(SetBy::SERVER, destMapPosition.y()));
+		warpResults.push_back(setPropWith<NPCProp::GMAPLEVELX>(SetBy::SERVER, static_cast<uint8_t>(destMapPosition.x())));
+		warpResults.push_back(setPropWith<NPCProp::GMAPLEVELY>(SetBy::SERVER, static_cast<uint8_t>(destMapPosition.y())));
 	}
 
 	// If we are moving levels, change the current level.
@@ -320,10 +320,12 @@ void NPC::addMoveToQueue(const LocalPixelPosition& moveDelta, const float durati
 		move.options.set(NPCMove::informWhenDone);
 	if (options & (1 << NPCMove::applyDirection))
 		move.options.set(NPCMove::applyDirection);
+	if (options & (1 << NPCMove::moveDirBlockCheck))
+		move.options.set(NPCMove::moveDirBlockCheck);
 
 	// Determine our start and stop positions.
 	move.origin = moveQueue.empty() ? getGlobalPosition() : moveQueue.back().destination;
-	move.destination = translatePosition(move.origin, moveDelta);
+	move.destination = translatePosition(move.origin, moveDelta.x(), moveDelta.y());
 
 	bool finishAllMovements = false;
 
@@ -419,7 +421,7 @@ void NPC::processMoveQueue(std::chrono::milliseconds deltaTime)
 
 		// If we are testing for walls, do that now.
 		// If we would hit a wall, we do not move.
-		if (move.options.test(NPCMove::blockCheck))
+		if (move.options.test(NPCMove::blockCheck) || move.options.test(NPCMove::moveDirBlockCheck))
 		{
 			if (auto levelPtr = getLevel(); levelPtr != nullptr)
 			{
@@ -438,21 +440,45 @@ void NPC::processMoveQueue(std::chrono::milliseconds deltaTime)
 					boundingBox.position = translatePosition(potentialPosition, 8, 16);
 				}
 
-				// The onwall check depends on direction.
-				PixelPosition onwallPosition;
-				switch (character.direction)
+				std::array<bool, 4> checkPositions{false, false, false, false};
+
+				// Mark the current direction as a check position.
+				if (move.options.test(NPCMove::blockCheck))
+					checkPositions[character.direction] = true;
+
+				// If we are also testing the current movement direction, add those too.
+				if (move.options.test(NPCMove::moveDirBlockCheck))
 				{
-					case 0: onwallPosition = boundingBox.topcenter(); break;
-					case 1: onwallPosition = boundingBox.leftcenter(); break;
-					case 3: onwallPosition = boundingBox.rightcenter(); break;
-					default: onwallPosition = boundingBox.bottomcenter(); break;
+					const auto displacement = move.destination - move.origin;
+					if (displacement.y() < 0) checkPositions[0] = true;
+					if (displacement.x() < 0) checkPositions[1] = true;
+					if (displacement.y() > 0) checkPositions[2] = true;
+					if (displacement.x() > 0) checkPositions[3] = true;
 				}
 
-				// Do the check now.
-				if (levelPtr->isOnWall(onwallPosition))
+				// Test all of our positions now.
+				for (int i = 0; i < 4; ++i)
 				{
-					movementFinished = true;
-					terminateQueue = true;
+					if (checkPositions[i] == false)
+						continue;
+
+					// Calculate the position to check.
+					PixelPosition onwallPosition;
+					switch (i)
+					{
+						case 0: onwallPosition = boundingBox.topcenter(); break;
+						case 1: onwallPosition = boundingBox.leftcenter(); break;
+						case 3: onwallPosition = boundingBox.rightcenter(); break;
+						default: onwallPosition = boundingBox.bottomcenter(); break;
+					}
+
+					// Do the check now.
+					if (levelPtr->isOnWall(onwallPosition))
+					{
+						movementFinished = true;
+						terminateQueue = true;
+						break;
+					}
 				}
 			}
 		}
@@ -461,13 +487,13 @@ void NPC::processMoveQueue(std::chrono::milliseconds deltaTime)
 		if (!movementFinished)
 		{
 			// If the map position changed, set that now.
-			const auto& [mapX, mapY, _] = currentLevel->clampMapPosition(toMapPosition(potentialPosition));
+			const auto& [mapX, mapY, _] = currentLevel->clampMapPositionToLevel(toMapPosition(potentialPosition));
 			if (storageType == NPCStorageType::LEVEL && (mapX != character.mapX || mapY != character.mapY))
 				indexInLevelFile = std::nullopt;
 			if (mapX != character.mapX)
-				setPropWith<NPCProp::GMAPLEVELX>(SetBy::SERVER, mapX);
+				setPropWith<NPCProp::GMAPLEVELX>(SetBy::SERVER, static_cast<uint8_t>(mapX));
 			if (mapY != character.mapY)
-				setPropWith<NPCProp::GMAPLEVELY>(SetBy::SERVER, mapY);
+				setPropWith<NPCProp::GMAPLEVELY>(SetBy::SERVER, static_cast<uint8_t>(mapY));
 
 			// Set the current position.
 			auto localPosition = toLocalPixelPosition(potentialPosition);
@@ -496,6 +522,15 @@ void NPC::processMoveQueue(std::chrono::milliseconds deltaTime)
 			else
 				moveQueue.pop_front();
 		}
+	}
+
+	// The queue got terminated early, so force an X/Y prop to send.
+	if (terminateQueue)
+	{
+		modTime[PROPID(NPCProp::X)] = m_server->getFrameStartTime();
+		modTime[PROPID(NPCProp::Y)] = m_server->getFrameStartTime();
+		modTime[PROPID(NPCProp::X2)] = m_server->getFrameStartTime();
+		modTime[PROPID(NPCProp::Y2)] = m_server->getFrameStartTime();
 	}
 
 	// Still moving, so prevent position props from updating.
@@ -1470,7 +1505,7 @@ SetResults NPC::setProp(const NPCProp prop, const SetBy setBy, PropertyBase* bas
 
 			if (const auto map = levelPtr->getMap(); map != nullptr)
 			{
-				auto clamped = levelPtr->clampMapPosition({numProp->value, character.mapY});
+				auto clamped = levelPtr->clampMapPositionToLevel({numProp->value, character.mapY});
 				character.mapX = clamped.x();
 				indexInLevelFile = std::nullopt;
 			}
@@ -1485,7 +1520,7 @@ SetResults NPC::setProp(const NPCProp prop, const SetBy setBy, PropertyBase* bas
 
 			if (const auto map = levelPtr->getMap(); map != nullptr)
 			{
-				auto clamped = levelPtr->clampMapPosition({character.mapX, numProp->value});
+				auto clamped = levelPtr->clampMapPositionToLevel({character.mapX, numProp->value});
 				character.mapY = clamped.y();
 				indexInLevelFile = std::nullopt;
 			}
@@ -2001,7 +2036,7 @@ void NPC::constructScriptParameters()
 				// Fix the map position if applicable.
 				if (const auto levelPtr = getLevel(); levelPtr != nullptr && levelPtr->isGmap())
 				{
-					if (const auto mapX = levelPtr->clampMapPosition(toMapPosition(globalPosition)).x(); mapX != character.mapX)
+					if (const auto mapX = levelPtr->clampMapPositionToLevel(toMapPosition(globalPosition)).x(); mapX != character.mapX)
 					{
 						character.mapX = mapX;
 						modTime[PROPID(NPCProp::GMAPLEVELX)] = now;
@@ -2032,7 +2067,7 @@ void NPC::constructScriptParameters()
 				// Fix the map position if applicable.
 				if (const auto levelPtr = getLevel(); levelPtr != nullptr && levelPtr->isGmap())
 				{
-					if (const auto mapY = levelPtr->clampMapPosition(toMapPosition(globalPosition)).y(); mapY != character.mapY)
+					if (const auto mapY = levelPtr->clampMapPositionToLevel(toMapPosition(globalPosition)).y(); mapY != character.mapY)
 					{
 						character.mapY = mapY;
 						modTime[PROPID(NPCProp::GMAPLEVELY)] = now;
@@ -2180,8 +2215,8 @@ void NPC::testForLinks(SetResults& result)
 	// Gmaps are treated as one large map, and so level npcs can freely walk across maps (source: post=1193766)
 	if (levelPtr->isGmap())
 	{
-		const auto computedMapChangeX = static_cast<int8_t>(character.localPixelX / 1024);
-		const auto computedMapChangeY = static_cast<int8_t>(character.localPixelY / 1024);
+		const auto computedMapChangeX = static_cast<MapPosition::ValueType>(character.localPixelX / 1024);
+		const auto computedMapChangeY = static_cast<MapPosition::ValueType>(character.localPixelY / 1024);
 		const auto computedLocalX = static_cast<int16_t>(std::abs(character.localPixelX % 1024));
 		const auto computedLocalY = static_cast<int16_t>(std::abs(character.localPixelY % 1024));
 
@@ -2189,9 +2224,9 @@ void NPC::testForLinks(SetResults& result)
 		// If they did, alter their map location.
 		if (computedMapChangeX != 0 || computedMapChangeY != 0)
 		{
-			// Seihai: brace-init from int is a narrowing error on MSVC. Below 0 becomes 0, not 255.
-			const auto toMapCoord = [](const int value) { return static_cast<uint8_t>(std::clamp(value, 0, 255)); };
-			auto clamped = levelPtr->clampMapPosition({toMapCoord(character.mapX + computedMapChangeX), toMapCoord(character.mapY + computedMapChangeY)});
+			// Seihai: brace-init from int is a narrowing error on MSVC; clampMapPositionToLevel keeps it on the map.
+			const auto toMapCoord = [](const int value) { return static_cast<MapPosition::ValueType>(std::clamp(value, -32768, 32767)); };
+			auto clamped = levelPtr->clampMapPositionToLevel({toMapCoord(computedMapChangeX + character.mapX), toMapCoord(computedMapChangeY + character.mapY)});
 			character.mapX = clamped.x();
 			character.mapY = clamped.y();
 			result.resultPropIds.push_back(PROPID(NPCProp::GMAPLEVELX));
@@ -2213,7 +2248,7 @@ void NPC::testForLinks(SetResults& result)
 		return;
 
 	// Test for links.
-	static Position<float> touchTest[] = {{2, 1}, {0, 2}, {2, 4}, {3, 2}};
+	static TilePosition touchTest[] = {{2, 1}, {0, 2}, {2, 4}, {3, 2}};
 	const TilePosition testPos = character.getTilePosition().translate(touchTest[character.direction].x(), touchTest[character.direction].y());
 	if (const auto linkTouched = levelPtr->getLink(testPos); linkTouched.has_value())
 	{

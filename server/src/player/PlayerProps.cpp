@@ -926,7 +926,7 @@ SetResults Player::setProp(PlayerProp prop, SetBy setBy, PropertyBase* base)
 			if (auto subLevel = level->getSubLevelAtPosition(getMapPosition()); subLevel != nullptr)
 				leaveSubLevel(subLevel);
 
-			auto mapPosition = level->clampMapPosition({numProp->value, account.character.mapY});
+			auto mapPosition = level->clampMapPositionToLevel({numProp->value, account.character.mapY});
 			if (auto levelData = level->getStaticLevelDataAtPosition(mapPosition); levelData != nullptr)
 			{
 				account.character.mapX = mapPosition.x();
@@ -959,7 +959,7 @@ SetResults Player::setProp(PlayerProp prop, SetBy setBy, PropertyBase* base)
 			if (auto subLevel = level->getSubLevelAtPosition(getMapPosition()); subLevel != nullptr)
 				leaveSubLevel(subLevel);
 
-			auto mapPosition = level->clampMapPosition({account.character.mapX, numProp->value});
+			auto mapPosition = level->clampMapPositionToLevel({account.character.mapX, numProp->value});
 			if (auto levelData = level->getStaticLevelDataAtPosition(mapPosition); levelData != nullptr)
 			{
 				account.character.mapY = mapPosition.y();

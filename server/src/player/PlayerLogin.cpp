@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-12, 2026-11-18: see CHANGES-SEIHAI.md.
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -24,6 +24,25 @@
 ///////////////////////////////////////////////////////////////////////////////
 namespace preagonal
 {
+///////////////////////////////////////////////////////////////////////////////
+
+static bool isOriginalClient(CString& pPacket)
+{
+	// Read Client-Version for v1.3 clients
+	auto version = pPacket.readChars(8);
+	auto versionId = getVersionID(version);
+
+	// 1.41 registers itself as PLTYPE_CLIENT, but starts with an encryption key, so skip that for the version check.
+	if (versionId == CLVER_UNKNOWN)
+	{
+		pPacket.setRead(2);	// type + key
+		version = pPacket.readChars(8);
+		versionId = getVersionID(version);
+	}
+
+	return versionId <= CLVER_1_411;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
 PlayerLogin::PlayerLogin(CSocket* pSocket, const PlayerID pId)
@@ -128,7 +147,7 @@ std::optional<HandlePacketResult> PlayerLogin::msgSecureHello(CString& pPacket, 
 
 	// Read the next frame as a login frame again, and stay registered for it.
 	PacketCount = 0;
-	LoginParsed = false;
+	ProcessedLoginPacket = false;
 	LoginLeftover.clear();
 	return HandlePacketResult::Handled;
 }
@@ -170,7 +189,8 @@ HandlePacketResult PlayerLogin::createPlayer(CString& pPacket, const int type, c
 	std::shared_ptr<Player> player = nullptr;
 	if (type & PLTYPE_ANYCLIENT)
 	{
-		if (type == PLTYPE_CLIENT)
+		// PlayerClientOriginal is for 1.x clients, so try to read the version information first.
+		if (type == PLTYPE_CLIENT && isOriginalClient(pPacket))
 			player = std::make_shared<PlayerClientOriginal>(m_playerSock, m_id);
 		else player = std::make_shared<PlayerClient>(m_playerSock, m_id);
 	}
@@ -192,7 +212,7 @@ HandlePacketResult PlayerLogin::createPlayer(CString& pPacket, const int type, c
 
 	// Update the new player's current packet state to match ours.
 	player->PacketCount = 1;
-	player->LoginParsed = true;
+	player->ProcessedLoginPacket = true;
 	player->setReceivedBuffer(m_recvBuffer);
 
 	// Remove ourselves from the server.

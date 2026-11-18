@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-16: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-16, 2026-11-18: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <any>
 #include <array>
@@ -742,9 +742,9 @@ GS1ScriptValue fn_getz(GS1Visitor* visitor, const std::vector<GS1ScriptValue*>& 
 
 	if (const auto level = visitor->findCurrentLevel(); level != nullptr)
 	{
-		auto x = static_cast<float>(GS1Visitor::getScriptValueAsCopy<double>(*arguments[0]).value_or(0.0));
-		auto y = static_cast<float>(GS1Visitor::getScriptValueAsCopy<double>(*arguments[1]).value_or(0.0));
-		return GameValue{level->getHeightAt(toPixelPosition({x, y}))};
+		const auto x = static_cast<float>(GS1Visitor::getScriptValueAsCopy<double>(*arguments[0]).value_or(0.0));
+		const auto y = static_cast<float>(GS1Visitor::getScriptValueAsCopy<double>(*arguments[1]).value_or(0.0));
+		return GameValue{level->getHeightAt(toPixelPosition(TilePosition{x, y}))};
 	}
 
 	return GameValue{0.0};
@@ -1119,12 +1119,12 @@ GS1ScriptValue fn_onwall(GS1Visitor* visitor, const std::vector<GS1ScriptValue*>
 	if (arguments.size() != 2)
 		throw std::invalid_argument("invalid arguments: onwall(x, y)");
 
-	auto x = static_cast<float>(GS1Visitor::getScriptValueAsCopy<double>(*arguments[0]).value_or(0.0));
-	auto y = static_cast<float>(GS1Visitor::getScriptValueAsCopy<double>(*arguments[1]).value_or(0.0));
+	const auto x = static_cast<float>(GS1Visitor::getScriptValueAsCopy<double>(*arguments[0]).value_or(0.0));
+	const auto y = static_cast<float>(GS1Visitor::getScriptValueAsCopy<double>(*arguments[1]).value_or(0.0));
 
 	if (const auto level = visitor->findCurrentLevel(); level != nullptr)
 	{
-		if (level->isOnWall(toPixelPosition({x, y})))
+		if (level->isOnWall(toPixelPosition(TilePosition{x, y})))
 			return GameValue{true};
 
 		if (const auto source = visitor->findNearestScriptObjectSourceFromStack(ScriptObjectType::NPC); source.has_value())
@@ -1135,9 +1135,9 @@ GS1ScriptValue fn_onwall(GS1Visitor* visitor, const std::vector<GS1ScriptValue*>
 				const auto subLevel = level->getSubLevelAtPosition(npc->character.getMapPosition());
 				if (subLevel == nullptr)
 					return GameValue{true};
-				if (!npc->noPlayerOnWall && !subLevel->isNoPkZone && level->isOnPlayer(toPixelPosition({x, y})))
+				if (!npc->noPlayerOnWall && !subLevel->isNoPkZone && level->isOnPlayer(toPixelPosition(TilePosition{x, y})))
 					return GameValue{true};
-				if (level->testNPC(toPixelPosition({x, y}), npc->id) >= 0)
+				if (level->testNPC(toPixelPosition(TilePosition{x, y}), npc->id).first >= 0)
 					return GameValue{true};
 			}
 		}
@@ -1155,14 +1155,14 @@ GS1ScriptValue fn_onwall2(GS1Visitor* visitor, const std::vector<GS1ScriptValue*
 	if (arguments.size() != 4)
 		throw std::invalid_argument("invalid arguments: onwall2(x, y, width, height)");
 
-	auto x = static_cast<float>(GS1Visitor::getScriptValueAsCopy<double>(*arguments[0]).value_or(0.0));
-	auto y = static_cast<float>(GS1Visitor::getScriptValueAsCopy<double>(*arguments[1]).value_or(0.0));
-	auto width = DoubleAsIntegralFloor<uint16_t>(GS1Visitor::getScriptValueAsCopy<double>(*arguments[2]).value_or(0.0) * 16);
-	auto height = DoubleAsIntegralFloor<uint16_t>(GS1Visitor::getScriptValueAsCopy<double>(*arguments[3]).value_or(0.0) * 16);
+	const auto x = static_cast<float>(GS1Visitor::getScriptValueAsCopy<double>(*arguments[0]).value_or(0.0));
+	const auto y = static_cast<float>(GS1Visitor::getScriptValueAsCopy<double>(*arguments[1]).value_or(0.0));
+	const auto width = DoubleAsIntegralFloor<uint16_t>(GS1Visitor::getScriptValueAsCopy<double>(*arguments[2]).value_or(0.0) * 16);
+	const auto height = DoubleAsIntegralFloor<uint16_t>(GS1Visitor::getScriptValueAsCopy<double>(*arguments[3]).value_or(0.0) * 16);
 
 	if (const auto level = visitor->findCurrentLevel(); level != nullptr)
 	{
-		if (level->isOnWall2(PixelRectangleArea{toPixelPosition({x, y}), {width, height}}))
+		if (level->isOnWall2(PixelRectangleArea{toPixelPosition(TilePosition{x, y}), {width, height}}))
 			return GameValue{true};
 
 		if (const auto source = visitor->findNearestScriptObjectSourceFromStack(ScriptObjectType::NPC); source.has_value())
@@ -1174,10 +1174,10 @@ GS1ScriptValue fn_onwall2(GS1Visitor* visitor, const std::vector<GS1ScriptValue*
 				if (subLevel == nullptr)
 					return GameValue{true};
 
-				const PixelRectangleArea searchRect{toPixelPosition({x, y}), {width, height}};
+				const PixelRectangleArea searchRect{toPixelPosition(TilePosition{x, y}), {width, height}};
 				if (!npc->noPlayerOnWall && !subLevel->isNoPkZone && level->isOnPlayer(searchRect))
 					return GameValue{true};
-				if (level->testNPC(searchRect, npc->id) >= 0)
+				if (level->testNPC(searchRect, npc->id).first >= 0)
 					return GameValue{true};
 			}
 		}
@@ -1198,7 +1198,7 @@ GS1ScriptValue fn_onwater(GS1Visitor* visitor, const std::vector<GS1ScriptValue*
 
 	if (const auto level = visitor->findCurrentLevel(); level != nullptr)
 	{
-		if (level->isOnWater(toPixelPosition({x, y})))
+		if (level->isOnWater(toPixelPosition(TilePosition{x, y})))
 			return GameValue{true};
 	}
 
@@ -1219,7 +1219,7 @@ GS1ScriptValue fn_onwater2(GS1Visitor* visitor, const std::vector<GS1ScriptValue
 
 	if (const auto level = visitor->findCurrentLevel(); level != nullptr)
 	{
-		if (level->isOnWater2(PixelRectangleArea{toPixelPosition({x, y}), {width, height}}))
+		if (level->isOnWater2(PixelRectangleArea{toPixelPosition(TilePosition{x, y}), {width, height}}))
 			return GameValue{true};
 	}
 
@@ -1707,9 +1707,7 @@ GS1ScriptValue fn_tiletype(GS1Visitor* visitor, const std::vector<GS1ScriptValue
 	{
 		const auto x = GS1Visitor::getScriptValueAsCopy<double>(*arguments[0]).value_or(0.0);
 		const auto y = GS1Visitor::getScriptValueAsCopy<double>(*arguments[1]).value_or(0.0);
-
-		const auto tilePosition = toTilePosition(Position<double>{x, y});
-		return GameValue{static_cast<double>(ENUM(level->getTileTypeAt(toWholeTilePosition(tilePosition))))};
+		return GameValue{static_cast<double>(ENUM(level->getTileTypeAt(toWholeTilePosition(TilePosition{static_cast<float>(x), static_cast<float>(y)}))))};
 	}
 
 	// Not found?  Default to blocking.
