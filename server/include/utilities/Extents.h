@@ -832,8 +832,8 @@ inline constexpr Dimension<in_tiles, T> toTileBasedDimension(const Dimension<Uni
 	else if constexpr (std::same_as<Unit, in_pixels>)
 	{
 		if constexpr (std::floating_point<O> && std::integral<T>)
-			return DestDimension{static_cast<T>(fixEpsilon(dimension.width())) / 16, static_cast<T>(fixEpsilon(dimension.height())) / 16, static_cast<T>(fixEpsilon(dimension.length())) / 16};
-		else return DestDimension{static_cast<T>(dimension.width()) / 16, static_cast<T>(dimension.height()) / 16, static_cast<T>(dimension.length()) / 16};
+			return DestDimension{static_cast<T>(static_cast<T>(fixEpsilon(dimension.width())) / 16), static_cast<T>(static_cast<T>(fixEpsilon(dimension.height())) / 16), static_cast<T>(static_cast<T>(fixEpsilon(dimension.length())) / 16)};
+		else return DestDimension{static_cast<T>(static_cast<T>(dimension.width()) / 16), static_cast<T>(static_cast<T>(dimension.height()) / 16), static_cast<T>(static_cast<T>(dimension.length()) / 16)};
 	}
 	else if constexpr (std::same_as<Unit, in_tiles>)
 	{
@@ -854,14 +854,14 @@ inline constexpr Dimension<in_levels, T> toMapBasedDimension(const Dimension<Uni
 	if constexpr (std::same_as<Unit, in_pixels>)
 	{
 		if constexpr (std::floating_point<O> && std::integral<T>)
-			return DestDimension{static_cast<T>(fixEpsilon(dimension.width() + 1023)) / 1024, static_cast<T>(fixEpsilon(dimension.length() + 1023)) / 1024, static_cast<T>(fixEpsilon(dimension.length() + 1023)) / 1024};
+			return DestDimension{static_cast<T>(static_cast<T>(fixEpsilon(dimension.width() + 1023)) / 1024), static_cast<T>(static_cast<T>(fixEpsilon(dimension.length() + 1023)) / 1024), static_cast<T>(static_cast<T>(fixEpsilon(dimension.length() + 1023)) / 1024)};
 		else return DestDimension{static_cast<T>((dimension.width() + 1023) / 1024), static_cast<T>((dimension.length() + 1023) / 1024), static_cast<T>((dimension.length() + 1023) / 1024)};
 	}
 	else if constexpr (std::same_as<Unit, in_tiles>)
 	{
 		if constexpr (std::floating_point<O> && std::integral<T>)
-			return DestDimension{static_cast<T>(fixEpsilon(dimension.width() + 63)) / 64, static_cast<T>(fixEpsilon(dimension.length() + 63)) / 64, static_cast<T>(fixEpsilon(dimension.length() + 63)) / 64};
-		else return DestDimension{static_cast<T>((dimension.width() + 63)) / 64, static_cast<T>((dimension.length() + 63)) / 64, static_cast<T>((dimension.length() + 63)) / 64};
+			return DestDimension{static_cast<T>(static_cast<T>(fixEpsilon(dimension.width() + 63)) / 64), static_cast<T>(static_cast<T>(fixEpsilon(dimension.length() + 63)) / 64), static_cast<T>(static_cast<T>(fixEpsilon(dimension.length() + 63)) / 64)};
+		else return DestDimension{static_cast<T>(static_cast<T>((dimension.width() + 63)) / 64), static_cast<T>(static_cast<T>((dimension.length() + 63)) / 64), static_cast<T>(static_cast<T>((dimension.length() + 63)) / 64)};
 	}
 	else if constexpr (std::same_as<Unit, in_levels>)
 	{
