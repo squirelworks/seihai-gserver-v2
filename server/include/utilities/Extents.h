@@ -535,8 +535,8 @@ inline constexpr Position<in_tiles, T> toTileBasedPosition(const Position<Unit, 
 	else if constexpr (std::same_as<Unit, in_pixels>)
 	{
 		if constexpr (std::floating_point<O> && std::integral<T>)
-			return DestPosition{static_cast<T>(fixEpsilon(position.x())) / 16, static_cast<T>(fixEpsilon(position.y())) / 16, static_cast<T>(fixEpsilon(position.z())) / 16};
-		else return DestPosition{static_cast<T>(position.x()) / 16, static_cast<T>(position.y()) / 16, static_cast<T>(position.z()) / 16};
+			return DestPosition{static_cast<T>(static_cast<T>(fixEpsilon(position.x())) / 16), static_cast<T>(static_cast<T>(fixEpsilon(position.y())) / 16), static_cast<T>(static_cast<T>(fixEpsilon(position.z())) / 16)};
+		else return DestPosition{static_cast<T>(static_cast<T>(position.x()) / 16), static_cast<T>(static_cast<T>(position.y()) / 16), static_cast<T>(static_cast<T>(position.z()) / 16)};
 	}
 	else if constexpr (std::same_as<Unit, in_tiles>)
 	{
@@ -578,14 +578,14 @@ inline constexpr Position<in_levels, T> toMapBasedPosition(const Position<Unit, 
 	if constexpr (std::same_as<Unit, in_pixels>)
 	{
 		if constexpr (std::floating_point<O> && std::integral<T>)
-			return DestPosition{static_cast<T>(fixEpsilon(position.x())) / 1024, static_cast<T>(fixEpsilon(position.y())) / 1024, static_cast<T>(fixEpsilon(position.z())) / 1024};
-		else return DestPosition{static_cast<T>(position.x()) / 1024, static_cast<T>(position.y()) / 1024, static_cast<T>(position.z()) / 1024};
+			return DestPosition{static_cast<T>(static_cast<T>(fixEpsilon(position.x())) / 1024), static_cast<T>(static_cast<T>(fixEpsilon(position.y())) / 1024), static_cast<T>(static_cast<T>(fixEpsilon(position.z())) / 1024)};
+		else return DestPosition{static_cast<T>(static_cast<T>(position.x()) / 1024), static_cast<T>(static_cast<T>(position.y()) / 1024), static_cast<T>(static_cast<T>(position.z()) / 1024)};
 	}
 	else if constexpr (std::same_as<Unit, in_tiles>)
 	{
 		if constexpr (std::floating_point<O> && std::integral<T>)
-			return DestPosition{static_cast<T>(fixEpsilon(position.x())) / 64, static_cast<T>(fixEpsilon(position.y())) / 64, static_cast<T>(fixEpsilon(position.z())) / 64};
-		return DestPosition{static_cast<T>(position.x()) / 64, static_cast<T>(position.y()) / 64, static_cast<T>(position.z()) / 64};
+			return DestPosition{static_cast<T>(static_cast<T>(fixEpsilon(position.x())) / 64), static_cast<T>(static_cast<T>(fixEpsilon(position.y())) / 64), static_cast<T>(static_cast<T>(fixEpsilon(position.z())) / 64)};
+		return DestPosition{static_cast<T>(static_cast<T>(position.x()) / 64), static_cast<T>(static_cast<T>(position.y()) / 64), static_cast<T>(static_cast<T>(position.z()) / 64)};
 	}
 	else if constexpr (std::same_as<Unit, in_levels>)
 	{
