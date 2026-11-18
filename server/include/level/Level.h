@@ -679,7 +679,7 @@ inline PixelPosition Level::convertToMapPosition(const MapPosition& mapPosition,
 		auto correctMapPosition = clampMapPositionToLevel(mapPosition);
 		return { (static_cast<int32_t>(position.x()) * static_cast<int32_t>(pixelPerTile.width())) + (correctMapPosition.x() * static_cast<int32_t>(pixelPerPart.width())), (static_cast<int32_t>(position.y()) * static_cast<int32_t>(pixelPerTile.height())) + (correctMapPosition.y() * static_cast<int32_t>(pixelPerPart.height())), static_cast<int32_t>(position.z()) * static_cast<int32_t>(pixelPerTile.length()) };
 	}
-	return {static_cast<PixelDimension::ValueType>(position.x() * pixelPerTile.width()), static_cast<PixelDimension::ValueType>(position.y() * pixelPerTile.height()), static_cast<PixelDimension::ValueType>(position.z() * pixelPerTile.length())};
+	return {static_cast<PixelPosition::ValueType>(position.x() * pixelPerTile.width()), static_cast<PixelPosition::ValueType>(position.y() * pixelPerTile.height()), static_cast<PixelPosition::ValueType>(position.z() * pixelPerTile.length())};
 }
 
 inline MapPosition Level::clampMapPositionToLevel(const MapPosition& mapPosition) const noexcept
