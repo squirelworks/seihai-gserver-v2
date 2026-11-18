@@ -729,7 +729,7 @@ std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file, const 
 	if (isClient() && m_versionId < CLVER_2_14)
 	{
 		if (fileData.size() > 64000)
-			return {sendFailure("File too large for client version"), isBigFile};
+			return {sendFailure(std::format("File '{}' is too large for client version", filename)), isBigFile};
 
 		isBigFile = false;
 	}
@@ -1354,7 +1354,7 @@ void Player::setPosition(const PixelPosition& position)
 
 	if (const auto level = getLevel(); level != nullptr && level->isGmap())
 	{
-		const auto mapPosition = level->clampMapPosition(toMapPosition(position));
+		const auto mapPosition = level->clampMapPositionToLevel(toMapPosition(position));
 		account.character.mapX = mapPosition.x();
 		account.character.mapY = mapPosition.y();
 	}
@@ -1555,7 +1555,7 @@ void Player::constructScriptParameters()
 				// Fix the map position if applicable.
 				if (const auto levelPtr = getLevel(); levelPtr != nullptr && levelPtr->isGmap())
 				{
-					if (const auto mapX = levelPtr->clampMapPosition(toMapPosition(globalPosition)).x(); mapX != account.character.mapX)
+					if (const auto mapX = levelPtr->clampMapPositionToLevel(toMapPosition(globalPosition)).x(); mapX != account.character.mapX)
 					{
 						account.character.mapX = mapX;
 						modTime[PROPID(PlayerProp::GMAPLEVELX)] = now;
@@ -1584,7 +1584,7 @@ void Player::constructScriptParameters()
 				// Fix the map position if applicable.
 				if (const auto levelPtr = getLevel(); levelPtr != nullptr && levelPtr->isGmap())
 				{
-					if (const auto mapY = levelPtr->clampMapPosition(toMapPosition(globalPosition)).y(); mapY != account.character.mapY)
+					if (const auto mapY = levelPtr->clampMapPositionToLevel(toMapPosition(globalPosition)).y(); mapY != account.character.mapY)
 					{
 						account.character.mapY = mapY;
 						modTime[PROPID(PlayerProp::GMAPLEVELY)] = now;
@@ -1753,7 +1753,25 @@ void Player::constructScriptParameters()
 	// colors
 	const size_t colorCount = m_server->isNewWorldMode() ? 8 : 5;
 	for (size_t i = 0; i < colorCount; ++i)
+	{
 		bind::bindPropertyAsReadWrite(scriptParameters, bind::IntegralProperty{.name = colorPropertyNames[i], .modTime = std::ref(modTime[PROPID(PlayerProp::COLORS)]), .value = std::ref(account.character.colors[i])});
+		bind::bindPropertyAsReadWrite(scriptParameters, bind::ManuallyDefinedProperty<std::string>{
+			.name = colorPropertyNames[i],
+			.getter = [this, i](std::optional<size_t>) -> GameValueVariantForGetter
+			{
+				return std::string{getColorNameFromId(account.character.colors[i])};
+			},
+			.setter = [this, i](const GameValueVariantForSetter& incoming, std::optional<int64_t>)
+			{
+				if (const auto value = std::get_if<std::reference_wrapper<std::string>>(&incoming); value != nullptr)
+				{
+					const auto colorId = getColorIdFromName(value->get());
+					account.character.colors[i] = colorId;
+					modTime[PROPID(PlayerProp::COLORS)] = m_server->getFrameStartTime();
+				}
+			}
+		});
+	}
 
 	// gani attributes
 	for (size_t i = 0; i < 30; ++i)

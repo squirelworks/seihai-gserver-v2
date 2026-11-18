@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-07: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-07, 2026-11-18: see CHANGES-SEIHAI.md.
 #ifndef IPACKETHANDLER_H
 #define IPACKETHANDLER_H
 
@@ -200,10 +200,6 @@ public:
 	// the gen-3 iterator one step behind for the whole session.
 	CString LoginLeftover;
 
-	// Lab: set once the login packet is parsed. processBuffer used PacketCount == 0 for this,
-	// but PLI_PACKETCOUNT resets the count, so a frame that arrives after a lone id 31 (1.3x
-	// clients send one every 10 s) was read as a new login and counted as invalid.
-	bool LoginParsed = false;
 	void processLoginLeftover(CString& bundle) { parsePacketsFromBundle(bundle); }
 
 public:
@@ -215,6 +211,7 @@ public:
 	PacketHandleMode HandleMode = PacketHandleMode::OLDPROTOCOL;
 	bool RemoveNewlinesFromRawPacket = false;
 	bool RemoveNewlineFromFileUpload = false;
+	bool ProcessedLoginPacket = false;
 
 protected:
 	bool m_nextIsRaw = false;
@@ -237,7 +234,7 @@ inline void IPacketHandler::processBuffer(CString& buffer)
 		processPacketBundle(bundle);
 
 		// Parse the packets.
-		if (LoginParsed || PacketCount != 0) [[likely]]
+		if (ProcessedLoginPacket) [[likely]]
 			parsePacketsFromBundle(bundle);
 		else
 		{
@@ -388,7 +385,10 @@ inline void IPacketHandler::parsePacketsFromBundle(CString& bundle)
 inline void IPacketHandler::parseLoginPacket(CString& buffer)
 {
 	++PacketCount;
-	LoginParsed = true;
+	// Seihai: set here, before the login is handled, rather than after parseLoginPacket
+	// returns as upstream does, so a SEI00001 hello can clear it again and have the
+	// next frame read as a login frame.
+	ProcessedLoginPacket = true;
 
 	// Pull out the packet.
 	auto packet = buffer.readString("\n");

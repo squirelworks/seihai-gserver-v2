@@ -70,6 +70,7 @@ struct CachedLevel
 
 //----------------------------
 
+/// @brief Player that represents a 2.x+ client.
 class PlayerClient : public Player
 {
 	// TODO(refactor): Need to refactor some Player functions like sendFile so this can be removed.

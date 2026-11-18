@@ -1574,7 +1574,8 @@ std::shared_ptr<NPC> Server::addNPC(const std::string_view image, const std::str
 		newNPC->scriptType = type;
 
 	// Set NPC props.
-	auto localPixelPosition = toLocalPixelPosition(x, y);
+	const auto tilePosition = TilePosition{x, y};
+	const auto localPixelPosition = toLocalPixelPosition(tilePosition);
 	newNPC->character.localPixelX = localPixelPosition.x();
 	newNPC->character.localPixelY = localPixelPosition.y();
 	newNPC->image = image;
@@ -1587,7 +1588,7 @@ std::shared_ptr<NPC> Server::addNPC(const std::string_view image, const std::str
 		// If the level is a gmap, set the modTime on the map position props.
 		if (const auto map = levelPtr->getMap(); map && map->isGmap())
 		{
-			auto mapPosition = levelPtr->clampMapPosition(toMapPosition(TilePosition{x, y}));
+			auto mapPosition = levelPtr->clampMapPositionToLevel(toMapPosition(tilePosition));
 			newNPC->character.mapX = mapPosition.x();
 			newNPC->character.mapY = mapPosition.y();
 			newNPC->modTime[PROPID(NPCProp::GMAPLEVELX)] = m_frameStartTime;
@@ -2629,7 +2630,7 @@ void Server::sendShootToOneLevel(const LevelShoot* shoot, const std::shared_ptr<
 	constexpr float pi = std::numbers::pi_v<float>;
 	constexpr float halfpi = pi / 2;
 
-	const auto mapPosition = level->clampMapPosition(toMapPosition(shoot->position));
+	const auto mapPosition = level->clampMapPositionToLevel(toMapPosition(shoot->position));
 
 	ShootPacketWrapper newPacket{};
 	newPacket.source = (shoot->from.second == ScriptObjectType::NPC ? shoot->from.first : 0);
@@ -2641,7 +2642,7 @@ void Server::sendShootToOneLevel(const LevelShoot* shoot, const std::shared_ptr<
 	newPacket.power = shoot->powerIn44TileParts;
 	newPacket.gravityInTiles = shoot->gravity;
 	newPacket.gani = shoot->gani;
-	newPacket.shootParams = string::toCSV(getShootParams());
+	newPacket.shootParams = getShootParams();
 
 	const CString oldPacketBuf = CString() >> (char)PLO_SHOOT >> (short)0 << newPacket.constructShootV1();
 	const CString newPacketBuf = CString() >> (char)PLO_SHOOT2 >> (short)0 << newPacket.constructShootV2();

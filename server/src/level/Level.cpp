@@ -352,7 +352,7 @@ double SubLevel::getHeightAt(const LocalPixelPosition& position) const noexcept
 	if (!terrain.has_value() || terrain.value().heightmap.empty())
 		return 0.0;
 
-	auto tilePosition = toTilePosition(position);
+	auto tilePosition = toLocalTilePosition(position);
 
 	// Determine the origin tile for our calculation.
 	// This will be the top-left tile within the quad we are calculating the height for.
@@ -360,28 +360,28 @@ double SubLevel::getHeightAt(const LocalPixelPosition& position) const noexcept
 	if (tilePosition.x() > 64) originTile.x() = 64;
 	if (tilePosition.y() > 64) originTile.y() = 64;
 
-	auto heightAtPosition = [&](const TilePosition& pos) -> double
+	auto heightAtPosition = [&](const LocalTilePosition& pos) -> double
 	{
 		return terrain.value().heightmap[static_cast<size_t>(pos.y() * 65 + pos.x())];
 	};
 
 	// Generate 3D coordinates for our tiles.
-	TilePosition topLeft = toTilePosition(originTile);
-	TilePosition topRight = toTilePosition(translatePosition(originTile, 1_ui8, 0_ui8));
-	TilePosition bottomLeft = toTilePosition(translatePosition(originTile, 0_ui8, 1_ui8));
+	LocalTilePosition topLeft = toLocalTilePosition(originTile);
+	LocalTilePosition topRight = toLocalTilePosition(translatePosition(originTile, 1, 0));
+	LocalTilePosition bottomLeft = toLocalTilePosition(translatePosition(originTile, 0, 1));
 	topLeft.z() = static_cast<float>(heightAtPosition(topLeft));
 	topRight.z() = static_cast<float>(heightAtPosition(topRight));
 	bottomLeft.z() = static_cast<float>(heightAtPosition(bottomLeft));
 
 	// Calculate our direction vectors.
-	const Position<float> vecU = topRight - topLeft;
-	const Position<float> vecV = bottomLeft - topLeft;
+	const LocalTilePosition vecU = topRight - topLeft;
+	const LocalTilePosition vecV = bottomLeft - topLeft;
 
 	// Determine our tile offset.
-	TilePosition offset{tilePosition.x() - topLeft.x(), tilePosition.y() - topLeft.y()};
+	LocalTilePosition offset{tilePosition.x() - topLeft.x(), tilePosition.y() - topLeft.y()};
 
 	// Calculate our point using the offset along the direction vectors.
-	TilePosition point = topLeft + (vecU * offset.x()) + (vecV * offset.y());
+	LocalTilePosition point = topLeft + (vecU * offset.x()) + (vecV * offset.y());
 
 	return point.z();
 }
@@ -918,7 +918,7 @@ void Level::reload(const StaticLevelDataPtr& staticData)
 	// Delete items.
 	for (size_t i = m_items.size(); i > 0; --i)
 	{
-		if (toMapPosition(m_items[i].position) == mapPosition)
+		if (toMapPosition(m_items[i - 1].position) == mapPosition)
 			removeItem(inform_client, i - 1);
 	}
 
@@ -1237,7 +1237,7 @@ std::generator<std::pair<const LevelSign*, WholeTilePosition>> Level::getSignPos
 		if (const auto sdata = m_levelParts.at(0)->staticData.lock(); sdata != nullptr)
 		{
 			for (const auto& sign : sdata->signs)
-				co_yield std::make_pair(&sign, WholeTilePosition{static_cast<uint16_t>(sign.getTileX()), static_cast<uint16_t>(sign.getTileY())});
+				co_yield std::make_pair(&sign, toWholeTilePosition(TilePosition{sign.getTileX(), sign.getTileY()}));
 		}
 	}
 	else
@@ -1248,7 +1248,7 @@ std::generator<std::pair<const LevelSign*, WholeTilePosition>> Level::getSignPos
 			{
 				auto origin = toWholeTilePosition(getSubLevelOrigin(levelPtr).value_or(PixelPosition{}));
 				for (const auto& sign : sdata->signs)
-					co_yield std::make_pair(&sign, translatePosition(origin, static_cast<uint16_t>(sign.getTileX()), static_cast<uint16_t>(sign.getTileY())));
+					co_yield std::make_pair(&sign, translatePosition(origin, toWholeTilePosition(TilePosition{sign.getTileX(), sign.getTileY()})));
 			}
 		}
 	}
@@ -1707,6 +1707,8 @@ bool Level::alterBoard(CString& tileData, const WholeTileRectangleArea& area, Pl
 			// Determine the area within the part.
 			auto localRect = clipLocalWholeTileRectangleArea(mapPosition, area);
 
+			DEBUGPRINT("[BOARD] Creating {}x{} board alteration on map ({}, {}): pos ({}, {}), size: ({},{})", area.size.width(), area.size.height(), partX, partY, localRect.position.x(), localRect.position.y(), localRect.size.width(), localRect.size.height());
+
 			// Delete any existing changes contained within the same region.
 			std::erase_if(sourcePart->boardChanges, [&localRect](const LevelBoardChange& change)
 			{
@@ -1786,12 +1788,12 @@ void Level::applyBoardChangeFromScriptTiles(const WholeTileRectangleArea& area, 
 			for (size_t x = 0; x < localArea.size.width(); ++x)
 			{
 				// Get the tile from the sub-level.
-				auto sourcePosition = Position<size_t>(localArea.position.x() + x, localArea.position.y() + y);
-				auto tile = subTiles->at(sourcePosition.y() * 64 + sourcePosition.x());
+				const auto sourcePosition = Position<in_tiles, size_t>(localArea.position.x() + x, localArea.position.y() + y);
+				const auto tile = subTiles->at(sourcePosition.y() * 64 + sourcePosition.x());
 
 				// Set the tile in the destination array, calculating the position relative to the origin of the area.
 				// This will let us pick the appropriate index.
-				auto destPosition = Position<size_t>(displacement.x() + x, displacement.y() + y);
+				const auto destPosition = Position<in_tiles, size_t>(displacement.x() + x, displacement.y() + y);
 				tiles[destPosition.y() * area.size.width() + destPosition.x()] = tile;
 			}
 		}
@@ -1851,12 +1853,12 @@ void Level::saveBoardChangeFromScriptTiles(const WholeTileRectangleArea& area) c
 	}
 }
 
-void Level::updateBoard(const TileRectangleArea& area) noexcept
+void Level::updateBoard(const WholeTileRectangleArea& area) noexcept
 {
-	applyBoardChangeFromScriptTiles(toWholeTileRectangleArea(area), true);
+	applyBoardChangeFromScriptTiles(area, true);
 }
 
-void Level::updateBoard2(const TileRectangleArea& area) noexcept
+void Level::updateBoard2(const WholeTileRectangleArea& area) noexcept
 {
 	// If we don't allow permanent tile modifications, just call updateBoard().
 	if (m_server->cached.enablePermanentTileChanges.getValue() == false)
@@ -1865,8 +1867,7 @@ void Level::updateBoard2(const TileRectangleArea& area) noexcept
 		return;
 	}
 
-	const auto wholeTileArea = toWholeTileRectangleArea(area);
-	applyBoardChangeFromScriptTiles(wholeTileArea, false, false);
+	applyBoardChangeFromScriptTiles(area, false, false);
 
 	// ReSharper disable once CppTooWideScope
 	const bool levelsAutoSave = m_server->cached.saveTileChangesToLevelFile.getValue();
@@ -1875,7 +1876,7 @@ void Level::updateBoard2(const TileRectangleArea& area) noexcept
 		const auto mapPosition = toMapPosition(area.position);
 		if (const auto staticData = getStaticLevelDataAtPosition(mapPosition); staticData != nullptr)
 		{
-			saveBoardChangeFromScriptTiles(wholeTileArea);
+			saveBoardChangeFromScriptTiles(area);
 			saveLevel(mapPosition, staticData->levelName);
 		}
 	}
@@ -2307,14 +2308,14 @@ void Level::addSpyFire(const PixelPosition& position, const ScriptObject& from, 
 		// clang-format off
 		const auto lengthInPixels = static_cast<int16_t>((length + 1) * 32);
 		PixelPosition testPosition = startingPosition.translate(
-			static_cast<int16_t>((direction == 1) ? -lengthInPixels : 0),
-			static_cast<int16_t>((direction == 0) ? -lengthInPixels : 0)
+			static_cast<PixelPosition::ValueType>((direction == 1) ? -lengthInPixels : 0),
+			static_cast<PixelPosition::ValueType>((direction == 0) ? -lengthInPixels : 0)
 		);
 		// clang-format on
 
-		Dimension<uint16_t> testDimension{
-			static_cast<uint16_t>((direction == 0 || direction == 2) ? 32 : lengthInPixels),
-			static_cast<uint16_t>((direction == 1 || direction == 3) ? 32 : lengthInPixels)
+		PixelDimension testDimension{
+			static_cast<PixelDimension::ValueType>((direction == 0 || direction == 2) ? 32 : lengthInPixels),
+			static_cast<PixelDimension::ValueType>((direction == 1 || direction == 3) ? 32 : lengthInPixels)
 		};
 
 		const auto center = translatePosition(startingPosition, 16, 16);
@@ -2589,19 +2590,19 @@ LevelShoot* Level::addShoot(const LevelShoot* existingShoot)
 	return &m_shoots.back();
 }
 
-LevelShoot* Level::addShoot(inform_client_t, const PixelPosition& position, const float angle, const float zangle, const uint8_t power, const float gravity, const std::string& gani, const ScriptObject& from)
+LevelShoot* Level::addShoot(inform_client_t, const PixelPosition& position, const float angle, const float zangle, const uint8_t power, const float gravity, const std::string& gani, const std::string& shootParams, const ScriptObject& from)
 {
 	if (!m_server->hasNPCServer())
 		return nullptr;
 
-	const auto result = addShoot(position, angle, zangle, power, gravity, gani, from);
+	const auto result = addShoot(position, angle, zangle, power, gravity, gani, shootParams, from);
 	if (result != nullptr)
 		m_server->sendShootToOneLevel(result, shared_from_this());
 
 	return result;
 }
 
-LevelShoot* Level::addShoot(const PixelPosition& position, const float angle, const float zangle, const uint8_t power, const float gravity, const std::string& gani, const ScriptObject& from)
+LevelShoot* Level::addShoot(const PixelPosition& position, const float angle, const float zangle, const uint8_t power, const float gravity, const std::string& gani, const std::string& shootParams, const ScriptObject& from)
 {
 	if (!m_server->hasNPCServer())
 		return nullptr;
@@ -2610,7 +2611,7 @@ LevelShoot* Level::addShoot(const PixelPosition& position, const float angle, co
 	const double ground = getHeightAt(position.translate(8, 16));
 	tilePosition.translate(0, 0, static_cast<float>(ground));
 
-	LevelShoot newShoot{.position = tilePosition, .angle = angle, .zangle = zangle, .powerIn44TileParts = power, .gani = gani, .gravity = gravity, .from = from};
+	LevelShoot newShoot{.position = tilePosition, .angle = angle, .zangle = zangle, .powerIn44TileParts = power, .gani = gani, .gravity = gravity, .shootParams = shootParams, .from = from};
 	if (!newShoot.gani.empty() && newShoot.gani.back() == ',')
 		newShoot.gani.pop_back();
 	newShoot.calculateSpeeds();
@@ -2618,10 +2619,10 @@ LevelShoot* Level::addShoot(const PixelPosition& position, const float angle, co
 	return &m_shoots.back();
 }
 
-LevelShoot* Level::addShoot(const PixelPosition& position, const uint8_t angle, const uint8_t zangle, const uint8_t power, const float gravity, const std::string& gani, const ScriptObject& from)
+LevelShoot* Level::addShoot(const PixelPosition& position, const uint8_t angle, const uint8_t zangle, const uint8_t power, const float gravity, const std::string& gani, const std::string& shootParams, const ScriptObject& from)
 {
 	constexpr auto pi = std::numbers::pi_v<float>;
-	return addShoot(position, (static_cast<float>(angle) / 220.0f) * (2 * pi), ((static_cast<float>(zangle) / 110.0f) - 1.0f) * (pi / 2), power, gravity, gani, from);
+	return addShoot(position, (static_cast<float>(angle) / 220.0f) * (2 * pi), ((static_cast<float>(zangle) - 110) / 110.0) * (pi / 2), power, gravity, gani, shootParams, from);
 }
 
 bool Level::removeShoot(const uint8_t index)
@@ -2686,23 +2687,24 @@ bool Level::moveShoot(LevelShoot* shoot, const int iterations) const
 	{
 		// If the shoot is out of bounds, delete it.
 		const auto levelDimensions = sizeInTiles();
-		if (shoot->position.x() < 0 || shoot->position.y() < 0 || shoot->position.x() >= static_cast<float>(levelDimensions.width()) || shoot->position.y() >= static_cast<float>(levelDimensions.height()))
+		if (shoot->lifetime > 7s ||  shoot->position.x() < 0 || shoot->position.y() < 0 || shoot->position.x() >= static_cast<float>(levelDimensions.width()) || shoot->position.y() >= static_cast<float>(levelDimensions.height()))
 			return false;
 
 		// Move the shoot.
 		shoot->move();
+		shoot->lifetime += 50ms;
 
 		bool collided = false;
 		std::string eventParams;
 		auto constructEventParams = [&collided, &eventParams, &shoot]()
 		{
-			if (!eventParams.empty()) return;
+			if (!eventParams.empty() || collided) return;
 			collided = true;
 			eventParams = std::format("{},{}", shoot->position.x(), shoot->position.y());
 			if (!shoot->shootParams.empty())
 			{
 				eventParams += ',';
-				eventParams += string::toCSV(shoot->shootParams);
+				eventParams += shoot->shootParams;
 			}
 		};
 
@@ -2716,16 +2718,27 @@ bool Level::moveShoot(LevelShoot* shoot, const int iterations) const
 		// Check for NPC collisions.
 		//log::printLine(log::server, "Collision search pos: ({}), ground: {}", searchPosition / 16.0f, currentGroundLevel / 16.0f);
 		const bool fromPlayer = (shoot->from.second == ScriptObjectType::PLAYER);
-		for (const auto& npc : findIntersectingNPCsForCollision({pixelPosition, {24_ui16, 24_ui16, 48_ui16}}))
+		const auto searchPosition = PixelRectangleArea{pixelPosition, PixelDimension{24_ui16, 24_ui16, 48_ui16}};
+		for (const auto& npc : findIntersectingNPCsForCollision(searchPosition))
 		{
 			if (shoot->from.second == ScriptObjectType::NPC && shoot->from.first == npc)
 				continue;
 			if (auto npcPtr = m_server->getNPC(npc); npcPtr != nullptr)
 			{
-				//log::printLine(log::server, "Collision ({}) with NPC '{}' at ({})", searchPosition / 16.0f, npcPtr->name, npcPos);
+				DEBUGPRINT("[SHOOT] Collision ({}) with NPC '{}' at ({})", toTilePosition(searchPosition.position), npcPtr->name, npcPtr->getTilePosition());
 				constructEventParams();
 				npcPtr->scripting.events.addEvent(ScriptEventType::TRIGGERACTION, shoot->from, (fromPlayer ? "projectile" : "sprojectile"), eventParams);
 			}
+		}
+
+		// Check for player collisions.
+		if (const auto [targetIndex, targetId] = testPlayer(searchPosition); targetIndex!= -1 && targetId != shoot->from.first)
+		{
+			constructEventParams();
+			DEBUGPRINT("[SHOOT] Collision ({}) with player at index {}", toTilePosition(searchPosition.position), targetId);
+
+			// Override this so we use the hit player in the event.
+			shoot->from = source::FromPlayer(targetId);
 		}
 
 		// If we are within 3 tiles of the ground, and we aren't going up, check for walls and the ground.
@@ -2733,12 +2746,12 @@ bool Level::moveShoot(LevelShoot* shoot, const int iterations) const
 		if (!collided && groundDiff <= 48 && (DoubleIsZero(shoot->movementPerFrame.z()) || shoot->movementPerFrame.z() <= 0.0))
 		{
 			// Check if we hit the ground.
-			if (pixelPosition.z() <= currentGroundLevel)
+			if (pixelPosition.z() <= currentGroundLevel && !DoubleIsZero(shoot->gravity))
 				constructEventParams();
 
 			// Check for wall collisions.
 			const bool onWallDetection = m_server->cached.projectilesStopOnWall.getValue() && groundDiff < 48;
-			if (!collided && onWallDetection && isOnWall2(WholeTileRectangleArea{toWholeTilePosition(pixelPosition), {1_ui8, 1_ui8}}))
+			if (!collided && onWallDetection && isOnWall2(toWholeTileRectangleArea(searchPosition)))
 				constructEventParams();
 		}
 
@@ -2769,11 +2782,11 @@ bool Level::moveArrow(LevelArrow* arrow, const int iterations)
 		if (std::abs(arrow->position.x() - arrow->startPosition.x()) > maxDistance || std::abs(arrow->position.y() - arrow->startPosition.y()) > maxDistance)
 			return false;
 
-		constexpr std::array<Dimension<uint16_t>, 4> hitboxDimensions = {
-			Dimension<uint16_t>{3_i32, 0_i32},  // up
-			Dimension<uint16_t>{32_i32, 0_i32}, // left
-			Dimension<uint16_t>{3_i32, 32_i32}, // down
-			Dimension<uint16_t>{32_i32, 0_i32}, // right
+		constexpr std::array hitboxDimensions = {
+			PixelDimension{3_i32, 0_i32},  // up
+			PixelDimension{32_i32, 0_i32}, // left
+			PixelDimension{3_i32, 32_i32}, // down
+			PixelDimension{32_i32, 0_i32}, // right
 		};
 
 		// Arrow collision bounding box.
@@ -2897,9 +2910,9 @@ bool Level::isOnWall(const PixelPosition& position) const noexcept
 bool Level::isOnWall2(const WholeTileRectangleArea& tileArea) const noexcept
 {
 	// TODO(optimize): Optimize this.
-	for (auto cy = tileArea.position.y(); cy < tileArea.position.y() + std::max(1_ui8, tileArea.size.height()); ++cy)
+	for (auto cy = tileArea.position.y(); cy < tileArea.position.y() + std::max(1_ui16, tileArea.size.height()); ++cy)
 	{
-		for (auto cx = tileArea.position.x(); cx < tileArea.position.x() + std::max(1_ui8, tileArea.size.width()); ++cx)
+		for (auto cx = tileArea.position.x(); cx < tileArea.position.x() + std::max(1_ui16, tileArea.size.width()); ++cx)
 		{
 			if (isOnWall(WholeTilePosition{cx, cy}))
 				return true;
@@ -2927,9 +2940,9 @@ bool Level::isOnWater(const PixelPosition& position) const noexcept
 bool Level::isOnWater2(const WholeTileRectangleArea& tileArea) const noexcept
 {
 	// TODO(optimize): Optimize this.
-	for (auto cy = tileArea.position.y(); cy < tileArea.position.y() + std::max(1_ui8, tileArea.size.height()); ++cy)
+	for (auto cy = tileArea.position.y(); cy < tileArea.position.y() + std::max(1_ui16, tileArea.size.height()); ++cy)
 	{
-		for (auto cx = tileArea.position.x(); cx < tileArea.position.x() + std::max(1_ui8, tileArea.size.width()); ++cx)
+		for (auto cx = tileArea.position.x(); cx < tileArea.position.x() + std::max(1_ui16, tileArea.size.width()); ++cx)
 		{
 			if (isOnWater(WholeTilePosition{cx, cy}))
 				return true;
@@ -3006,7 +3019,7 @@ bool Level::isOnPlayer(const PixelRectangleArea& pixelArea) const noexcept
 	return false;
 }
 
-std::ptrdiff_t Level::testNPC(const PixelPosition& position, const std::optional<NPCID> initiator) const noexcept
+std::pair<std::ptrdiff_t, NPCID> Level::testNPC(const PixelPosition& position, const std::optional<NPCID> initiator) const noexcept
 {
 	std::ptrdiff_t index = 0;
 
@@ -3018,17 +3031,17 @@ std::ptrdiff_t Level::testNPC(const PixelPosition& position, const std::optional
 			if (positionInRectangle(position, npc->getCollisionBoundingBox()))
 			{
 				if (initiator.has_value() && id == initiator.value())
-					return -1;
-				return index;
+					return {-1, id};
+				return {index, id};
 			}
 		}
 		++index;
 	}
 
-	return -2;
+	return {-2, 0};
 }
 
-std::ptrdiff_t Level::testNPC(const PixelRectangleArea& pixelArea, const std::optional<NPCID> initiator) const noexcept
+std::pair<std::ptrdiff_t, NPCID> Level::testNPC(const PixelRectangleArea& pixelArea, const std::optional<NPCID> initiator) const noexcept
 {
 	std::ptrdiff_t index = 0;
 
@@ -3040,17 +3053,17 @@ std::ptrdiff_t Level::testNPC(const PixelRectangleArea& pixelArea, const std::op
 			if (rectanglesIntersect(pixelArea, npc->getCollisionBoundingBox()))
 			{
 				if (initiator.has_value() && id == initiator.value())
-					return -1;
-				return index;
+					return {-1, id};
+				return {index, id};
 			}
 		}
 		++index;
 	}
 
-	return -2;
+	return {-2, 0};
 }
 
-std::ptrdiff_t Level::testPlayer(const PixelPosition& position) const noexcept
+std::pair<std::ptrdiff_t, PlayerID> Level::testPlayer(const PixelPosition& position) const noexcept
 {
 	std::ptrdiff_t index = 0;
 
@@ -3060,15 +3073,15 @@ std::ptrdiff_t Level::testPlayer(const PixelPosition& position) const noexcept
 		if (auto player = m_server->getPlayer(id); player != nullptr)
 		{
 			if (positionInRectangle(position, player->getCollisionBoundingBox()))
-				return index;
+				return {index, id};
 		}
 		++index;
 	}
 
-	return -1;
+	return {-1, 0};
 }
 
-std::ptrdiff_t Level::testPlayer(const PixelRectangleArea& pixelArea) const noexcept
+std::pair<std::ptrdiff_t, PlayerID> Level::testPlayer(const PixelRectangleArea& pixelArea) const noexcept
 {
 	std::ptrdiff_t index = 0;
 
@@ -3078,12 +3091,12 @@ std::ptrdiff_t Level::testPlayer(const PixelRectangleArea& pixelArea) const noex
 		if (auto player = m_server->getPlayer(id); player != nullptr)
 		{
 			if (rectanglesIntersect(pixelArea, player->getCollisionBoundingBox()))
-				return index;
+				return {index, id};
 		}
 		++index;
 	}
 
-	return -1;
+	return {-1, 0};
 }
 
 tileset::TileType Level::getTileTypeAt(const WholeTilePosition& tilePosition) const noexcept
@@ -3624,7 +3637,7 @@ std::shared_ptr<NPC> Level::generateItemNPC(const PixelPosition& position, const
 	// Create a new npc for this item.
 	if (!itemNPC)
 	{
-		itemNPC = m_server->getNPCServer()->addNPC("", std::format("if (created) join {};", itemName), shared_from_this(), {loc[0], loc[1]}, NPCTYPE_ITEM);
+		itemNPC = m_server->getNPCServer()->addNPC("", std::format("if (created) join {};", itemName), shared_from_this(), loc, NPCTYPE_ITEM);
 		itemNPC->character.gralats = itemNPC->character.arrows = itemNPC->character.bombs = itemNPC->character.hitpointsInHalves = 0;
 	}
 

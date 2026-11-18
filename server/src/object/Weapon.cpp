@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-12, 2026-11-13, 2026-11-16: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-18: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -414,7 +414,7 @@ void Weapon::calculateHeaderChecksum(const ScriptByteCode& bytecode) const
 	const auto& script = m_script.getOriginalSource();
 
 	// Set the cryptographic key to be the script's hash.
-	// This will become the DES encryption key the client will use the encrypt the bytecode.
+	// This will become the DES encryption key the client will use to encrypt the bytecode.
 	constexpr string::string_hash hash{};
 	auto scriptHash = static_cast<uint64_t>(hash(script));
 
@@ -434,8 +434,8 @@ void Weapon::calculateHeaderChecksum(const ScriptByteCode& bytecode) const
 		keyBytes[4 + i] = static_cast<uint8_t>(hashBytes[1] >> (8 * i));
 	}
 	const auto stored = seihai::scriptCacheEncrypt(std::string_view{reinterpret_cast<const char*>(bytecode.data()), bytecode.size()}, keyBytes);
-	m_checksum = crc32(0L, Z_NULL, 0);
-	m_checksum = crc32(m_checksum, stored.data(), static_cast<uInt>(stored.size()));
+	m_encryptedChecksum = crc32(0L, Z_NULL, 0);
+	m_encryptedChecksum = crc32(m_encryptedChecksum, stored.data(), static_cast<uInt>(stored.size()));
 
 	// Seihai (#26): 4.04r2 to 4.20r8 cache a weapon as the raw bytes of its PLO_WEAPONBYTECODE (132), in
 	// weblevels/weapons/<name>.code, and 193 compares the zlib CRC32 of that file with its GINT5
@@ -458,7 +458,7 @@ void Weapon::calculateHeaderChecksum(const ScriptByteCode& bytecode) const
 	// Header with CRC32.
 	// Seihai: the CRC is a GINT5, like the key fields, the class header's CRC (ScriptClass) and PLO_WEAPONHASH.
 	// CString's long long constructor writes decimal text ("847531159"), which no GINT5 reader decodes to the CRC.
-	const CString crc32 = CString() >> static_cast<long long>(m_checksum);
+	const CString crc32 = CString() >> static_cast<long long>(m_encryptedChecksum);
 	headerParts.push_back(crc32.toString());
 	m_headerWithCRC = string::toCSV(headerParts);
 }

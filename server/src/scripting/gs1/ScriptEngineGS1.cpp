@@ -477,6 +477,7 @@ bool ScriptEngineGS1::execute(ScriptEvent& event, std::vector<ScriptEventType>* 
 
 	if (context->script != nullptr)
 		cleanup(*wrapper);
+
 	return true;
 }
 
@@ -524,6 +525,7 @@ bool ScriptEngineGS1::executeFunction(const std::string_view function, ScriptEve
 
 	if (context->script != nullptr)
 		cleanup(*wrapper);
+
 	return true;
 }
 

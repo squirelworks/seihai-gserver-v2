@@ -71,27 +71,41 @@ struct ServerFixture
 		player->constructScriptParameters();
 
 		// Configure Test NPC.
-		const auto npc = npcServer->addNPC("door.png"sv, ""sv, nullptr, TilePosition{20.0f, 30.0f}, NPCTYPE_OBJECT);
+		auto npc = npcServer->addNPC("door.png"sv, ""sv, nullptr, TilePosition{20.0f, 30.0f}, NPCTYPE_OBJECT);
 		npc->name = "Test";
 		testNPC = npc->id;
 
+		// Configure second Test NPC.
+		npc = npcServer->addNPC("bcalarmclock.png"sv, ""sv, nullptr, TilePosition{25.0f, 35.0f}, NPCTYPE_OBJECT);
+		npc->name = "Test2";
+		testNPC2 = npc->id;
+
 		// Configure Test Clients.
 		client = std::make_shared<PlayerClient>(new CSocket(), server->getPlayerIdGenerator().getAvailableId());
+		client2 = std::make_shared<PlayerClient>(new CSocket(), server->getPlayerIdGenerator().getAvailableId());
 		rc = std::make_shared<PlayerRC>(new CSocket(), server->getPlayerIdGenerator().getAvailableId());
 		client->setType(PLTYPE_CLIENT2);
+		client2->setType(PLTYPE_CLIENT2);
 		rc->setType(PLTYPE_RC);
 		server->addPlayer(client, client->getId());
+		server->addPlayer(client2, client2->getId());
 		server->addPlayer(rc, rc->getId());
 		npcServer->playerLogin(client);
+		npcServer->playerLogin(client2);
 		npcServer->playerLogin(rc);
+		client->account.name = "Player1";
+		client->account.deaths = 33;
+		client2->account.name = "Player2";
 	}
 
 	NPCID testNPC = NPCID_GEN_DATABASE_LOCALN;
+	NPCID testNPC2 = NPCID_GEN_DATABASE_LOCALN + 1;
 	Server* server = nullptr;
 	ITranslationManager* translationManager = nullptr;
 	std::shared_ptr<NPCServer> npcServer;
 	std::shared_ptr<gs1::ScriptEngineGS1> engine;
 	std::shared_ptr<PlayerClient> client;
+	std::shared_ptr<PlayerClient> client2;
 	std::shared_ptr<PlayerRC> rc;
 };
 
@@ -114,8 +128,8 @@ static gs1::GS1ScriptWrapper* get_wrapper(const CompiledScriptResult& result, co
 
 static bool execute_script(IScriptEngine& engine, ScriptEvent& event, const ScriptObject& source, CompiledScriptResult& result, const std::source_location location = std::source_location::current())
 {
-	const auto failure = std::get_if<1>(&result);
-	const std::string error{failure ? failure->second : ""};
+	const auto str = std::get_if<std::pair<ScriptCompilationFailureType, std::string>>(&result);
+	const std::string error{str != nullptr ? str->second : ""};
 
 	CAPTURE(location.line());
 	CAPTURE(location.function_name());
@@ -759,7 +773,7 @@ TEST_CASE_METHOD(ServerFixture, "ScriptEngineGS1 executes basic expressions", "[
 
 ////////////////////////////////////////////////////////////////////////////////
 
-TEST_CASE_METHOD(ServerFixture, "ScriptEngineGS1 compiles and executes simple expressions", "[Scripting][IScriptEngine][GS1]")
+TEST_CASE_METHOD(ServerFixture, "ScriptEngineGS1 compiles and executes simple targeted expressions", "[Scripting][IScriptEngine][GS1]")
 {
 	SECTION("compiled string expression")
 	{
@@ -812,33 +826,71 @@ TEST_CASE_METHOD(ServerFixture, "ScriptEngineGS1 npc and player bindings and cro
 
 				setstring level.test,LevelHello!;
 
-				this.px = players[0].x;
+				for (i = 0; i < playerscount; i++) {
+					if (players[i].deaths == 33) break;
+				}
+
+				this.px = players[i].x;
+
+				this.base = 3;
+				with (getnpc(Test2)) {
+					this.base = 42;
+					thiso.base = 6;
+					y = 10;
+				}
+
+				client.fakevar = 3;
+				with (getplayer(Player2)) {
+					client.fakevar = 42;
+					cliento.fakevar = 6;
+					x = 5;
+					playerx = 10;
+				}
 			}
 		)";
 		auto npc = server->getNPC(testNPC);
+		auto npc2 = server->getNPC(testNPC2);
 
 		auto level = std::make_shared<Level>();
 		level->levelName = "TestLevel";
 		npc->setLevel(level);
 		client->account.character.localPixelX = (36 * 16);
 		level->addPlayer(client->getId());
+		level->addPlayer(client2->getId());
+
+		engine->settings.set("always-scope-variables", false);
 
 		auto result = engine->compileScript(ScriptCompilationTarget::SERVER, "test_script", script);
 		REQUIRE(execute_script(*engine, created, source::FromNPC(testNPC), result));
 
+		engine->settings.set("always-scope-variables", true);
+
 		auto wrapper = get_wrapper(result);
 		auto scriptStore = wrapper->visitor->builtInStore;
 		CHECK_THAT(scriptStore->getValue<double>("contextVar").value_or(0.0), Catch::Matchers::WithinRel(42.0));
+		CHECK_THAT(scriptStore->getValue<double>("client.fakevar").value_or(0.0), Catch::Matchers::WithinRel(42.0));
+		CHECK_THAT(scriptStore->getValue<double>("cliento.fakevar").value_or(0.0), Catch::Matchers::WithinRel(6.0));
 
 		auto npcstore = &npc->scripting.variables;
 		CHECK_THAT(npcstore->getValue<double>("npcVar").value_or(0.0), Catch::Matchers::WithinRel(33.0));
 		CHECK_THAT(npcstore->getValue<std::string>("npcFlag").value_or(std::string{}), Catch::Matchers::Equals("World!"));
 		CHECK_THAT(npcstore->getValue<double>("px").value_or(0.0), Catch::Matchers::WithinRel(36.0));
+		CHECK_THAT(npcstore->getValue<double>("base").value_or(0.0), Catch::Matchers::WithinRel(6.0));
+		CHECK_THAT(npc->scriptParameters["x"].getCopy<double>().value_or(0.0) , Catch::Matchers::WithinRel(5.0));
+
+		auto npc2store = &npc2->scripting.variables;
+		CHECK_THAT(npc2store->getValue<double>("base").value_or(0.0), Catch::Matchers::WithinRel(42.0));
+		CHECK_THAT(npc2->scriptParameters["y"].getCopy<double>().value_or(0.0), Catch::Matchers::WithinRel(10.0));
 
 		auto playerstore = &player->account.variables;
 		CHECK_THAT(playerstore->getValue<std::string>("playerFlag").value_or(std::string{}), Catch::Matchers::Equals("Hello!"));
 		CHECK_THAT(playerstore->getValue<std::string>("client.playerFlag").value_or(std::string{}), Catch::Matchers::Equals("World!"));
 		CHECK(playerstore->getValue<bool>("clientr.playerFlag").value_or(false) == true);
+		CHECK_FALSE(playerstore->contains("client.fakevar"));
+		CHECK_FALSE(playerstore->contains("cliento.fakevar"));
+
+		// player2
+		CHECK_THAT(client2->scriptParameters["x"].getCopy<double>().value_or(0.0), Catch::Matchers::WithinRel(10.0));
 
 		auto serverstore = &server->Scripting.variables;
 		CHECK(serverstore->getValue<bool>("server.Test").value_or(false) == true);
@@ -933,6 +985,11 @@ TEST_CASE_METHOD(ServerFixture, "ScriptEngineGS1 npc and player bindings and cro
 				setstring this.message,Hello, #n!;
 				setplayerprop #n,Altered;
 				setstring this.message2,Hello, #n!;
+				setplayerprop #C0,green;
+				setplayerprop #C1,black;
+				setplayerprop #C2,red;
+				setplayerprop #C2,#C2;
+				setplayerprop #C3,#C0;
 			}
 		)";
 		auto result = engine->compileScript(ScriptCompilationTarget::SERVER, "test_script", script);
@@ -944,6 +1001,10 @@ TEST_CASE_METHOD(ServerFixture, "ScriptEngineGS1 npc and player bindings and cro
 		CHECK(store->getValue<std::string>("message2").value_or(std::string{}) == "Hello, Altered!");
 
 		CHECK(player->account.character.nickName == "Altered");
+		CHECK(player->account.character.colors[0] == ENUM(ClassicColors::GREEN));
+		CHECK(player->account.character.colors[1] == ENUM(ClassicColors::BLACK));
+		CHECK(player->account.character.colors[2] == ENUM(ClassicColors::RED));
+		CHECK(player->account.character.colors[3] == ENUM(ClassicColors::GREEN));
 	}
 
 	SECTION("player properties can be changed")
@@ -962,11 +1023,12 @@ TEST_CASE_METHOD(ServerFixture, "ScriptEngineGS1 npc and player bindings and cro
 		auto result = engine->compileScript(ScriptCompilationTarget::SERVER, "test_script", script);
 		REQUIRE(execute_script(*engine, created, source::FromNPC(3), result));
 
-		CHECK(player->account.character.colors[0] == 2);
-		CHECK(player->account.character.colors[1] == 0);
-		CHECK(player->account.character.colors[2] == 10);
-		CHECK(player->account.character.colors[3] == 13);
-		CHECK(player->account.character.colors[4] == 13);
+		// std::array<uint8_t, 8> colors{2, 0, 10, 4, 18, 18, 18, 18}; // 0-19 are ClassicColors, 20+ are HTMLColors
+		CHECK(player->account.character.colors[0] == ENUM(ClassicColors::ORANGE));
+		CHECK(player->account.character.colors[1] == ENUM(ClassicColors::WHITE));
+		CHECK(player->account.character.colors[2] == ENUM(ClassicColors::BLUE));
+		CHECK(player->account.character.colors[3] == ENUM(ClassicColors::CYNOBER));
+		CHECK(player->account.character.colors[4] == ENUM(ClassicColors::CYNOBER));
 		CHECK(player->account.character.headImage == "head2.png");
 		CHECK_FALSE(player->account.character.sprite == 16);
 		CHECK(player->account.character.sprite == 10);
@@ -1087,7 +1149,7 @@ TEST_CASE_METHOD(ServerFixture, "ScriptEngineGS1 server bindings", "[Scripting][
 
 		const auto wrapper = get_wrapper(result);
 		const auto store = wrapper->visitor->builtInStore;
-		CHECK_THAT(store->getValue<double>("test").value_or(0.0), Catch::Matchers::WithinRel(2.0));
+		CHECK_THAT(store->getValue<double>("test").value_or(0.0), Catch::Matchers::WithinRel(3.0));
 	}
 }
 

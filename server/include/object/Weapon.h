@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-18: see CHANGES-SEIHAI.md.
 #ifndef WEAPON_H
 #define WEAPON_H
 
@@ -94,7 +94,7 @@ protected:
 	LevelItemType m_weaponDefault;
 	Script m_script;
 	// Seihai: mutable because the GS1 bytecode is compiled on first use, and the header follows it.
-	mutable uint32_t m_checksum = 0;
+	mutable uint32_t m_encryptedChecksum = 0;
 	mutable uint32_t m_plainChecksum = 0;	// Seihai (#26): CRC32 of the bytecode as sent in PLO_WEAPONBYTECODE (132).
 	mutable std::string m_desKey;
 	mutable std::string m_header;
