@@ -542,18 +542,20 @@ void Player::sendPacket(const CString& packet, const PacketQueue channel)
 	}
 
 	// Seihai (#107): a classic server writes prop 10 in the 1.x bow form, but 2.0 and later read it as a gani. They
-	// drew no players at all; they now get the player's gani in its place.
+	// drew no players at all; they now get the player's gani in its place, a stock head as .png and the body.
 	if (isClient() && m_server != nullptr && m_server->Generation == ServerGeneration::CLASSIC
 		&& m_versionId >= CLVER_2_0 && m_versionId != CLVER_UNKNOWN)
 	{
 		if (const auto packetId = static_cast<unsigned char>(packet[0]) - 32; packetId == PLO_PLAYERPROPS || packetId == PLO_OTHERPLPROPS)
 		{
-			const CString rewritten = legacy::rewritePacketForPost20OnClassic(packet, [this](const std::optional<uint16_t> otherId) -> std::string
+			const CString rewritten = legacy::rewritePacketForPost20OnClassic(packet, [this](const std::optional<uint16_t> otherId) -> legacy::Post20Look
 			{
 				if (!otherId.has_value())
-					return account.character.gani;
+					return {account.character.gani, account.character.bodyImage};
 				const auto other = m_server->getPlayer(static_cast<PlayerID>(otherId.value()));
-				return other != nullptr ? other->account.character.gani : std::string{};
+				if (other == nullptr)
+					return {};
+				return {other->account.character.gani, other->account.character.bodyImage};
 			});
 			return sendPacketUnchecked(rewritten, channel);
 		}

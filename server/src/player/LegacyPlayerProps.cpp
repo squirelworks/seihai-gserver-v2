@@ -260,12 +260,14 @@ CString rewritePacketForPre21(const CString& packet, const int versionId, const 
 	return packet;
 }
 
-CString rewriteBowPropForPost20(const CString& props, const std::string_view gani)
+CString rewriteBowPropForPost20(const CString& props, const std::string_view gani, const std::string_view body)
 {
 	CString in{props};
 	in.setRead(0);
 	CString out;
 	bool changed = false;
+	bool sawHead = false;
+	bool sawBody = false;
 
 	while (in.bytesLeft() > 0)
 	{
@@ -292,28 +294,58 @@ CString rewriteBowPropForPost20(const CString& props, const std::string_view gan
 			out >> (char)propId >> (char)len << std::string_view{name}.substr(0, len);
 			changed = true;
 		}
+		else if (propId == PROPID(PlayerProp::HEADIMAGE))
+		{
+			sawHead = true;
+			CString value = props.subString(start + 1, in.readPos() - start - 1);
+			value.setRead(0);
+			const int first = value.readGUChar();
+			std::string image = first >= 100 ? value.readChars(first - 100).toString() : std::string{};
+			if (stockImageNumber(image, "head") >= 0 && endsWithNoCase(image, ".gif"))
+			{
+				image.replace(image.size() - 4, 4, ".png");
+				out >> (char)propId >> (char)(100 + image.length()) << image;
+				changed = true;
+			}
+			else
+				out << props.subString(start, in.readPos() - start);
+		}
 		else
+		{
+			sawBody = sawBody || propId == PROPID(PlayerProp::BODYIMAGE);
 			out << props.subString(start, in.readPos() - start);
+		}
+	}
+
+	if (sawHead && !sawBody && !body.empty())
+	{
+		const auto len = std::min<size_t>(body.size(), 223);
+		out >> (char)PROPID(PlayerProp::BODYIMAGE) >> (char)len << body.substr(0, len);
+		changed = true;
 	}
 
 	return changed ? out : props;
 }
 
-CString rewritePacketForPost20OnClassic(const CString& packet, const std::function<std::string(std::optional<uint16_t>)>& ganiFor)
+CString rewritePacketForPost20OnClassic(const CString& packet, const std::function<Post20Look(std::optional<uint16_t>)>& lookFor)
 {
 	if (packet.length() < 1)
 		return packet;
 
 	const int packetId = static_cast<unsigned char>(packet[0]) - 32;
 	if (packetId == PLO_PLAYERPROPS)
-		return CString() >> (char)PLO_PLAYERPROPS << rewriteBowPropForPost20(packet.subString(1), ganiFor(std::nullopt));
+	{
+		const auto look = lookFor(std::nullopt);
+		return CString() >> (char)PLO_PLAYERPROPS << rewriteBowPropForPost20(packet.subString(1), look.gani, look.body);
+	}
 
 	if (packetId == PLO_OTHERPLPROPS && packet.length() >= 3)
 	{
 		CString idBytes = packet.subString(1, 2);
 		idBytes.setRead(0);
 		const auto otherId = static_cast<uint16_t>(idBytes.readGUShort());
-		return CString() >> (char)PLO_OTHERPLPROPS << packet.subString(1, 2) << rewriteBowPropForPost20(packet.subString(3), ganiFor(otherId));
+		const auto look = lookFor(otherId);
+		return CString() >> (char)PLO_OTHERPLPROPS << packet.subString(1, 2) << rewriteBowPropForPost20(packet.subString(3), look.gani, look.body);
 	}
 
 	return packet;
