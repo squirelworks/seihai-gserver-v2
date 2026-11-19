@@ -294,6 +294,24 @@ CString rewriteBowPropForPost20(const CString& props, const std::string_view gan
 			out >> (char)propId >> (char)len << std::string_view{name}.substr(0, len);
 			changed = true;
 		}
+		else if (propId == PROPID(PlayerProp::SWORDIMAGE) || propId == PROPID(PlayerProp::SHIELDIMAGE))
+		{
+			// A stock sword or shield named as a .gif (what a classic account names) goes as the .png 2.x ships.
+			const bool sword = propId == PROPID(PlayerProp::SWORDIMAGE);
+			const int named = sword ? 30 : 10;
+			CString value = props.subString(start + 1, in.readPos() - start - 1);
+			value.setRead(0);
+			const int power = value.readGUChar();
+			std::string image = power >= named ? value.readChars(value.readGUChar()).toString() : std::string{};
+			if (stockImageNumber(image, sword ? "sword" : "shield") >= 0 && endsWithNoCase(image, ".gif"))
+			{
+				image.replace(image.size() - 4, 4, ".png");
+				out >> (char)propId >> (char)power >> (char)image.length() << image;
+				changed = true;
+			}
+			else
+				out << props.subString(start, in.readPos() - start);
+		}
 		else if (propId == PROPID(PlayerProp::HEADIMAGE))
 		{
 			sawHead = true;
