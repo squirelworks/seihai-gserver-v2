@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-07, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-18: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-07, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-18, 2026-11-19: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -103,6 +103,8 @@ static PacketHandleArray GeneratePacketHandlers()
 	handlers[PLI_SERVERWARP] = &PlayerClient::msgPLI_SERVERWARP;
 	handlers[PLI_PROCESSLIST] = &PlayerClient::msgPLI_PROCESSLIST;
 	handlers[PLI_ENTERLEVEL] = &PlayerClient::msgPLI_ENTERLEVEL;
+	handlers[PLI_MUTEPLAYER] = &PlayerClient::msgPLI_MUTEPLAYER;
+	handlers[PLI_PROCESSRUNNING] = &PlayerClient::msgPLI_PROCESSRUNNING;
 	handlers[PLI_VERIFYWANTSEND] = &PlayerClient::msgPLI_VERIFYWANTSEND;
 	handlers[PLI_SHOOT2] = &PlayerClient::msgPLI_SHOOT2;
 	handlers[PLI_REQUESTUPDATEBOARD] = &PlayerClient::msgPLI_REQUESTUPDATEBOARD;

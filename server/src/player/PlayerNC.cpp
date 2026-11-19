@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-19: see CHANGES-SEIHAI.md.
 #include <array>
 #include <cstdint>
 #include <optional>
@@ -182,6 +183,10 @@ bool PlayerNC::sendLogin()
 {
 	if (Player::sendLogin() == false)
 		return false;
+
+	// Seihai: name the server first, so seihai-rc knows how this server writes NC text
+	// (backslashes doubled inside quoted lines, RCText.h). seihai-rc #56.
+	sendPacket(CString() >> (char)PLO_RC_CHAT << "Server: GServer-v2 (Seihai) " << APP_VERSION);
 
 	if (const auto npcServer = m_server->getNPCServer(); npcServer != nullptr)
 	{

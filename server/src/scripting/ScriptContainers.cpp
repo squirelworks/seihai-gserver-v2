@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-19: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
@@ -29,10 +30,11 @@ namespace preagonal
 
 clock::time_point helpers::currentFrameTime()
 {
-	static Server* server = nullptr;
-	if (server == nullptr)
-		server = BabyDI::Get<Server>();
-	return server->getFrameStartTime();
+	// Seihai: looked up each time. A cached pointer outlived the Server it named once
+	// another Server was provided (the GS1 tests do that per case), which the
+	// sanitizer job reported as a call through a freed object (#87).
+	const auto* server = BabyDI::Get<Server>();
+	return server != nullptr ? server->getFrameStartTime() : clock::now();
 }
 
 ////////////////////////////////////////////////////////////

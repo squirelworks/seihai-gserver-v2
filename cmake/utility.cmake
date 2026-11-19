@@ -1,4 +1,4 @@
-# Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-11-12, 2026-11-19: see CHANGES-SEIHAI.md.
 function(set_default_compiler_options target ISTESTTARGET)
 
 	# --- Configure compiler -----------------------------------------------------------
@@ -174,7 +174,8 @@ function(add_test_og target target_path)
 	target_link_libraries(${target} PRIVATE ${APP_LIBRARY_NAME_TESTREF} Catch2::Catch2WithMain)
 
 	# Seihai: macOS has no static C runtime (ld: library not found for -lcrt0.o), so the tests link it dynamically there.
-	if(APPLE)
+	# A sanitizer build cannot link -static either (#87).
+	if(APPLE OR SANITIZE)
 		target_link_options(${target} PRIVATE -fstack-protector)
 	elseif(NOT MSVC)
 		target_link_options(${target} PRIVATE -static -fstack-protector)

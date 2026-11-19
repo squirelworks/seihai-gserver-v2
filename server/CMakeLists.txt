@@ -1,4 +1,4 @@
-# Modified by the Seihai project, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-18: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-18, 2026-11-19: see CHANGES-SEIHAI.md.
 #
 #  server/src/CMakeLists.txt
 #
@@ -232,6 +232,10 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 	if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "14.0")
 		target_link_libraries(${TARGET_NAME} PUBLIC stdc++exp)
 	endif()
+# Seihai: Clang on Linux uses GCC's libstdc++, whose <stacktrace> needs the same library
+# (the sanitizer CI job builds with Clang, #87).
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	target_link_libraries(${TARGET_NAME} PUBLIC stdc++exp)
 endif()
 
 # ----------------------------

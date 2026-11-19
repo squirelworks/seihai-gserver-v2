@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-12, 2026-11-13, 2026-11-16: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-19: see CHANGES-SEIHAI.md.
 #ifndef PLAYERCLIENT_H
 #define PLAYERCLIENT_H
 
@@ -212,6 +212,8 @@ public:
 	HandlePacketResult msgPLI_SERVERWARP(CString& pPacket);
 	HandlePacketResult msgPLI_PROCESSLIST(CString& pPacket);
 	HandlePacketResult msgPLI_ENTERLEVEL(CString& pPacket);
+	HandlePacketResult msgPLI_MUTEPLAYER(CString& pPacket);
+	HandlePacketResult msgPLI_PROCESSRUNNING(CString& pPacket);
 	HandlePacketResult msgPLI_UPDATECLASS(CString& pPacket);
 	HandlePacketResult msgPLI_UPDATEGANI(CString& pPacket);
 	HandlePacketResult msgPLI_UPDATESCRIPT(CString& pPacket);
@@ -263,6 +265,16 @@ public:
 	static bool serverWarpReady(clock::time_point now, clock::time_point heldSince, clock::time_point lastFileActivity) noexcept;
 	// The packet ids that count as a file request for the hold.
 	static bool isFileRequest(uint8_t packetId) noexcept;
+	// Seihai: PLI_BADDYADD (17) read and checked (#103). Empty when the body is shorter
+	// than its four fixed bytes, the type is past the dragon or the tile is off the level.
+	struct BaddyAddRequest
+	{
+		float x = 0.0f, y = 0.0f;
+		uint8_t type = 0;
+		uint8_t power = 0;
+		CString image;
+	};
+	static std::optional<BaddyAddRequest> readBaddyAdd(CString& packet);
 	static constexpr std::chrono::seconds SERVERWARP_QUIET{2};
 	static constexpr std::chrono::seconds SERVERWARP_MAX_HOLD{30};
 
