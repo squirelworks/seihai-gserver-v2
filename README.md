@@ -2,6 +2,8 @@
 
 This is the Seihai fork of GServer-v2 `beta4`, with fixes for real 1.33 to 2.31
 clients. What changed and why is in [CHANGES-SEIHAI.md](CHANGES-SEIHAI.md).
+Known bugs, with how to reproduce them and where to start looking, are in
+[KNOWN-ISSUES.md](KNOWN-ISSUES.md).
 Prebuilt Linux, Windows and macOS builds are on the Releases page, each with its
 source. Licence: GPL-3.0, as upstream.
 
