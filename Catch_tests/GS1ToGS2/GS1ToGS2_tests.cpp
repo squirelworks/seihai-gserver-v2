@@ -1,4 +1,4 @@
-// Seihai project, 2026-11-13: see CHANGES-SEIHAI.md.
+// Seihai project, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
 //
 // This file is part of the Seihai fork of GServer-v2 and is released under the
 // GNU General Public License version 3 (see LICENSE.md).
@@ -237,4 +237,39 @@ TEST_CASE("GS1 gr. flag writes are not resent every tick", "[GS1ToGS2]")
 
 	// Account flags are not gated on the client (the server may change them); the server drops unchanged writes.
 	CHECK(gs2("if (created) set gotkey;") == "function onCreated() {\n\ttriggeraction(0, 0, \"gr.flagset\", \"gotkey\");\n}\n");
+}
+
+TEST_CASE("GS2 client scripts are found whether or not they are marked (#110, #113)", "[GS1ToGS2]")
+{
+	// #113: the marker after //#CLIENTSIDE counts.
+	CHECK(gs1::hasGS2Marker("//#GS2\nfunction onCreated() {}"));
+	CHECK(gs1::hasGS2Marker("//#CLIENTSIDE\n//#gs2\nfunction onCreated() {}"));
+	CHECK(gs1::hasGS2Marker("//#CLIENTSIDE\xa7//#GS2\xa7function onCreated() {}"));
+	CHECK_FALSE(gs1::hasGS2Marker("//#CLIENTSIDE\nif (created) setimg a.png;\n//#GS2\n"));
+	CHECK_FALSE(gs1::hasGS2Marker("if (created) setimg a.png;"));
+
+	const auto marked = "//#CLIENTSIDE\n//#GS2\nfunction onCreated() { setimg(\"door.png\"); }\n"s;
+	const auto markedResult = gs1::compileClientScript(marked);
+	REQUIRE(markedResult.ok());
+	CHECK(markedResult.gs2);
+	CHECK(markedResult.bytecode == compileGS2(marked));
+
+	// #110: GS1 cannot lex the string literal, so the script is compiled as GS2.
+	const auto unmarked = "function onCreated() { echo(\"labchat\"); }\n"s;
+	const auto unmarkedResult = gs1::compileClientScript(unmarked);
+	for (const auto& e : unmarkedResult.errors)
+		UNSCOPED_INFO(e);
+	REQUIRE(unmarkedResult.ok());
+	CHECK(unmarkedResult.gs2);
+	CHECK(unmarkedResult.bytecode == compileGS2(unmarked));
+
+	// GS1 stays GS1.
+	const auto door = gs1::compileClientScript(Door);
+	REQUIRE(door.ok());
+	CHECK_FALSE(door.gs2);
+
+	// GS1 that parses but cannot be translated is still refused, not guessed at as GS2.
+	const auto refused = gs1::compileClientScript("if (created) putnpc a.png,x.txt,1,2;");
+	CHECK_FALSE(refused.ok());
+	CHECK_FALSE(refused.gs2);
 }

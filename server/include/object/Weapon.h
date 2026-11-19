@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-18: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-18, 2026-11-19: see CHANGES-SEIHAI.md.
 #ifndef WEAPON_H
 #define WEAPON_H
 
@@ -52,6 +52,8 @@ public:
 	// Seihai: the bytecode a client after 5.07 gets. That is the NPC-server's compiled clientside script; without one,
 	// a GS1 clientside script is translated to GS2 and compiled here (gs1::compileClientScript), as for level NPCs.
 	[[nodiscard]] const ScriptByteCode& getClientByteCode() const;
+	// Seihai (#113): the clientside script is GS2 as written and compiled, so 4.x to 5.12 need its bytecode, not its text.
+	[[nodiscard]] bool clientScriptIsGS2() const;
 
 public:
 	std::string getJoinedClassesList() const;
@@ -101,6 +103,7 @@ protected:
 	mutable std::string m_headerWithCRC;
 	mutable std::optional<std::string> m_gs1ByteCodeSource;
 	mutable ScriptByteCode m_gs1ByteCode;
+	mutable bool m_gs1ByteCodeIsGS2 = false; // Seihai (#113): the clientside script was GS2 as written.
 
 	mutable std::vector<std::pair<EventHandle, std::weak_ptr<ScriptClass>>> m_joinedClasses;
 };

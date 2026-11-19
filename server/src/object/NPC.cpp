@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-18: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-18, 2026-11-19: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -1888,7 +1888,12 @@ bool NPC::sendsGS1ByteCodeTo(const Player& player) const
 	if (m_server->Generation == ServerGeneration::MODERN)
 		return !m_server->hasNPCServer();
 	// Up to 5.07 the client still runs GS1 text, as it does for weapons (Weapon::registerWeaponWithPlayer).
-	return player.getVersion() > CLVER_5_07;
+	if (player.getVersion() > CLVER_5_07)
+		return true;
+	// Seihai (#113): but from 4.042 it cannot run GS2 text, so a GS2 clientside script goes there as bytecode too.
+	if (player.getVersion() >= CLVER_4_042)
+		return !getGS1ClientByteCode().empty() && m_gs1ByteCodeIsGS2;
+	return false;
 }
 
 const std::vector<uint8_t>& NPC::getGS1ClientByteCode() const
@@ -1906,6 +1911,7 @@ const std::vector<uint8_t>& NPC::getGS1ClientByteCode() const
 			log::printLine(log::server, "  {}", error);
 	}
 	m_gs1ByteCode = std::move(compiled.bytecode);
+	m_gs1ByteCodeIsGS2 = compiled.gs2;
 	m_gs1ByteCodeSource = std::move(source);
 	return m_gs1ByteCode;
 }

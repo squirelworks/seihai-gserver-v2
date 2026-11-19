@@ -1,4 +1,4 @@
-// Seihai project, 2026-11-13: see CHANGES-SEIHAI.md.
+// Seihai project, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
 //
 // This file is part of the Seihai fork of GServer-v2 and is released under the
 // GNU General Public License version 3 (see LICENSE.md).
@@ -1718,6 +1718,31 @@ GS2Translation translateToGS2(const std::string_view gs1Source)
 	return result;
 }
 
+bool hasGS2Marker(const std::string_view clientSource)
+{
+	size_t pos = 0;
+	while (pos < clientSource.size())
+	{
+		auto end = clientSource.find_first_of("\n\xa7", pos);
+		if (end == std::string_view::npos)
+			end = clientSource.size();
+
+		auto line = clientSource.substr(pos, end - pos);
+		const auto lineStart = line.find_first_not_of(" \t\r");
+		if (lineStart != std::string_view::npos)
+		{
+			line = line.substr(lineStart);
+			// Only the leading `//#` directive lines count; the first other line ends the search.
+			if (!line.starts_with("//#"))
+				return false;
+			if (line.size() >= 6 && toLower(line.substr(0, 6)) == "//#gs2"sv)
+				return true;
+		}
+		pos = end + 1;
+	}
+	return false;
+}
+
 ClientByteCode compileClientScript(const std::string_view clientSource)
 {
 	ClientByteCode result;
@@ -1728,14 +1753,34 @@ ClientByteCode compileClientScript(const std::string_view clientSource)
 	if (first == std::string::npos)
 		return result;
 
-	// Already GS2.
-	if (const auto view = std::string_view{source}.substr(first); view.size() >= 6 && toLower(view.substr(0, 6)) == "//#gs2"sv)
+	// Already GS2. Seihai (#113): the marker may follow other `//#` lines such as `//#CLIENTSIDE`.
+	if (hasGS2Marker(source))
+	{
 		result.gs2Source = source;
+		result.gs2 = true;
+	}
 	else
 	{
 		auto translation = translateToGS2(source);
 		if (!translation.ok())
 		{
+			// Seihai (#110): text GS1 cannot lex or parse is not GS1, so it is tried as GS2 before giving up. A script
+			// that GS1 reads but cannot translate keeps the translator's errors: GS2 must not guess at GS1 text.
+			const bool notGS1 = std::ranges::all_of(translation.errors, [](const std::string& error)
+			{
+				return error.starts_with("GS1 lexing") || error.starts_with("GS1 parsing");
+			});
+			if (notGS1)
+			{
+				GS2Context gs2Context;
+				if (auto response = gs2Context.compile(source); response.success)
+				{
+					result.gs2Source = std::move(source);
+					result.gs2 = true;
+					result.bytecode.assign(response.bytecode.buffer(), response.bytecode.buffer() + response.bytecode.length());
+					return result;
+				}
+			}
 			result.errors = std::move(translation.errors);
 			return result;
 		}

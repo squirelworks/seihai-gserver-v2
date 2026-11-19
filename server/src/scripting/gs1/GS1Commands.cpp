@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12, 2026-11-16, 2026-11-18: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-16, 2026-11-18, 2026-11-19: see CHANGES-SEIHAI.md.
 // ReSharper disable CppParameterMayBeConstPtrOrRef
 #include <algorithm>
 #include <any>
@@ -3676,13 +3676,21 @@ void fn_toweapons(GS1Visitor* visitor, const std::vector<GS1ScriptValue*>& argum
 // Sends out a trigger action.
 void fn_triggeraction(GS1Visitor* visitor, const std::vector<GS1ScriptValue*>& arguments)
 {
-	if (arguments.size() != 4)
+	if (arguments.size() < 3)
 		throw std::invalid_argument("invalid arguments: triggeraction x,y,action,params");
 
 	const auto x = GS1Visitor::getScriptValueAsCopy<double>(*arguments[0]).value_or(0.0);
 	const auto y = GS1Visitor::getScriptValueAsCopy<double>(*arguments[1]).value_or(0.0);
 	const auto action = GS1Visitor::getScriptValueAsCopy<std::string>(*arguments[2]).value_or("");
-	const auto params = GS1Visitor::getScriptValueAsCopy<std::string>(*arguments[2]).value_or("");
+
+	// Seihai (#112): the params are every argument after the action, joined with commas as written
+	// (`triggeraction x,y,ping,p1,p2;` sends `ping,p1,p2`). Before, the action name was sent as the params.
+	std::string params;
+	for (size_t i = 3; i < arguments.size(); ++i)
+	{
+		if (i > 3) params += ',';
+		params += GS1Visitor::getScriptValueAsCopy<std::string>(*arguments[i]).value_or("");
+	}
 
 	const auto server = BabyDI::Get<Server>();
 	if (action == "clientside")

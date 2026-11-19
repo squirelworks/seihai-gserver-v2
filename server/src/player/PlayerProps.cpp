@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-14, 2026-11-16: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-14, 2026-11-16, 2026-11-19: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -339,7 +339,9 @@ SetResults Player::setProp(PlayerProp prop, SetBy setBy, PropertyBase* base)
 				SETPROP_RETURN_IGNORE;
 
 			// 1.x servers didn't have ganis.  This prop was used for the bow instead.
-			if (m_server->Generation == ServerGeneration::CLASSIC)
+			// Seihai (#107): the form read follows the client, so a bow from a 1.x client sets the bow and a gani from
+			// a 2.x client on a classic server sets the gani (which a classic server keeps for its 2.x players).
+			if (ganiProp->bowGif.has_value() || (m_server->Generation == ServerGeneration::CLASSIC && !ganiProp->gani.has_value()))
 			{
 				if (!ganiProp->bowGif.has_value())
 					SETPROP_RETURN_IGNORE;
@@ -1199,12 +1201,27 @@ void Player::setPropsFromPacket(CString& packet, const props::SetBy setBy, const
 {
 	PropertySendResults results;
 
+	// Seihai (#107): read the props in the forms of the client that sent them.
+	const props::ClientVersionScope versionScope{isClient() ? m_versionId : 0};
+
 	while (packet.bytesLeft() > 0)
 	{
 		const auto propId = static_cast<PlayerProp>(packet.readGUChar());
 
-		auto prop = constructPropFor(propId);
-		prop->deserialize(packet);
+		// Seihai (#107): a prop id this server does not know ends the packet, not the session. Its value's length is
+		// unknown, so the rest is skipped; the props before it still apply. Real clients skip such ids too
+		// (seihai-gserver#161). Before, constructPropFor threw and the client was kicked.
+		std::shared_ptr<PropertyBase> prop;
+		try
+		{
+			prop = constructPropFor(propId);
+			prop->deserialize(packet);
+		}
+		catch (const std::exception&)
+		{
+			log::printLine(log::server, "Player {} sent unknown or unreadable prop {}; the rest of the props packet is ignored.", account.name, PROPID(propId));
+			break;
+		}
 
 		if (!checkPropSetAccess(propId, setBy, originator))
 			continue;

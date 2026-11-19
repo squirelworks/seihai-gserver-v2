@@ -1,4 +1,4 @@
-// Seihai project, 2026-11-13: see CHANGES-SEIHAI.md.
+// Seihai project, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
 //
 // This file is part of the Seihai fork of GServer-v2 and is released under the
 // GNU General Public License version 3 (see LICENSE.md).
@@ -21,6 +21,7 @@
 #include <player/LegacyPlayerProps.h>
 #include <player/PlayerProps.h>
 #include <utilities/CommonTypes.h>
+#include <utilities/PropertySerializers.h>
 
 using namespace preagonal;
 
@@ -219,4 +220,65 @@ TEST_CASE("1.x clients get player props in the pre-2.1 forms", "[legacy]")
 		REQUIRE_FALSE(legacy::isPre21Client(CLVER_UNKNOWN));
 		REQUIRE_FALSE(legacy::isPre21Client(CLVER_NW_2_02));
 	}
+}
+
+TEST_CASE("prop 10 follows the client on a classic server (#107)", "[legacy]")
+{
+	BabyDI_RELEASE(Server);
+	auto* server = BabyDI_PROVIDE(Server, new Server("test"));
+	server->Generation = ServerGeneration::CLASSIC;
+
+	SECTION("a 2.22 client's walk gani is read as a gani, not as bow power 4 and prop 87")
+	{
+		CString in;
+		in << str("walk");
+		in.setRead(0);
+		const props::ClientVersionScope scope{CLVER_2_22};
+		props::PropertyGaniOrBowGif prop;
+		prop.deserialize(in);
+		REQUIRE(prop.gani.has_value());
+		CHECK(prop.gani.value() == "walk");
+		CHECK_FALSE(prop.bowGif.has_value());
+		CHECK(in.bytesLeft() == 0);
+	}
+
+	SECTION("a 1.39 client's prop 10 is still a bow")
+	{
+		CString in;
+		in >> (char)(10 + 8) << "bow1.gif";
+		in.setRead(0);
+		const props::ClientVersionScope scope{CLVER_1_39};
+		props::PropertyGaniOrBowGif prop;
+		prop.deserialize(in);
+		REQUIRE(prop.bowGif.has_value());
+		CHECK(prop.bowGif->first == "bow1.gif");
+	}
+
+	SECTION("a 2.x client is sent the gani in place of the bow form")
+	{
+		CString props;
+		props >> (char)PROPID(PlayerProp::NICKNAME) << str("m139");
+		props >> (char)PROPID(PlayerProp::GANI) >> (char)(10 + 8) << "bow1.gif";
+		props >> (char)PROPID(PlayerProp::X) >> (char)60;
+
+		CString out = legacy::rewriteBowPropForPost20(props, "walk");
+		out.setRead(0);
+		CHECK(out.readGUChar() == PROPID(PlayerProp::NICKNAME));
+		CHECK(out.readChars(out.readGUChar()) == "m139");
+		CHECK(out.readGUChar() == PROPID(PlayerProp::GANI));
+		CHECK(out.readChars(out.readGUChar()) == "walk");
+		CHECK(out.readGUChar() == PROPID(PlayerProp::X));
+		CHECK(out.readGUChar() == 60);
+		CHECK(out.bytesLeft() == 0);
+
+		// No gani known: idle.
+		CHECK(legacy::rewriteBowPropForPost20(props, "").find("idle") >= 0);
+
+		// No prop 10: unchanged.
+		CString noGani;
+		noGani >> (char)PROPID(PlayerProp::X) >> (char)60;
+		CHECK(legacy::rewriteBowPropForPost20(noGani, "walk") == noGani);
+	}
+
+	BabyDI_RELEASE(Server);
 }
