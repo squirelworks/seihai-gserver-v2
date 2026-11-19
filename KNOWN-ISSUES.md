@@ -7,7 +7,7 @@ how to see it for yourself, what we already know about the cause, and where in
 the code to start. Most entries stop short of a fix on purpose: we would rather
 you look at the evidence and decide.
 
-Last checked against branch `seihai` at the #120 merge (2026-11-19). The
+Last checked against branch `seihai` at the #121 merge (2026-11-19). The
 tracking issue for each bug is linked; comment there if you find something, or
 open a pull request against `seihai`.
 
@@ -22,7 +22,6 @@ below were found here and are still in upstream.
 - [Before you start](#before-you-start)
 - [Open bugs](#open-bugs)
   1. [Bare `shootball` aims the wrong way after the first shot, and 1.39 draws no ball](#1-bare-shootball-aims-the-wrong-way-after-the-first-shot-and-139-draws-no-ball) (#106)
-- [Fixed, but not yet checked with real clients](#fixed-but-not-yet-checked-with-real-clients)
 - [Open areas, not single bugs](#open-areas-not-single-bugs)
 - [Recently fixed](#recently-fixed)
 
@@ -95,24 +94,6 @@ finds "the player" (compare it with how `fn_triggeraction` uses
 on the script's stack at all).
 
 
-## Fixed, but not yet checked with real clients
-
-These were found in the 2026-11-19 lab and fixed the same day in #120, with
-Catch2 tests, but no real client has been run against the fixes yet. If you
-have the client named, running the check and reporting the result on the issue
-is a real help. Details of each fix are in `CHANGES-SEIHAI.md`.
-
-| Bug | What was wrong | How to check the fix |
-|---|---|---|
-| GS1 `triggeraction` sent the action name as its params ([#112](https://github.com/squirelworks/seihai-gserver-v2/issues/112)) | `fn_triggeraction` read both `action` and `params` from `arguments[2]`, so `ping,p1,p2` went out as `ping,ping`. | A server-side `triggeraction x,y,ping,p1,p2;` on `npcdemo`; the outgoing trigger should read `ping,p1,p2`. Any client. |
-| A GS2 weapon with a string literal never compiled ([#110](https://github.com/squirelworks/seihai-gserver-v2/issues/110)) | The GS1 lexer rejected the `"`, and that rejection also stopped the GS2 compile, so the client got only PLO 33. | A weapon `//#CLIENTSIDE` + `function onCreated() { echo("labchat"); }` on `modern`; 5.24r4 or 6.03r7 should get 197 and 140 and print the text. |
-| `//#GS2` after `//#CLIENTSIDE` was ignored; 4.x and 5.x got GS2 text ([#113](https://github.com/squirelworks/seihai-gserver-v2/issues/113)) | The marker was only seen as the very first line, and the version cut-offs sent text to 4.042 to 5.12. Now GS2 goes to those builds as bytecode (PLO 132/131); GS1 still goes as text. | A GS2 weapon and a GS2 level NPC with 4.20r8 and 5.12; both should run. |
-| A server name starting with `3 ` made 5.12 think the server was 3D ([#114](https://github.com/squirelworks/seihai-gserver-v2/issues/114)) | The listserver's `PLO_SERVERWARP` was forwarded unchanged; the client reads `3 ` as the 3D prefix. The gserver now strips a leading `3 ` and logs it. A lobby that writes 178 itself must do the same. | `serverwarp` to a server named `3 Test` with 5.12; it should stay connected past 30 s. |
-| npcdemo refused 4.x and 5.x ([#115](https://github.com/squirelworks/seihai-gserver-v2/issues/115)) | Its `newmain` line stopped at 3.153. It now runs 2.00 to 2.31 and 3.04 to 5.12. The `classic` and `default` worlds still start their `modern` line at 5.12, so 4.x to 5.07 only get in on `npcdemo` and `modern`. | Log into `npcdemo` with a 4.x and a 5.x build. |
-| Classic generation ran no server-side level NPC scripts ([#106](https://github.com/squirelworks/seihai-gserver-v2/issues/106), part 1) | `Script::compileScript` had branches for newmain and modern only. | Copy `npcdemo`, set `generation = classic`, admit 1.39; `created`, `timeout` and `playerenters` should fire. |
-| A 2.x client on a classic world was kicked when it walked ([#107](https://github.com/squirelworks/seihai-gserver-v2/issues/107)) | Prop 10 followed the server's generation, so a 2.x gani was read as a 1.x bow and its bytes as prop ids. It now follows the client's version, both ways. | 2.22 next to 1.39 on `classic` (add 2.22 to the `classic` range); 2.22 should walk, stay connected and draw 1.39. |
-| An unknown prop id in a client's props packet ended the session ([#107](https://github.com/squirelworks/seihai-gserver-v2/issues/107)) | `Player::constructPropFor` threw and the client was dropped. Now it ends that packet only, as real clients do. | Covered by the 2.22 check above; also any newer client that sends a prop id this server doesn't know. |
-
 ## Open areas, not single bugs
 
 These are tracked work where outside help is welcome. They are not one bug each.
@@ -135,10 +116,22 @@ These are tracked work where outside help is welcome. They are not one bug each.
 ## Recently fixed
 
 Kept here for a while so people running older builds know what they are hitting.
+The #120 fixes passed a real-client lab on 2026-11-19; the #121 ones have
+Catch2 tests, with a real-client recheck to follow.
 Each is in `CHANGES-SEIHAI.md` with the details.
 
 | Bug | Fixed in | Symptom on older builds |
 |---|---|---|
+| GS1 `triggeraction` sent the action name as its params ([#112](https://github.com/squirelworks/seihai-gserver-v2/issues/112)) | #120 | `fn_triggeraction` read `action` and `params` from the same argument, so `ping,p1,p2` went out as `ping,ping`. |
+| A GS2 weapon with a string literal never compiled ([#110](https://github.com/squirelworks/seihai-gserver-v2/issues/110)) | #120 | The GS1 lexer rejected the `"` and that also stopped the GS2 compile; 5.24r4 and 6.03r7 got only PLO 33. |
+| `//#GS2` after `//#CLIENTSIDE` was ignored ([#113](https://github.com/squirelworks/seihai-gserver-v2/issues/113)) | #120 | 4.x and 5.x got GS2 source as text and ran nothing. |
+| A server name starting with `3 ` made 5.12 go 3D ([#114](https://github.com/squirelworks/seihai-gserver-v2/issues/114)) | #120 | The listserver's `PLO_SERVERWARP` was forwarded unchanged; 5.12 dropped after about 15 s. The gserver now strips a leading `3 `. A lobby that writes 178 itself must do the same. |
+| npcdemo refused 4.x and 5.x ([#115](https://github.com/squirelworks/seihai-gserver-v2/issues/115)) | #120 | Its `newmain` line stopped at 3.153. The `classic` and `default` worlds still start their `modern` line at 5.12. |
+| Classic generation ran no server-side level NPC scripts ([#106](https://github.com/squirelworks/seihai-gserver-v2/issues/106), part 1) | #120 | `created`, `timeout` and `playerenters` never fired on a classic world. |
+| A 2.x client on a classic world was kicked when it walked ([#107](https://github.com/squirelworks/seihai-gserver-v2/issues/107)) | #120 | Prop 10 followed the server's generation, so a 2.x gani was read as a 1.x bow and its bytes as prop ids. An unknown prop id ended the session; now it ends only that packet. |
+| 5.12 ignored GS1 weapons | #121 | 5.08 to 5.12 don't run GS1 text, but GS1 weapons still went to them as text. |
+| `setcharprop #c,Welcome #n!` greeted the NPC | #121 | The NPC context pushed for the message code also covered the text, so `#n` was the NPC's own name. |
+| 2.x drew players head-only on a classic world | #121 | Classic never sends the body (prop 35) and its accounts name `head0.gif`. |
 | GR-V1.05 levels load four bytes late (#116) | #118, 2026-11-19 | `File::readPackedIntegral` had its size guards inverted, so `<1>` read five bytes. Every board of a GR-V1.05 level started four bytes late and links, NPCs and signs after it were garbage. Also hit every length-prefixed string read from a file. |
 | A malformed level ends the server (#117) | #118, 2026-11-19 | A link to a name the OS cannot check (longer than NAME_MAX) threw `std::filesystem::filesystem_error` inside a `noexcept` lookup, which calls `std::terminate`. Short NPC, chest and sign lines read past their end. |
 | Short client packets (#103) | #104, 2026-11-18 | A short `PLI_BADDYADD` made a baddy of type 224 that crashed 6.03r7; empty `PLI_REQUESTUPDATEBOARD` and `PLI_SERVERWARP` were acted on. |

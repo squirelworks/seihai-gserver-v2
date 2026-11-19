@@ -580,6 +580,14 @@ void processBuiltInCommand(GS1Visitor* visitor, const antlr4::tree::ParseTree* n
 			}
 
 			makeValue(child->accept(visitor));
+
+			// Seihai: only `setcharprop`'s message code is the NPC's. Its text is read as everywhere else, so
+			// `setcharprop #c,Welcome #n!` greets the player, not the NPC (npcdemo, lab 2026-11-19).
+			if (popContext && commandName == "setcharprop" && !arguments.empty())
+			{
+				visitor->popSource();
+				popContext = false;
+			}
 		}
 
 		// Unset the expecting flag.

@@ -189,8 +189,11 @@ void Weapon::registerWeaponWithPlayer(const std::shared_ptr<Player>& player) con
 	// Classic GS1-as-text weapons (no bytecode): keep the text form for builds
 	// that still take classic script packets; modern builds need bytecode.
 	// Seihai (#113): a GS2 clientside script goes as bytecode to every build that reads it (4.042 on), not as text.
+	// Seihai: 5.08 to 5.12 no longer run GS1 text at all (5.12 ignored a GS1 weapon, lab 2026-11-19), so they get the
+	// translated bytecode as level NPCs already do (NPC::sendsGS1ByteCodeTo).
 	if (m_script.getClientByteCode().empty() && !scriptPackets::usesModernScriptCache(player->getVersion())
-		&& !(scriptPackets::usesClassicScriptBytecode(player->getVersion()) && clientScriptIsGS2()))
+		&& !(scriptPackets::usesClassicScriptBytecode(player->getVersion())
+			 && (clientScriptIsGS2() || (player->getVersion() > CLVER_5_07 && !getClientByteCode().empty()))))
 	{
 		// Seihai: without an NPC-server nothing turned the weapon file's newlines into \xa7.
 		const std::string script = gs1WireText(getClientSideScript());

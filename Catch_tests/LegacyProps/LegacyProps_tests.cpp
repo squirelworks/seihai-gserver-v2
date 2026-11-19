@@ -271,6 +271,20 @@ TEST_CASE("prop 10 follows the client on a classic server (#107)", "[legacy]")
 		CHECK(out.readGUChar() == 60);
 		CHECK(out.bytesLeft() == 0);
 
+		// A head from the classic account goes as the .png 2.x ships, and the body follows it.
+		CString full;
+		full >> (char)PROPID(PlayerProp::GANI) >> (char)(10 + 8) << "bow1.gif";
+		full >> (char)PROPID(PlayerProp::HEADIMAGE) >> (char)(100 + 9) << "head0.gif";
+		CString look = legacy::rewriteBowPropForPost20(full, "idle", "body.png");
+		CHECK(look.find("head0.png") >= 0);
+		CHECK(look.find("head0.gif") < 0);
+		look.setRead(0);
+		look.readGUChar(); look.readChars(look.readGUChar());   // gani
+		look.readGUChar(); look.readChars(look.readGUChar() - 100); // head
+		CHECK(look.readGUChar() == PROPID(PlayerProp::BODYIMAGE));
+		CHECK(look.readChars(look.readGUChar()) == "body.png");
+		CHECK(look.bytesLeft() == 0);
+
 		// No gani known: idle.
 		CHECK(legacy::rewriteBowPropForPost20(props, "").find("idle") >= 0);
 
