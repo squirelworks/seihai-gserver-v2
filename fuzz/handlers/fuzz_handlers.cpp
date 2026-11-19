@@ -1,19 +1,22 @@
 // Seihai project, 2026-11-19: see CHANGES-SEIHAI.md.
 //
 // This file is part of the Seihai fork of GServer-v2 and is released under the
-// GNU General Public License version 3 or later (see LICENSE.md).
+// GNU General Public License version 3 (see LICENSE.md).
 //
-// libFuzzer target (#87): the real packet handlers. Where fuzz/fuzz_process_buffer
-// stops at framing and decryption, this one hands already-split packets to
-// PlayerClient, PlayerRC and PlayerNC the way the socket loop does, with a client that
-// is logged in and standing in a level.
+// libFuzzer target over the real client packet handlers (#87). Where
+// fuzz_process_buffer stops at the framing with a stub handler, this one feeds
+// decoded packets to PlayerClient::handlePacket on a Server with no socket, as
+// Catch_tests/ShortPackets does for empty bodies. Built from the main project with
+// -DFUZZ_HANDLERS=ON (Clang, with SANITIZE=ON); see fuzz/README.md.
 //
-// Input layout:
-//   byte 0  bits 0-1: 0 or 3 game client, 1 RC, 2 NC; bits 2-7: version pick
-//   then, repeated: [id] [length] [length bytes of body]
-// The server is made once per process, in the working directory, from a world with
-// two small levels. Run it from an empty scratch folder (see fuzz/README.md): RC
-// handlers can write files under servers/fuzz/.
+// RC and NC handlers too: two more picks of the first byte make the player a
+// PlayerRC or PlayerNC with every admin right (but no folder rights, so the file
+// browser stays inside the scratch world). Game clients stand in a small level.
+//
+// Input: one byte picking the client type and version, then records of
+//   [id byte] [body length byte] [body]
+// A record that runs past the end takes what is left. Ids are taken mod 224;
+// RAWDATA (it sizes the next packet, which has no meaning here) is skipped.
 
 #include <atomic>
 #include <cstddef>
@@ -21,7 +24,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
-#include <optional>
+#include <string>
 
 #include <CSocket.h>
 #include <CString.h>
@@ -38,36 +41,30 @@
 #include <utilities/manager/ITranslationManager.h>
 #include <utilities/manager/TranslationManagerClassic.h>
 
-std::atomic_bool shutdownProgram{false};
-
 using namespace preagonal;
+
+std::atomic_bool shutdownProgram{false};
 
 namespace
 {
-	// handlePacket is protected; these call it as the socket loop does, and set the
-	// version the login would have set.
-	struct FuzzClient final : PlayerClient
+	// handlePacket is protected; the socket loop calls it the same way.
+	struct FuzzClient : PlayerClient
 	{
 		using PlayerClient::PlayerClient;
 		using PlayerClient::handlePacket;
-		void setVersionId(int v) { m_versionId = v; }
+		void setVersionForFuzz(int v) { m_versionId = v; }
 	};
-	struct FuzzRC final : PlayerRC
+	struct FuzzRC : PlayerRC
 	{
 		using PlayerRC::PlayerRC;
 		using PlayerRC::handlePacket;
-		void setVersionId(int v) { m_versionId = v; }
+		void setVersionForFuzz(int v) { m_versionId = v; }
 	};
-	struct FuzzNC final : PlayerNC
+	struct FuzzNC : PlayerNC
 	{
 		using PlayerNC::PlayerNC;
 		using PlayerNC::handlePacket;
-		void setVersionId(int v) { m_versionId = v; }
-	};
-
-	constexpr int ClientVersions[] = {
-		CLVER_1_39, CLVER_1_411, CLVER_2_22, CLVER_2_31, CLVER_3_153,
-		CLVER_4_042, CLVER_4_208, CLVER_5_07, CLVER_5_12, CLVER_6_037,
+		void setVersionForFuzz(int v) { m_versionId = v; }
 	};
 
 	void writeFile(const std::filesystem::path& path, const std::string& bytes)
@@ -77,119 +74,114 @@ namespace
 		out << bytes;
 	}
 
-	Server* heldServer()
+	Server* theServer()
 	{
-		static Server* server = []
-		{
+		static Server* server = [] {
 			log::networkdump.disabled = true;
 			log::npc.disabled = true;
 			log::rc.disabled = true;
 			log::script.disabled = true;
 			log::server.disabled = true;
-
-			BabyDI_RELEASE(ITranslationManager);
 			BabyDI_PROVIDE(ITranslationManager, new TranslationManagerClassic());
-			// main() provides these; the handlers expect them.
-			BabyDI_RELEASE(GuildManager);
+			auto* server = BabyDI_PROVIDE(Server, new Server("fuzz"));
+			// main.cpp provides the guild manager next to the server.
 			BabyDI_PROVIDE(GuildManager, new GuildManager());
-			BabyDI_RELEASE(Server);
-			auto* s = new Server("fuzz");
-			BabyDI_PROVIDE(Server, s);
 
+			// A small level for game clients to stand in: a link, a sign, a chest and an NPC.
 			const auto root = std::filesystem::current_path() / "fuzz-world";
-			const std::string level =
+			writeFile(root / "fuzz.nw",
 				"GLEVNW01\n"
 				"LINK fuzz2.nw 0 0 2 2 30 30\n"
 				"SIGN 10 10\nHello\nSIGNEND\n"
 				"CHEST 20 20 greenrupee 0\n"
-				"NPC - 30 30\nif (created) { setimg door.png; }\n//#CLIENTSIDE\nif (playerenters) { message hi; }\nNPCEND\n";
-			writeFile(root / "fuzz.nw", level);
+				"NPC - 30 30\nif (created) { setimg door.png; }\n//#CLIENTSIDE\nif (playerenters) { message hi; }\nNPCEND\n");
 			writeFile(root / "fuzz2.nw", "GLEVNW01\n");
-			s->getFileSystem().bindSingleFile(root / "fuzz.nw");
-			s->getFileSystem().bindSingleFile(root / "fuzz2.nw");
-			return s;
+			server->getFileSystem().bindSingleFile(root / "fuzz.nw");
+			server->getFileSystem().bindSingleFile(root / "fuzz2.nw");
+
+			// The account loader falls back to this file; without a LEVEL, an RC Add
+			// Account stops on forceSaveAccount's debug assert.
+			const std::string defaultAccount = "GRACC001\nLEVEL fuzz.nw\nX 30\nY 30\n";
+			writeFile(std::filesystem::current_path() / "accounts" / "(defaultaccount).txt", defaultAccount);
+			writeFile(std::filesystem::current_path() / "servers" / "fuzz" / "accounts" / "(defaultaccount).txt", defaultAccount);
+			return server;
 		}();
 		return server;
 	}
 
-	template <typename P>
-	std::shared_ptr<P> makePlayer(Server* server, int type, int version, const char* name)
+	// The client generations the handlers branch on, each with a version of that era.
+	struct Kind
 	{
-		auto p = std::make_shared<P>(new CSocket(), server->getPlayerIdGenerator().getAvailableId());
-		p->setType(type);
-		p->setVersionId(version);
-		p->account.name = name;
-		server->addPlayer(p, p->getId());
-		return p;
-	}
+		int type;
+		int version;
+	};
+	constexpr Kind kKinds[] = {
+		{PLTYPE_CLIENT, CLVER_1_39},	{PLTYPE_CLIENT, CLVER_2_0},	{PLTYPE_CLIENT, CLVER_2_22},
+		{PLTYPE_CLIENT2, CLVER_4_042},	{PLTYPE_CLIENT2, CLVER_5_07}, {PLTYPE_CLIENT3, CLVER_6_037},
+	};
+}
 
-	template <typename P>
-	void feed(Server* server, const std::shared_ptr<P>& p, const uint8_t* data, size_t size)
+template <typename P>
+static void feed(Server* server, const std::shared_ptr<P>& player, const uint8_t* data, size_t size)
+{
+	size_t at = 1;
+	while (at + 2 <= size)
 	{
-		size_t pos = 0;
-		for (int count = 0; count < 64 && pos + 2 <= size; ++count)
+		const uint8_t id = data[at] % 224;
+		size_t len = data[at + 1];
+		at += 2;
+		if (len > size - at)
+			len = size - at;
+		if (id == PLI_RAWDATA)
 		{
-			const uint8_t id = data[pos];
-			const size_t len = data[pos + 1];
-			pos += 2;
-			const size_t take = std::min(len, size - pos);
-
-			// RAWDATA only announces the size of the next packet.
-			if (id == PLI_RAWDATA)
-			{
-				pos += take;
-				continue;
-			}
-
-			CString body;
-			if (take > 0)
-				body.write(reinterpret_cast<const char*>(data + pos), static_cast<int>(take));
-			pos += take;
-
-			p->handlePacket(id, body);
+			at += len;
+			continue;
 		}
-		server->deletePlayer(p);
+		CString body;
+		if (len > 0)
+			body.write(reinterpret_cast<const char*>(data + at), static_cast<int>(len));
+		at += len;
+		player->handlePacket(id, body);
 	}
-} // namespace
+	server->deletePlayer(player);
+}
+
+template <typename P>
+static std::shared_ptr<P> makePlayer(Server* server, int type, int version, const char* name)
+{
+	auto player = std::make_shared<P>(new CSocket(), server->getPlayerIdGenerator().getAvailableId());
+	player->setType(type);
+	player->setVersionForFuzz(version);
+	player->account.name = name;
+	server->addPlayer(player, player->getId());
+	return player;
+}
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 {
 	if (size < 1 || size > 64 * 1024)
 		return 0;
 
-	auto* server = heldServer();
-	const uint8_t kind = data[0] & 3;
-	const uint8_t pick = data[0] >> 2;
-	++data;
-	--size;
-
-	switch (kind)
+	Server* server = theServer();
+	const size_t pick = data[0] % (std::size(kKinds) + 2);
+	if (pick == std::size(kKinds))
 	{
-		case 1:
-		{
-			auto rc = makePlayer<FuzzRC>(server, PLTYPE_RC2, RCVER_2, "FuzzRC");
-			// Every right but folder access, so the RC handlers run without touching files
-			// outside the scratch world.
-			rc->account.adminRights = 0xFFFFFFFFu;
-			feed(server, rc, data, size);
-			break;
-		}
-		case 2:
-		{
-			auto nc = makePlayer<FuzzNC>(server, PLTYPE_NC, NCVER_2_1, "FuzzNC");
-			nc->account.adminRights = 0xFFFFFFFFu;
-			feed(server, nc, data, size);
-			break;
-		}
-		default:
-		{
-			const int version = ClientVersions[pick % std::size(ClientVersions)];
-			const int type = version < CLVER_2_0 ? PLTYPE_CLIENT : (version < CLVER_4_0211 ? PLTYPE_CLIENT2 : PLTYPE_CLIENT3);
-			auto client = makePlayer<FuzzClient>(server, type, version, "Fuzz");
-			client->warp("fuzz.nw", LocalPixelPosition{static_cast<int16_t>(30 * 16), static_cast<int16_t>(30 * 16)});
-			feed(server, client, data, size);
-			break;
-		}
+		auto rc = makePlayer<FuzzRC>(server, PLTYPE_RC2, RCVER_2, "FuzzRC");
+		rc->account.adminRights = 0xFFFFFFFFu;
+		feed(server, rc, data, size);
+	}
+	else if (pick == std::size(kKinds) + 1)
+	{
+		auto nc = makePlayer<FuzzNC>(server, PLTYPE_NC, NCVER_2_1, "FuzzNC");
+		nc->account.adminRights = 0xFFFFFFFFu;
+		feed(server, nc, data, size);
+	}
+	else
+	{
+		const Kind& kind = kKinds[pick];
+		auto client = makePlayer<FuzzClient>(server, kind.type, kind.version, "Fuzz");
+		client->warp("fuzz.nw", LocalPixelPosition{static_cast<int16_t>(30 * 16), static_cast<int16_t>(30 * 16)});
+		feed(server, client, data, size);
 	}
 	return 0;
 }

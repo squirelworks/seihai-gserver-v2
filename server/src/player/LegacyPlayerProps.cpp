@@ -144,6 +144,17 @@ bool isPre21Client(const int versionId)
 	return versionId >= CLVER_1_20 && versionId < CLVER_2_0;
 }
 
+CString stripArrowAddPlayerId(const CString& packet)
+{
+	if (packet.length() < 3 || static_cast<unsigned char>(packet[0]) - 32 != PLO_ARROWADD)
+		return packet;
+	CString out;
+	out.writeChar(packet[0]);
+	if (packet.length() > 3)
+		out << packet.subString(3);
+	return out;
+}
+
 bool pre21KnowsProp(const int versionId, const int propId, const bool forOtherPlayer)
 {
 	// Prop 10 is the bow for these clients; a 2.x server holds a gani there.

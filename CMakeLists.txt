@@ -154,17 +154,15 @@ if(SANITIZE)
 	add_link_options(-fsanitize=address,undefined)
 endif()
 
-# Seihai: libFuzzer target that drives the real packet handlers (#87). Needs Clang,
-# SANITIZE and TESTS; every target gets coverage instrumentation for the fuzzer.
-option(FUZZ_HANDLERS "Build fuzz/handlers (Clang libFuzzer over the real packet handlers)." OFF)
+# Seihai: libFuzzer target over the real client packet handlers (#87). Clang only, with
+# SANITIZE=ON. Every target gets coverage instrumentation so the fuzzer sees the
+# server's own branches; the standalone fuzz/ project covers the framing alone.
+option(FUZZ_HANDLERS "Build fuzz_handlers, a libFuzzer target over PlayerClient::handlePacket (Clang)." OFF)
 if(FUZZ_HANDLERS)
-	if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR NOT SANITIZE OR NOT TESTS)
-		message(FATAL_ERROR "FUZZ_HANDLERS needs Clang, -DSANITIZE=ON and -DTESTS=ON.")
+	if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+		message(FATAL_ERROR "FUZZ_HANDLERS needs Clang (libFuzzer).")
 	endif()
 	add_compile_options(-fsanitize=fuzzer-no-link)
-	# ztd.text copies zero bytes from a null pointer when it replaces invalid UTF-8
-	# (a level name from a client can hit it). Harmless, but it stops every run.
-	add_compile_options(-fno-sanitize=nonnull-attribute)
 endif()
 
 # Static runtime.
@@ -241,6 +239,11 @@ if (TESTS)
 	add_subdirectory(${PROJECT_SOURCE_DIR}/Catch_tests)
 endif()
 
+# Seihai: the fuzz_handlers target (#87; option set above).
 if (FUZZ_HANDLERS)
-	add_subdirectory(${PROJECT_SOURCE_DIR}/fuzz/handlers)
+	add_executable(fuzz_handlers ${PROJECT_SOURCE_DIR}/fuzz/handlers/fuzz_handlers.cpp)
+	target_compile_features(fuzz_handlers PUBLIC cxx_std_23)
+	target_compile_options(fuzz_handlers PRIVATE -fsanitize=fuzzer -Wno-unknown-attributes)
+	target_link_options(fuzz_handlers PRIVATE -fsanitize=fuzzer)
+	target_link_libraries(fuzz_handlers PRIVATE ${APP_LIBRARY_NAME_TESTREF})
 endif()
