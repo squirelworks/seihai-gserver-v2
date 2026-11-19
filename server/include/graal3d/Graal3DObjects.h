@@ -172,6 +172,7 @@ namespace graal3d
 		SkyState sky;
 		tge::CameraState tgeCamera;
 		tge::PlayerState tgePlayer;
+		std::string tgeShape; // TgePlayer: its PlayerData's shape file
 		uint32_t datablockId = tge::FirstDatablockId;
 
 		// TgeCamera and TgePlayer masks: 1 = position and rotation, 2 = the
@@ -223,7 +224,10 @@ namespace graal3d
 	//   tgecontrol player|camera  the control object of a protocol 19 client
 	//                             (3.153, 4.04r2): a stock TGE Player that walks
 	//                             with the client's moves (the default), or the
-	//                             Camera of the 2026-11-14 labs
+	//                             Camera of the 2026-11-14 labs. A Player needs a
+	//                             shape the client can load (tgeplayershape);
+	//                             without one these clients get the Camera
+	//   tgeplayershape <file>     the Player's shape, a TGE .dts (protocol 19)
 	//   skyoptions <b1> <b2> <b3> <solid r> <g> <b>
 	//                             the Sky's three unnamed bools (0/1) and solid colour
 	//   weapon3d <name> [<file>]  a script the client runs in 3D mode, sent over the
@@ -246,6 +250,7 @@ namespace graal3d
 			Camera,
 		};
 		TgeControl tgeControl = TgeControl::Player;
+		std::string tgePlayerShape;
 		struct Weapon3D
 		{
 			std::string name;

@@ -829,10 +829,10 @@ TEST_CASE("a 3.153 ack with another mission sequence is ignored", "[graal3d][tge
 
 TEST_CASE("PlayerData is ShapeBaseData then the 4.04r2 PlayerData fields, with the constructor's values", "[graal3d][tge]")
 {
-	const auto data = tge::playerData("", true);
+	const auto data = tge::playerData("", true, "player.dts");
 	const auto d = readPlayerData(data.toString(), data.bitPosition());
 	REQUIRE(d.fits);
-	REQUIRE(d.shape.empty());
+	REQUIRE(d.shape == "player.dts");
 	REQUIRE(d.renderFirstPerson);
 	REQUIRE(d.first.size() == 19);
 	REQUIRE(d.first[0] == Catch::Approx(-1.4f)); // min look angle
@@ -932,6 +932,7 @@ TEST_CASE("a 4.04r2 client gets a Sky and a walking Player control object", "[gr
 	player.kind = GhostObject::Kind::TgePlayer;
 	player.datablockId = tge::PlayerDatablockId;
 	player.tgePlayer.position = {10, 20, 5};
+	player.tgeShape = "player.dts";
 	c.conn.setGhost(7, player);
 	c.conn.setControlObject(7);
 	// Sun is not a protocol 19 kind here.
@@ -960,7 +961,9 @@ TEST_CASE("a 4.04r2 client gets a Sky and a walking Player control object", "[gr
 		REQUIRE(r.readInt(12) == 0);
 		REQUIRE(r.readInt(13) == 1);
 		const auto bits = r.readInt(14);
-		REQUIRE(readPlayerData(copyBits(r, bits), bits).fits);
+		const auto d = readPlayerData(copyBits(r, bits), bits);
+		REQUIRE(d.fits);
+		REQUIRE(d.shape == "player.dts");
 	}
 
 	c.send({{"ConnectionMessageEvent", tge::connectionMessageEvent(1, tge::message::DataBlocksDownloadDone, 0)}});
@@ -1055,4 +1058,13 @@ TEST_CASE("the world file chooses the protocol 19 control object", "[graal3d][tg
 	REQUIRE(parseWorld("tgecontrol camera\n").tgeControl == World::TgeControl::Camera);
 	REQUIRE(parseWorld("tgecontrol player\n").tgeControl == World::TgeControl::Player);
 	REQUIRE(parseWorld("tgecontrol car\n").errors.size() == 1);
+	REQUIRE(parseWorld("tgeplayershape player.dts\n").tgePlayerShape == "player.dts");
+}
+
+TEST_CASE("a protocol 19 Sky material list has at least seven entries", "[graal3d][tge]")
+{
+	// 4.04r2 reads entry 6, the environment map, on its first frame.
+	REQUIRE(tge::tgeSkyMaterialList("") == "g3d_sky,g3d_sky,g3d_sky,g3d_sky,g3d_sky,g3d_sky,g3d_sky");
+	REQUIRE(tge::tgeSkyMaterialList("fr,rt,bk,lf,up,dn") == "fr,rt,bk,lf,up,dn,fr");
+	REQUIRE(tge::tgeSkyMaterialList("fr,rt,bk,lf,up,dn,env,cloud") == "fr,rt,bk,lf,up,dn,env,cloud");
 }

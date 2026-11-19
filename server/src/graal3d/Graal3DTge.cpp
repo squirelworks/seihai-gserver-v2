@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cmath>
 #include <numbers>
+#include <string>
+#include <vector>
 
 namespace graal3d::tge
 {
@@ -36,7 +38,7 @@ namespace graal3d::tge
 
 		// SimDataBlock, GameBaseData and ShapeBaseData, as CameraData and
 		// PlayerData both start.
-		void writeShapeBaseData(BitWriter& w, std::string_view name)
+		void writeShapeBaseData(BitWriter& w, std::string_view name, std::string_view shape = {})
 		{
 			// SimDataBlock: the datablock's name.
 			w.writeString(name);
@@ -46,7 +48,7 @@ namespace graal3d::tge
 
 			// ShapeBaseData.
 			w.writeFlag(false);       // shape CRC check: off (else u32 CRC)
-			w.writeString("");        // shape file: none, so the client loads no shape
+			w.writeString(shape);     // shape file: none for a Camera, so the client loads no shape
 			for (int i = 0; i < 9; ++i)
 				w.writeFlag(false);   // mass, drag, density, max energy, camera distances and fov: defaults (each flag -> f32)
 			w.writeString("");        // a second file name (cloak texture): none
@@ -95,11 +97,32 @@ namespace graal3d::tge
 		return w;
 	}
 
-	BitWriter playerData(std::string_view name, bool packetStrings)
+	std::string tgeSkyMaterialList(std::string_view list, std::string_view fallback)
+	{
+		std::vector<std::string> names;
+		size_t start = 0;
+		while (!list.empty() && start <= list.size())
+		{
+			const auto comma = list.find(',', start);
+			names.emplace_back(list.substr(start, comma == std::string_view::npos ? std::string_view::npos : comma - start));
+			if (comma == std::string_view::npos)
+				break;
+			start = comma + 1;
+		}
+		const std::string pad = names.empty() || names[0].empty() ? std::string(fallback) : names[0];
+		while (names.size() < 7)
+			names.push_back(pad);
+		std::string out;
+		for (size_t i = 0; i < names.size(); ++i)
+			out += (i ? "," : "") + names[i];
+		return out;
+	}
+
+	BitWriter playerData(std::string_view name, bool packetStrings, std::string_view shape)
 	{
 		BitWriter w;
 		w.setPacketStrings(packetStrings);
-		writeShapeBaseData(w, name);
+		writeShapeBaseData(w, name, shape);
 
 		w.writeFlag(true);  // renderFirstPerson
 		w.writeFlag(false); // md3 model: none

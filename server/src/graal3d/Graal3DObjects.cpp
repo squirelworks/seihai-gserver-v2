@@ -507,6 +507,11 @@ namespace graal3d
 				world.tgeControl = w[1] == "camera" ? World::TgeControl::Camera : World::TgeControl::Player;
 				ok = true;
 			}
+			else if (w[0] == "tgeplayershape" && w.size() == 2)
+			{
+				world.tgePlayerShape = w[1];
+				ok = true;
+			}
 			else if (w[0] == "camera" && w.size() == 4)
 			{
 				std::array<float, 3> offset{};

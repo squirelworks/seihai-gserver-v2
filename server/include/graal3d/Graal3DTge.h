@@ -124,8 +124,18 @@ namespace graal3d::tge
 	//   3 x (flag -> int12 splash emitter);
 	//   9 x f32: ground impact min speed, shake freq (3), shake amp (3), shake
 	//     duration, shake falloff.
-	// Written with no shape, no sounds or effects and the 4.04r2 constructor's values.
-	BitWriter playerData(std::string_view name, bool packetStrings);
+	// Written with `shape` as its shape file, no sounds or effects and the 4.04r2
+	// constructor's values. The shape must load: 4.04r2's Player::onNewDataBlock
+	// (0x100ab580) fails without a shape instance, and the client then drops the
+	// link with "Invalid packet GameBase::unpackUpdate()" (lab 2026-11-19).
+	BitWriter playerData(std::string_view name, bool packetStrings, std::string_view shape);
+
+	// A Sky material list a 4.04r2 client can draw: it reads entry 6 (the
+	// environment map) with no null check on its first frame, so a list of six
+	// sky-box textures or none crashes it (lab 2026-11-19). Shorter lists are
+	// padded to seven entries with the first name, or with `fallback` when empty.
+	// A name the client cannot find is enough.
+	std::string tgeSkyMaterialList(std::string_view list, std::string_view fallback = "g3d_sky");
 
 	// The two fields of PlayerData the server's walk uses.
 	inline constexpr float PlayerMaxSpeed = 10.0f;         // max forward, backward and side speed

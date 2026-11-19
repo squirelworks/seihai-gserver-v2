@@ -416,7 +416,9 @@ namespace graal3d
 			{
 				if (object.kind == GhostObject::Kind::Sky)
 				{
-					connection.setGhost(key, object);
+					GhostObject padded = object;
+					padded.sky.materialList = tge::tgeSkyMaterialList(object.sky.materialList);
+					connection.setGhost(key, padded);
 					sky = true;
 				}
 				++key;
@@ -426,11 +428,17 @@ namespace graal3d
 				GhostObject plain;
 				plain.kind = GhostObject::Kind::Sky;
 				plain.sky.bools = {0, 0, 0}; // no textures: the solid colour
+				plain.sky.materialList = tge::tgeSkyMaterialList("");
 				connection.setGhost(skyKey(), plain);
 			}
 
+			// 4.04r2 refuses a Player whose datablock has no shape it can load, so
+			// without a tgeplayershape the client gets the Camera.
+			const bool player = m_world.tgeControl == World::TgeControl::Player && !m_world.tgePlayerShape.empty();
+			if (m_world.tgeControl == World::TgeControl::Player && !player)
+				log::printLine(log::server, "Graal3D: no tgeplayershape in graal3dworld.txt, so {} (protocol 19) gets a Camera.", account);
 			GhostObject control;
-			if (m_world.tgeControl == World::TgeControl::Camera)
+			if (!player)
 			{
 				control.kind = GhostObject::Kind::TgeCamera;
 				control.datablockId = tge::CameraDatablockId;
@@ -441,6 +449,7 @@ namespace graal3d
 				control.kind = GhostObject::Kind::TgePlayer;
 				control.datablockId = tge::PlayerDatablockId;
 				control.tgePlayer.position = m_world.spawn.position;
+				control.tgeShape = m_world.tgePlayerShape;
 			}
 			connection.setGhost(cameraKey(playerId), control);
 			connection.setControlObject(cameraKey(playerId));

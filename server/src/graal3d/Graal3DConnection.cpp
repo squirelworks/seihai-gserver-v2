@@ -162,11 +162,12 @@ namespace graal3d
 			return;
 		m_datablocksSent = true;
 		bool camera = false;
-		bool player = false;
+		const GhostObject* player = nullptr;
 		for (const auto& [key, g] : m_ghosts)
 		{
 			camera = camera || g.object.kind == GhostObject::Kind::TgeCamera;
-			player = player || g.object.kind == GhostObject::Kind::TgePlayer;
+			if (g.object.kind == GhostObject::Kind::TgePlayer)
+				player = &g.object;
 		}
 		struct Block
 		{
@@ -178,7 +179,7 @@ namespace graal3d
 		if (camera)
 			blocks.push_back({"CameraData", tge::CameraDatablockId, tge::cameraData("", m_packetStrings)});
 		if (player)
-			blocks.push_back({"PlayerData", tge::PlayerDatablockId, tge::playerData("", m_packetStrings)});
+			blocks.push_back({"PlayerData", tge::PlayerDatablockId, tge::playerData("", m_packetStrings, player->tgeShape)});
 		for (size_t i = 0; i < blocks.size(); ++i)
 		{
 			if (const auto classId = datablockClassId(m_profile, blocks[i].className))
