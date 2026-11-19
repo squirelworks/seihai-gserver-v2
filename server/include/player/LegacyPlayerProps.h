@@ -53,7 +53,8 @@ CString rewritePacketForPre21(const CString& packet, int versionId, const std::s
 
 /// @brief Seihai (#107): rewrite a props stream written by a classic server (prop 10 in the 1.x bow form) for a
 /// client of 2.0 or later, which reads prop 10 as a gani: the bow value is replaced by `gani` (empty means "idle").
-/// A stock head that is a `.gif` (`head0.gif`, what a classic account names) goes as the `.png` a 2.x client ships.
+/// A stock head, sword or shield that is a `.gif` (`head0.gif`, `sword1.gif`, what a classic account names) goes as
+/// the `.png` a 2.x client ships.
 /// A stream that carries the head but no body gets `body` (prop 35) after it: a classic server never sends the body,
 /// so 2.x drew players as a head only. The other props are copied as they are; a stream with none of these comes back
 /// unchanged.

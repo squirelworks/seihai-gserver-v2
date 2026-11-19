@@ -285,6 +285,17 @@ TEST_CASE("prop 10 follows the client on a classic server (#107)", "[legacy]")
 		CHECK(look.readChars(look.readGUChar()) == "body.png");
 		CHECK(look.bytesLeft() == 0);
 
+		// Stock sword and shield too; a preset number is left alone.
+		CString gear;
+		gear >> (char)PROPID(PlayerProp::SWORDIMAGE) >> (char)(1 + 30) << str("sword1.gif");
+		gear >> (char)PROPID(PlayerProp::SHIELDIMAGE) >> (char)(1 + 10) << str("shield1.gif");
+		gear >> (char)PROPID(PlayerProp::SHIELDIMAGE) >> (char)2;
+		const CString gearOut = legacy::rewriteBowPropForPost20(gear, "idle");
+		CHECK(gearOut.find("sword1.png") >= 0);
+		CHECK(gearOut.find("shield1.png") >= 0);
+		CHECK(gearOut.find(".gif") < 0);
+		CHECK(gearOut.length() == gear.length());
+
 		// No gani known: idle.
 		CHECK(legacy::rewriteBowPropForPost20(props, "").find("idle") >= 0);
 
