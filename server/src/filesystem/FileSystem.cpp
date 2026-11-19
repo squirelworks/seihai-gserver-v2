@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31 and 2026-11-19: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <cerrno>
 #include <cstdint>
@@ -25,6 +25,18 @@
 namespace preagonal::fs
 {
 ///////////////////////////////////////////////////////////////////////////////
+
+namespace
+{
+	/// A path that cannot be checked (too long, bad characters, no permission) does not
+	/// exist. The throwing std::filesystem::exists inside these noexcept lookups ended the
+	/// process on a malformed level link.
+	bool pathExists(const std::filesystem::path& file) noexcept
+	{
+		std::error_code ec;
+		return std::filesystem::exists(file, ec) && !ec;
+	}
+} // namespace
 
 FileSystem::FileSystem(const std::filesystem::path& directory)
 {
@@ -119,8 +131,9 @@ void FileSystem::bind(const std::filesystem::path& directory)
 
 void FileSystem::bindSingleFile(const std::filesystem::path& file)
 {
-	const std::filesystem::directory_entry fileInfo{file};
-	if (!fileInfo.exists())
+	std::error_code ec;
+	const std::filesystem::directory_entry fileInfo{file, ec};
+	if (ec || !fileInfo.exists(ec) || ec)
 		return;
 
 	std::scoped_lock guard{m_file_mutex};
@@ -318,7 +331,7 @@ void FileSystem::update()
 
 bool FileSystem::has(FileCategory category, const std::filesystem::path& file) const noexcept
 {
-	if (std::filesystem::exists(file))
+	if (pathExists(file))
 		return true;
 
 	// If we don't have a folders config, skip the category test.
@@ -339,7 +352,7 @@ bool FileSystem::has(FileCategory category, const std::filesystem::path& file) c
 
 bool FileSystem::has(const std::filesystem::path& file) const noexcept
 {
-	if (std::filesystem::exists(file))
+	if (pathExists(file))
 		return true;
 
 	// Check if our file is saved in the file system list.
@@ -354,7 +367,7 @@ bool FileSystem::has(const std::filesystem::path& file) const noexcept
 
 bool FileSystem::hasi(FileCategory category, const std::filesystem::path& file) const noexcept
 {
-	if (std::filesystem::exists(file))
+	if (pathExists(file))
 		return true;
 
 	const bool skipTest = !hasFoldersConfig();
@@ -475,7 +488,7 @@ std::vector<FileDataWeakPtr> FileSystem::infoi(const std::filesystem::path& file
 std::shared_ptr<File> FileSystem::open(const FileCategory category, const std::filesystem::path& file) const
 {
 	// Check if the file exists in the native file system and file is a direct path.
-	if (std::filesystem::exists(file))
+	if (pathExists(file))
 	{
 		if (auto f = std::make_shared<File>(file); f->opened())
 			return f;
@@ -497,7 +510,7 @@ std::vector<std::shared_ptr<File>> FileSystem::open(const std::filesystem::path&
 	std::vector<std::shared_ptr<File>> result;
 
 	// Check if the file exists in the native file system and file is a direct path.
-	if (std::filesystem::exists(file))
+	if (pathExists(file))
 	{
 		const auto f = std::make_shared<File>();
 		f->setFilePath(file);
@@ -517,7 +530,7 @@ std::vector<std::shared_ptr<File>> FileSystem::open(const std::filesystem::path&
 
 std::shared_ptr<File> FileSystem::open(const FileData& fileData)
 {
-	if (std::filesystem::exists(fileData.file))
+	if (pathExists(fileData.file))
 	{
 		if (auto f = std::make_shared<File>(fileData.file); f->opened())
 			return f;
@@ -529,7 +542,7 @@ std::shared_ptr<File> FileSystem::open(const FileData& fileData)
 std::shared_ptr<File> FileSystem::openi(const FileCategory category, const std::filesystem::path& file) const
 {
 	// Check if the file exists in the native file system and file is a direct path.
-	if (std::filesystem::exists(file))
+	if (pathExists(file))
 	{
 		if (auto f = std::make_shared<File>(file); f->opened())
 			return f;
@@ -553,7 +566,7 @@ std::shared_ptr<FileIO> FileSystem::openForWriting(const FileCategory category, 
 	FileIOPtr result = nullptr;
 
 	// Check if the file exists in the native file system and file is a direct path.
-	if (std::filesystem::exists(file))
+	if (pathExists(file))
 		result = std::make_shared<FileIO>(file);
 
 	// Check if the file exists in the native file system and file is a filename we want to find.
@@ -587,7 +600,7 @@ std::vector<std::shared_ptr<FileIO>> FileSystem::openForWriting(const std::files
 	std::vector<std::shared_ptr<FileIO>> result;
 
 	// Check if the file exists in the native file system and file is a direct path.
-	if (std::filesystem::exists(file))
+	if (pathExists(file))
 	{
 		const auto f = std::make_shared<FileIO>();
 		f->setFilePath(file);
@@ -607,7 +620,7 @@ std::vector<std::shared_ptr<FileIO>> FileSystem::openForWriting(const std::files
 
 std::shared_ptr<FileIO> FileSystem::openForWriting(const FileData& fileData)
 {
-	if (std::filesystem::exists(fileData.file))
+	if (pathExists(fileData.file))
 	{
 		if (auto f = std::make_shared<FileIO>(fileData.file); f->opened())
 			return f;
@@ -621,7 +634,7 @@ std::shared_ptr<FileIO> FileSystem::openiForWriting(const FileCategory category,
 	FileIOPtr result = nullptr;
 
 	// Check if the file exists in the native file system and file is a direct path.
-	if (std::filesystem::exists(file))
+	if (pathExists(file))
 		result = std::make_shared<FileIO>(file);
 
 	// Check if the file exists in the native file system and file is a filename we want to find.
@@ -654,7 +667,7 @@ std::shared_ptr<FileIO> FileSystem::openiForWriting(const FileCategory category,
 
 void FileSystem::addExisting(FileCategory category, const std::filesystem::path& fullFilePath)
 {
-	if (!std::filesystem::exists(fullFilePath))
+	if (!pathExists(fullFilePath))
 		return;
 
 	std::scoped_lock guard{m_file_mutex};
@@ -676,7 +689,7 @@ void FileSystem::addExisting(FileCategory category, const std::filesystem::path&
 
 FileData* FileSystem::rename(const FileData& fileData, const std::filesystem::path& newFileName)
 {
-	if (!std::filesystem::exists(fileData.file))
+	if (!pathExists(fileData.file))
 		return nullptr;
 
 	std::scoped_lock guard{m_file_mutex};

@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31 and 2026-11-19: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <cstdint>
 #include <filesystem>
@@ -699,6 +699,7 @@ void LevelLoader::loadBinaryNPCs(const StaticLevelDataPtr& levelData, const fs::
 
 		auto line = fileData->readLine();
 		if (line.empty() || line == "#") break;
+		if (line.size() < 2) continue; // Malformed: no room for the position.
 
 		TilePosition position;
 		position[0] = static_cast<float>(line[0] - 32);
@@ -722,6 +723,7 @@ void LevelLoader::loadBinaryChests(const StaticLevelDataPtr& levelData, const fs
 	{
 		auto line = fileData->readLine();
 		if (line.empty() || line == "#") break;
+		if (line.size() < 4) continue; // Malformed: a chest is x, y, item and sign.
 
 		const uint8_t x = line[0] - 32;
 		const uint8_t y = line[1] - 32;
@@ -739,6 +741,7 @@ void LevelLoader::loadBinarySigns(const StaticLevelDataPtr& levelData, const fs:
 	{
 		auto line = fileData->readLine();
 		if (line.empty()) break;
+		if (line.size() < 2) continue; // Malformed: no room for the position.
 
 		const uint8_t x = line[0] - 32;
 		const uint8_t y = line[1] - 32;
