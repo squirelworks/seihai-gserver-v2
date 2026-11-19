@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-14: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-14, 2026-11-19: see CHANGES-SEIHAI.md.
 // New file: the gserver's Graal 3D UDP side. See Graal3DService.h.
 
 #include <graal3d/Graal3DService.h>
@@ -406,15 +406,46 @@ namespace graal3d
 	{
 		if (connection.profile().tgePackets)
 		{
-			// 3.153 and 4.04r2: the GameObject world is not theirs. Each gets one
-			// stock TGE Camera at the spawn point as its control object; the
-			// Player layout of those clients is not read yet.
-			GhostObject camera;
-			camera.kind = GhostObject::Kind::TgeCamera;
-			camera.tgeCamera.position = m_world.spawn.position;
-			connection.setGhost(cameraKey(playerId), camera);
+			// 3.153 and 4.04r2: the GameObject world is not theirs. Each gets a Sky
+			// (the world's, else a plain one: 4.04r2 reads the scene's Sky on its
+			// first 3D frame without a null check) and one stock TGE Player, or with
+			// `tgecontrol camera` a Camera, at the spawn point as its control object.
+			ObjectKey key = 1;
+			bool sky = false;
+			for (const auto& object : m_world.objects)
+			{
+				if (object.kind == GhostObject::Kind::Sky)
+				{
+					connection.setGhost(key, object);
+					sky = true;
+				}
+				++key;
+			}
+			if (!sky)
+			{
+				GhostObject plain;
+				plain.kind = GhostObject::Kind::Sky;
+				plain.sky.bools = {0, 0, 0}; // no textures: the solid colour
+				connection.setGhost(skyKey(), plain);
+			}
+
+			GhostObject control;
+			if (m_world.tgeControl == World::TgeControl::Camera)
+			{
+				control.kind = GhostObject::Kind::TgeCamera;
+				control.datablockId = tge::CameraDatablockId;
+				control.tgeCamera.position = m_world.spawn.position;
+			}
+			else
+			{
+				control.kind = GhostObject::Kind::TgePlayer;
+				control.datablockId = tge::PlayerDatablockId;
+				control.tgePlayer.position = m_world.spawn.position;
+			}
+			connection.setGhost(cameraKey(playerId), control);
 			connection.setControlObject(cameraKey(playerId));
-			log::printLine(log::server, "Graal3D: {} (protocol 19) gets a Camera at the spawn point as its control object.", account);
+			log::printLine(log::server, "Graal3D: {} (protocol 19) gets a Sky and a {} at the spawn point as its control object.", account,
+						   control.className());
 			return;
 		}
 

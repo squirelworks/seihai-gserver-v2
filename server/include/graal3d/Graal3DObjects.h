@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
 // New file: the ghosted objects of a Graal 3D world in the GameObject era (4.20r6
 // and 5.x): GameObject, the Graal class every 3D thing is, and Sun. Their update
 // layouts come from a static read of the 5.00r7 Graal3DEngine.dll (protocol 24,
@@ -128,7 +128,8 @@ namespace graal3d
 	void writeSunUpdate(BitWriter& writer, const SunState& sun);
 	SunState readSunUpdate(BitReader& reader);
 
-	// Sky, in the layout the 5.12 client reads a Sky update in. The server sends it whole:
+	// Sky, in the layout the 5.12 client reads a Sky update in; the 4.04r2 client's
+	// Sky::unpackUpdate reads the same layout. The server sends it whole:
 	// the init part (mask 1) and the material list (mask 0x80); the later
 	// sections (storm, wind and fog changes) are left clear. Floats are raw 32-bit
 	// values, the bools whole bytes. Field names come from the GS2 properties the
@@ -162,6 +163,7 @@ namespace graal3d
 			Camera, // `object` holds its name and transform
 			Sky,
 			TgeCamera, // protocol 19: a stock TGE Camera, `tgeCamera` and `datablockId`
+			TgePlayer, // protocol 19: a stock TGE Player, `tgePlayer` and `datablockId`
 		};
 
 		Kind kind = Kind::GameObject;
@@ -169,23 +171,37 @@ namespace graal3d
 		SunState sun;
 		SkyState sky;
 		tge::CameraState tgeCamera;
+		tge::PlayerState tgePlayer;
 		uint32_t datablockId = tge::FirstDatablockId;
 
-		// TgeCamera masks: 1 = position and rotation, 2 = the datablock (creates only).
+		// TgeCamera and TgePlayer masks: 1 = position and rotation, 2 = the
+		// datablock (creates only).
 		static constexpr uint32_t TgeMove = 1;
 		static constexpr uint32_t TgeDatablock = 2;
 
 		[[nodiscard]] std::string_view className() const
 		{
-			return kind == Kind::Sun ? "Sun" : kind == Kind::Camera || kind == Kind::TgeCamera ? "Camera" : kind == Kind::Sky ? "Sky" : "GameObject";
+			switch (kind)
+			{
+				case Kind::Sun: return "Sun";
+				case Kind::Camera:
+				case Kind::TgeCamera: return "Camera";
+				case Kind::TgePlayer: return "Player";
+				case Kind::Sky: return "Sky";
+				default: return "GameObject";
+			}
 		}
-		// Protocol 19 ghosts only this kind; the GameObject era every other one.
-		[[nodiscard]] bool isTge() const { return kind == Kind::TgeCamera; }
+		// The protocol 19 kinds; the GameObject era ghosts every other one.
+		[[nodiscard]] bool isTge() const { return kind == Kind::TgeCamera || kind == Kind::TgePlayer; }
+		// Whether a client of that era takes this kind: a Sky goes to both.
+		[[nodiscard]] bool sentTo(bool tgeEra) const { return kind == Kind::Sky || isTge() == tgeEra; }
 		// The update for `mask` (ignored for Sun and Sky, which are always sent whole).
-		void writeUpdate(BitWriter& writer, uint32_t mask) const;
+		// `controlled`: the receiving client controls this object (a TgePlayer then
+		// leaves its move section out of updates after the first).
+		void writeUpdate(BitWriter& writer, uint32_t mask, bool controlled = false) const;
 		[[nodiscard]] uint32_t fullMask() const
 		{
-			if (kind == Kind::TgeCamera)
+			if (isTge())
 				return TgeMove | TgeDatablock;
 			return kind == Kind::Sun || kind == Kind::Sky ? 1u : gameObjectFullMask(object);
 		}
@@ -204,6 +220,10 @@ namespace graal3d
 	//   sky <textures> [<visible distance> [<fog r> <g> <b>]]
 	//                             a Sky; the textures are six names, comma
 	//                             separated and without spaces ("-" for none)
+	//   tgecontrol player|camera  the control object of a protocol 19 client
+	//                             (3.153, 4.04r2): a stock TGE Player that walks
+	//                             with the client's moves (the default), or the
+	//                             Camera of the 2026-11-14 labs
 	//   skyoptions <b1> <b2> <b3> <solid r> <g> <b>
 	//                             the Sky's three unnamed bools (0/1) and solid colour
 	//   weapon3d <name> [<file>]  a script the client runs in 3D mode, sent over the
@@ -220,6 +240,12 @@ namespace graal3d
 		std::string playerShape;
 		Transform spawn;
 		std::optional<std::array<float, 3>> cameraOffset;
+		enum class TgeControl
+		{
+			Player,
+			Camera,
+		};
+		TgeControl tgeControl = TgeControl::Player;
 		struct Weapon3D
 		{
 			std::string name;

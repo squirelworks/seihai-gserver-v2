@@ -1,6 +1,6 @@
 # Graal 3D (Seihai)
 
-<!-- Modified by the Seihai project, 2026-11-14: reconcile recorded lab coverage. -->
+<!-- Modified by the Seihai project, 2026-11-14: reconcile recorded lab coverage; 2026-11-19: protocol 19 Sky and Player. -->
 
 This file is part of the Seihai fork (GPL-3.0, see `LICENSE.md` and `CHANGES-SEIHAI.md`).
 
@@ -62,6 +62,10 @@ spawn 0 0 1
 
 # optional: give each client a Camera, this far from the spawn point
 camera 0 -3 2
+
+# optional, protocol 19 (3.153, 4.04r2) only: the control object, a stock TGE
+# Player that walks (the default) or the Camera of the 2026-11-14 labs
+tgecontrol player
 
 # optional: a Sky: six sky-box textures (front, right, back, left, top, bottom),
 # comma separated ("-" for none), then the visible distance and fog colour
@@ -149,7 +153,7 @@ too. The server never sends a player's position back to that player.
 | Scripts in 3D mode | with `weapon3d` lines: `addweapon` and `weaponscript` over the 3D text channel. A 5.12 lab client compiled and ran one, and its `keydown2` saw the arrow keys. |
 | Walking | a script's `triggerserver(..., "g3dpos", x, y, z)` and the gserver moves the player's object. Lab 15 showed the trigger reaching the gserver; the move is not yet run with a real client. |
 | `TerrainBlock`, `movetype` | **not sent.** |
-| 3.15x and 4.04r2 game packets | done up to the control object. Real 3.151 (Linux) and 3.153 (Mac) clients crash on their first frame after it (lab 2026-11-14). See "Protocol 19" below. |
+| 3.15x and 4.04r2 game packets | done up to a walking `Player` control object and a `Sky`. With only a `Camera`, real 3.151 (Linux) and 3.153 (Mac) clients crashed on their first frame after it (lab 2026-11-14), and 4.04r2 does too: it reads the scene's `Sky` with no null check. See "Protocol 19" below. |
 
 ## Protocol 19 (3.151 Linux, 3.153, 4.04r2)
 
@@ -161,23 +165,27 @@ read of the 4.04r2 `Graal3DEngine.dll` (Graal_analysis `torque/protocol19-server
 | Step | What goes out |
 |---|---|
 | First client packet | `MissionStartPhase1` with the mission sequence (`1`) and the mission name (`Graal3D`). 3.153's script sends the sequence back in its ack, 4.04r2 sends the ack bare; both are taken. |
-| Phase 1 ack | One datablock, a `CameraData` with no shape and every optional field clear (`SimDataBlockEvent`), then the connection message `DataBlocksDone` (5). |
-| `DataBlocksDownloadDone` (6) from the client | `MissionStartPhase2`, the connection message `GhostAlwaysStarting` (3) with the ghost count, and from now on ghosts: one stock `Camera` per client, at the world's `spawn` point. No ghost goes out before this, since a ghost naming a datablock the client has not loaded drops the connection. |
-| Phase 2 ack, and the Camera's create acked | `GhostAlwaysDone` (0), then `MissionStartPhase3`. The client lights the (empty) scene and acks. |
-| Phase 3 ack | The Camera becomes the control object (fly mode). 4.04r2 then raises login step 5. |
-| Every client packet after that | The client's moves are read and acknowledged in the server's move ack. They are not applied: the client moves its own Camera by prediction, and the server does not move it back. |
+| Phase 1 ack | One datablock, a `PlayerData` with no shape and the 4.04r2 constructor's values (with `tgecontrol camera`, a `CameraData` with no shape and every optional field clear), as a `SimDataBlockEvent`, then the connection message `DataBlocksDone` (5). |
+| `DataBlocksDownloadDone` (6) from the client | `MissionStartPhase2`, the connection message `GhostAlwaysStarting` (3) with the ghost count, and from now on ghosts: the world's `Sky` (or, without a `sky` line, a plain one in its solid colour) and one stock `Player` (or `Camera`) per client, at the world's `spawn` point. No ghost goes out before this, since a ghost naming a datablock the client has not loaded drops the connection. |
+| Phase 2 ack, and every create acked | `GhostAlwaysDone` (0), then `MissionStartPhase3`. The client lights the scene and acks. |
+| Phase 3 ack | The `Player` (or the `Camera`, in fly mode) becomes the control object, with its packet data. 4.04r2 then raises login step 5. |
+| Every client packet after that | The client's moves are read and acknowledged in the server's move ack. A `Player`'s are applied as a plain walk (turn with the move's yaw and pitch, walk at 10 units a second, no gravity or collision, since the server has no terrain), and its packet data (position, velocity, head and rotation) goes out again in the next packet. A `Camera`'s are not applied: the client moves it by prediction. |
 
-Not done for these clients: the `Player` (its update and `PlayerData` are not read
-yet, so nobody walks as a player and other players are not shown), the world's
-objects (they are `GameObject`s, a 4.20r6 and later class), `Sun` and `Sky`, terrain,
-and anything that comes from a `Player` control object (damage flash, white-out).
-Flags and `weapon3d` scripts go over the 3D text channel as for 5.x.
+The `Sky` update is the 5.12 one: 4.04r2's `Sky::unpackUpdate` reads the same
+layout. The `Player`, `PlayerData` and `Player` packet data layouts were read from
+the 4.04r2 `Graal3DEngine.dll` on 2026-11-19; they are stock TGE 1.x, with Graal's
+md3 model name in `PlayerData`. The `Player` has no shape, since no TGE `.dts` with
+the player sequences is held.
+
+Not done for these clients: other players' `Player`s, the world's objects (they are
+`GameObject`s, a 4.20r6 and later class), `Sun`, terrain, and damage flash or
+white-out. Flags and `weapon3d` scripts go over the 3D text channel as for 5.x.
 
 Lab 2026-11-14, with real clients:
 
 | Client | How far it gets |
 |---|---|
-| Linux 3.151, Mac 3.153 | Every step above, up to the control object, and their moves are acked. Then each crashes on its first frame (a null read while drawing). Not yet known: what that frame needs which a shapeless `Camera` alone does not give it. |
+| Linux 3.151, Mac 3.153 | Every step above with a `Camera` and no `Sky`, up to the control object, and their moves are acked. Then each crashes on its first frame (a null read while drawing). Likely the missing `Sky`, which 4.04r2 also needs (2026-11-19); not rerun yet. |
 | Windows 4.04r2 | Crashes while starting its own 3D engine, before it opens the UDP port (on Windows 10, and under Wine, where a 2D server works). |
 | Seihai's Ato client, as 4.04r2 and 3.153 | Every step, and the server reads its moves. |
 | 4.20r8 | Not protocol 19: it speaks protocol 24 and plays a full 3D session. |
