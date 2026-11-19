@@ -82,7 +82,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cmake -S . -B build -DTESTS=ON
-          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin ClientPing Scripting LegacyProps GS1ToGS2 GS1 FileSend ServerOptions ShortPackets
+          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin ClientPing Scripting LegacyProps GS1ToGS2 GS1 FileSend ServerOptions ShortPackets LevelLoad
           timeout 60 bin/RC
           timeout 60 bin/Gpak
           timeout 60 bin/Graal3D
@@ -97,7 +97,8 @@ jobs:
           timeout 120 bin/GS1
           timeout 60 bin/ServerOptions
           timeout 60 bin/ShortPackets
-          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin bin/ClientPing bin/Scripting bin/LegacyProps bin/GS1ToGS2 bin/GS1 bin/FileSend bin/ServerOptions bin/ShortPackets
+          timeout 60 bin/LevelLoad
+          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin bin/ClientPing bin/Scripting bin/LegacyProps bin/GS1ToGS2 bin/GS1 bin/FileSend bin/ServerOptions bin/ShortPackets bin/LevelLoad
           python3 -m unittest tools/lab/test_labcheck.py
       - name: Package
         shell: bash
@@ -204,7 +205,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cmake -S . -B build -DTESTS=ON
-          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin ClientPing Scripting LegacyProps GS1ToGS2 GS1 FileSend ServerOptions ShortPackets
+          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin ClientPing Scripting LegacyProps GS1ToGS2 GS1 FileSend ServerOptions ShortPackets LevelLoad
           timeout 60 bin/RC
           timeout 60 bin/Gpak
           timeout 60 bin/Graal3D
@@ -219,7 +220,8 @@ jobs:
           timeout 120 bin/GS1
           timeout 60 bin/ServerOptions
           timeout 60 bin/ShortPackets
-          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin bin/ClientPing bin/Scripting bin/LegacyProps bin/GS1ToGS2 bin/GS1 bin/FileSend bin/ServerOptions bin/ShortPackets
+          timeout 60 bin/LevelLoad
+          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin bin/ClientPing bin/Scripting bin/LegacyProps bin/GS1ToGS2 bin/GS1 bin/FileSend bin/ServerOptions bin/ShortPackets bin/LevelLoad
           python3 -m unittest tools/lab/test_labcheck.py
       - name: Package
         shell: bash

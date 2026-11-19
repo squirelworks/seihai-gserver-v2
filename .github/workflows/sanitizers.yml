@@ -51,10 +51,10 @@ jobs:
       - name: Build
         run: |
           cmake --build build --target gs2emu
-          cmake --build build --target ShortPackets RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin ClientPing Scripting LegacyProps GS1ToGS2 FileSend ServerOptions GS1
+          cmake --build build --target ShortPackets RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin ClientPing Scripting LegacyProps GS1ToGS2 FileSend ServerOptions LevelLoad GS1
       - name: Regression tests under the sanitizers
         run: |
-          for t in ShortPackets RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin ClientPing Scripting LegacyProps GS1ToGS2 FileSend ServerOptions; do
+          for t in ShortPackets RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin ClientPing Scripting LegacyProps GS1ToGS2 FileSend ServerOptions LevelLoad; do
             echo "== $t"; timeout 300 bin/$t
           done
           echo "== GS1"; timeout 600 bin/GS1
