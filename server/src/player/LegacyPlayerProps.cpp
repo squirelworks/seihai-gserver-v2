@@ -260,6 +260,13 @@ CString rewritePacketForPre21(const CString& packet, const int versionId, const 
 	return packet;
 }
 
+CString rewriteArrowAddForPre21(const CString& packet)
+{
+	if (packet.length() < 3 || static_cast<unsigned char>(packet[0]) - 32 != PLO_ARROWADD)
+		return packet;
+	return CString() >> (char)PLO_ARROWADD << packet.subString(3);
+}
+
 CString rewriteBowPropForPost20(const CString& props, const std::string_view gani, const std::string_view body)
 {
 	CString in{props};

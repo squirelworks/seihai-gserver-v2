@@ -296,3 +296,23 @@ TEST_CASE("prop 10 follows the client on a classic server (#107)", "[legacy]")
 
 	BabyDI_RELEASE(Server);
 }
+
+TEST_CASE("PLO_ARROWADD goes to 1.x without the shooter's id", "[LegacyProps][issue106]")
+{
+	// 1.39 lab, 2026-11-19: 1.39 drew `52 68 23 a3 20` (a ball) but nothing for `20 20 52 68 23 a3 20`.
+	CString npcBall;
+	npcBall >> (char)PLO_ARROWADD >> (short)0 >> (char)50 >> (char)72 >> (char)3 >> (char)131 >> (char)0;
+	CString expected;
+	expected >> (char)PLO_ARROWADD >> (char)50 >> (char)72 >> (char)3 >> (char)131 >> (char)0;
+	CHECK(legacy::rewriteArrowAddForPre21(npcBall) == expected);
+
+	// A player's arrow, relayed with that player's id.
+	CString relayed;
+	relayed >> (char)PLO_ARROWADD >> (short)3 << "^t\"\x8d!";
+	CHECK(legacy::rewriteArrowAddForPre21(relayed) == (CString() >> (char)PLO_ARROWADD << "^t\"\x8d!"));
+
+	// Other packets are untouched.
+	CString other;
+	other >> (char)PLO_BOMBADD >> (short)0 >> (char)1;
+	CHECK(legacy::rewriteArrowAddForPre21(other) == other);
+}

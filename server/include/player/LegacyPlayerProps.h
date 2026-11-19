@@ -51,6 +51,11 @@ CString rewritePropsForPre21(const CString& props, int versionId, bool forOtherP
 /// props describe is itself a 1.x client.
 CString rewritePacketForPre21(const CString& packet, int versionId, const std::set<int>& alsoDrop = {}, bool fromPre21Client = false);
 
+/// @brief Seihai (#106): rewrite a PLO_ARROWADD packet for a 1.x client. The server writes the shooter's player id
+/// (a GSHORT, 0 for an NPC) before `x y flags sprite type`; 1.x reads the five bytes only and draws nothing when the
+/// id is there (1.39 lab, 2026-11-19). The id is dropped. Any other packet is returned unchanged.
+CString rewriteArrowAddForPre21(const CString& packet);
+
 /// @brief Seihai (#107): rewrite a props stream written by a classic server (prop 10 in the 1.x bow form) for a
 /// client of 2.0 or later, which reads prop 10 as a gani: the bow value is replaced by `gani` (empty means "idle").
 /// A stock head that is a `.gif` (`head0.gif`, what a classic account names) goes as the `.png` a 2.x client ships.
