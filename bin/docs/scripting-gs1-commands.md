@@ -2597,7 +2597,7 @@ Shoots a ball projectile at the player.
 **gs2emu** adds an optional [direction](scripting-gs1-variables.md#directions) in the serverside version.
 Without the extension enabled, serverside `shootball` will shoot towards the player in one of the 4 cardinal directions, but will not shoot directly at the player's position.  This is because the packet to spawn a projectile only sends one of the 4 directions and does not include an exact flight path.
 
-**Seihai** accepts the bare form serverside too, as the 1.x levels use it. The server's balls fly in four directions, so a bare `shootball;` aims along the dominant axis from the NPC to the event's player, or the way the NPC faces when there is no player.
+**Seihai** accepts the bare form serverside too, as the 1.x levels use it. The server's balls fly in four directions, so a bare `shootball;` aims along the dominant axis from the NPC to the event's player. In an event with no player (`timeout`, `created`) it shoots one ball at each player in the level, as each 1.x client ran the script against its own player. With no players in the level it shoots the way the NPC faces.
 
 ---
 ## shootfireball

@@ -3049,34 +3049,22 @@ static uint8_t directionTowards(const TilePosition& from, const TilePosition& to
 	return dy < 0 ? 0 : 2;
 }
 
-// Seihai: the player in a level whose centre is nearest a point, skipping the NPC-server.
-template<class CentreOf>
-static std::shared_ptr<Player> nearestPlayerInLevel(const Level& level, const TilePosition& from, CentreOf centreOf)
+// Seihai: the players in a level, skipping the NPC-server.
+static std::vector<std::shared_ptr<Player>> playersInLevel(const Level& level)
 {
 	const auto server = BabyDI::Get<Server>();
-	std::shared_ptr<Player> best;
-	float bestDistance = 0.0f;
+	std::vector<std::shared_ptr<Player>> players;
 	for (const auto id : level.getPlayers())
 	{
-		const auto player = server->getPlayer(id);
-		if (player == nullptr || player->isNPCServer())
-			continue;
-		const auto centre = centreOf(player);
-		const auto dx = centre.x() - from.x();
-		const auto dy = centre.y() - from.y();
-		const auto distance = dx * dx + dy * dy;
-		if (best == nullptr || distance < bestDistance)
-		{
-			best = player;
-			bestDistance = distance;
-		}
+		if (const auto player = server->getPlayer(id); player != nullptr && !player->isNPCServer())
+			players.push_back(player);
 	}
-	return best;
+	return players;
 }
 
 // shootball;
 // (gr) shootball dir;
-// Seihai: the bare form shoots at the event's player, else the nearest player in the level, else the way the NPC faces.
+// Seihai: the bare form shoots at the event's player, else one ball at each player in the level, else the way the NPC faces.
 void fn_shootball(GS1Visitor* visitor, const std::vector<GS1ScriptValue*>& arguments)
 {
 	// Conformance.
@@ -3093,17 +3081,15 @@ void fn_shootball(GS1Visitor* visitor, const std::vector<GS1ScriptValue*>& argum
 
 		// Seihai: 1.x levels use the bare form, shootball;  The documented original shoots at the player. The
 		// server's balls fly in one of four directions, so a bare shootball takes the direction (dominant axis)
-		// from the NPC to the event's player, or the way the NPC faces when there is no player.
-		uint8_t dir = 0;
+		// from the NPC to its target, or the way the NPC faces when there is no player.
+		std::vector<uint8_t> dirs;
 		if (arguments.size() == 1)
-			dir = DoubleAsIntegralFloor<uint8_t>(GS1Visitor::getScriptValueAsCopy<double>(*arguments[0]).value_or(0.0));
+			dirs.push_back(DoubleAsIntegralFloor<uint8_t>(GS1Visitor::getScriptValueAsCopy<double>(*arguments[0]).value_or(0.0)));
 		else if (source.second == ScriptObjectType::NPC)
 		{
 			const auto server = BabyDI::Get<Server>();
 			if (const auto npc = server->getNPC(source.first); npc != nullptr)
 			{
-				dir = npc->character.direction % 4;
-
 				auto npcCentre = npc->character.getTilePosition();
 				if (npc->isCharacter())
 					npcCentre.translate(1.5f, 2.0f);
@@ -3117,28 +3103,38 @@ void fn_shootball(GS1Visitor* visitor, const std::vector<GS1ScriptValue*>& argum
 				};
 
 				// The event's player when there is one (playerenters, playertouchsme). A timeout or created has
-				// none, and 1.x ran the script on each client against its own player, so the nearest player in
-				// the NPC's level stands in for it. Before, those shots took the NPC's direction (#106).
-				std::shared_ptr<Player> target;
+				// none. 1.x ran shootball clientside only: each client in the level ran the script and shot a ball
+				// at its own player, so the server shoots one ball at each player in the level (#106).
+				std::shared_ptr<Player> eventPlayer;
 				if (const auto playerSource = visitor->findNearestScriptObjectSourceFromStack(ScriptObjectType::PLAYER); playerSource.has_value())
 				{
 					if (const auto player = server->getNPCServer()->getPlayer(playerSource.value().first); player != nullptr && !player->isNPCServer())
-						target = player;
+						eventPlayer = player;
 				}
-				if (target == nullptr)
-					target = nearestPlayerInLevel(*level, npcCentre, centreOf);
-				if (target != nullptr)
-					dir = directionTowards(npcCentre, centreOf(target));
+				if (eventPlayer != nullptr)
+					dirs.push_back(directionTowards(npcCentre, centreOf(eventPlayer)));
+				else
+				{
+					for (const auto& player : playersInLevel(*level))
+						dirs.push_back(directionTowards(npcCentre, centreOf(player)));
+				}
+				if (dirs.empty())
+					dirs.push_back(npc->character.direction % 4);
 			}
 		}
+		else
+			dirs.push_back(0);
 
-		const PixelPosition speed = {(dir == 0 || dir == 2) ? 0 : (dir == 1 ? -16 : 16), (dir == 1 || dir == 3) ? 0 : (dir == 0 ? -16 : 16)};
+		for (const auto dir : dirs)
+		{
+			const PixelPosition speed = {(dir == 0 || dir == 2) ? 0 : (dir == 1 ? -16 : 16), (dir == 1 || dir == 3) ? 0 : (dir == 0 ? -16 : 16)};
 
-		const auto sourcePosition = getPositionForArrow(source, dir);
-		if (!sourcePosition.has_value())
-			return;
+			const auto sourcePosition = getPositionForArrow(source, dir);
+			if (!sourcePosition.has_value())
+				return;
 
-		level->addArrow(inform_client, sourcePosition.value(), speed, dir, arrowTypeBall, source);
+			level->addArrow(inform_client, sourcePosition.value(), speed, dir, arrowTypeBall, source);
+		}
 	}
 }
 

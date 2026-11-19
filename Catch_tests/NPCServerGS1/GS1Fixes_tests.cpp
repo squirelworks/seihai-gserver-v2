@@ -8,6 +8,7 @@
 #include <fstream>
 #include <iterator>
 #include <memory>
+#include <set>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -209,46 +210,51 @@ TEST_CASE_METHOD(GS1Fixture, "bare shootball is accepted", "[GS1][issue33]")
 	log::npc.disabled = true;
 }
 
-TEST_CASE_METHOD(GS1Fixture, "bare shootball with no event player aims at the nearest player in the level", "[GS1][issue106]")
+TEST_CASE_METHOD(GS1Fixture, "bare shootball with no event player shoots one ball at each player in the level", "[GS1][issue106]")
 {
 	// A timeout or created has no player on the stack. Those shots took the NPC's own direction; the lab saw
-	// only the first shot (from playerenters) go toward the player (#106).
-	auto near = std::make_shared<PlayerClient>(new CSocket(), server->getPlayerIdGenerator().getAvailableId());
-	near->setType(PLTYPE_CLIENT2);
-	server->addPlayer(near, near->getId());
-	auto far = std::make_shared<PlayerClient>(new CSocket(), server->getPlayerIdGenerator().getAvailableId());
-	far->setType(PLTYPE_CLIENT2);
-	server->addPlayer(far, far->getId());
+	// only the first shot (from playerenters) go toward the player (#106). 1.x ran shootball on each client
+	// against its own player, so each player in the level gets a ball aimed at them.
+	auto first = std::make_shared<PlayerClient>(new CSocket(), server->getPlayerIdGenerator().getAvailableId());
+	first->setType(PLTYPE_CLIENT2);
+	server->addPlayer(first, first->getId());
+	auto second = std::make_shared<PlayerClient>(new CSocket(), server->getPlayerIdGenerator().getAvailableId());
+	second->setType(PLTYPE_CLIENT2);
+	server->addPlayer(second, second->getId());
 
 	auto level = std::make_shared<Level>();
 	level->levelName = "shootball.nw";
 	npc()->setLevel(level);
 	npc()->character.direction = 2; // facing down
-	level->addPlayer(near->getId());
-	level->addPlayer(far->getId());
 
-	const auto shotDirection = [&](float nearX, float nearY)
+	const auto shotDirections = [&]()
 	{
-		near->account.character.localPixelX = static_cast<int16_t>(nearX * 16);
-		near->account.character.localPixelY = static_cast<int16_t>(nearY * 16);
-		far->account.character.localPixelX = 20 * 16;
-		far->account.character.localPixelY = 60 * 16;
 		level->getArrows().clear();
 		REQUIRE(run("if (created) { shootball; }").empty());
-		REQUIRE(level->getArrows().size() == 1);
-		return level->getArrows().front().direction;
+		std::multiset<int> dirs;
+		for (const auto& arrow : level->getArrows())
+			dirs.insert(arrow.direction);
+		return dirs;
+	};
+	const auto place = [](const std::shared_ptr<PlayerClient>& player, float x, float y)
+	{
+		player->account.character.localPixelX = static_cast<int16_t>(x * 16);
+		player->account.character.localPixelY = static_cast<int16_t>(y * 16);
 	};
 
-	CHECK(shotDirection(40.0f, 30.0f) == 3); // right
-	CHECK(shotDirection(2.0f, 30.0f) == 1);  // left
-	CHECK(shotDirection(20.0f, 10.0f) == 0); // up
-
 	// No players at all: the way the NPC faces.
-	level->getPlayers().clear();
-	level->getArrows().clear();
-	REQUIRE(run("if (created) { shootball; }").empty());
-	REQUIRE(level->getArrows().size() == 1);
-	CHECK(level->getArrows().front().direction == 2);
+	CHECK(shotDirections() == std::multiset<int>{2});
+
+	level->addPlayer(first->getId());
+	place(first, 40.0f, 30.0f);
+	CHECK(shotDirections() == std::multiset<int>{3}); // right
+
+	level->addPlayer(second->getId());
+	place(second, 2.0f, 30.0f);
+	CHECK(shotDirections() == std::multiset<int>{1, 3}); // left and right
+
+	place(second, 20.0f, 10.0f);
+	CHECK(shotDirections() == std::multiset<int>{0, 3}); // up and right
 
 	npc()->setLevel(nullptr);
 }
