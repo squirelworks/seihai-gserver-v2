@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
 // New file: one Graal 3D (Torque) UDP connection, server side. See Graal3DConnection.h.
 // The notify protocol follows Torque's ConnectionProtocol::processRawPacket and
 // NetConnection's event code (MIT-licensed Torque3D source), with Graal's 12-bit
@@ -117,7 +117,7 @@ namespace graal3d
 			advanceTge();
 		if (sendsEvents() && m_established)
 		{
-			const bool work = !m_sendQueue.empty() || m_ackOwed || ghostWorkPending() || controlPending();
+			const bool work = !m_sendQueue.empty() || m_ackOwed || ghostWorkPending() || controlPending() || (m_controlDelivered && m_controlMoved);
 			const bool due = work && sinceSend >= SendIntervalMs;
 			if (due || sinceSend >= KeepAliveMs)
 				sendPacket(PacketType::Data, nowMs);
@@ -156,19 +156,38 @@ namespace graal3d
 	void Connection::startTgeDatablocks()
 	{
 		// Stock TGE: the datablocks follow the phase 1 ack, then DataBlocksDone
-		// with the mission sequence. This server has one: the CameraData every
-		// Camera ghost uses.
+		// with the mission sequence. This server has two, and sends the ones its
+		// ghosts use: the CameraData of a TgeCamera, the PlayerData of a TgePlayer.
 		if (m_datablocksSent)
 			return;
 		m_datablocksSent = true;
-		const auto classId = datablockClassId(m_profile, "CameraData");
-		if (classId)
+		bool camera = false;
+		const GhostObject* player = nullptr;
+		for (const auto& [key, g] : m_ghosts)
 		{
-			const auto data = tge::cameraData("", m_packetStrings);
-			postEvent("SimDataBlockEvent", tge::simDataBlockEvent(tge::FirstDatablockId, *classId, 0, 1, data));
+			camera = camera || g.object.kind == GhostObject::Kind::TgeCamera;
+			if (g.object.kind == GhostObject::Kind::TgePlayer)
+				player = &g.object;
+		}
+		struct Block
+		{
+			std::string_view className;
+			uint32_t id;
+			BitWriter data;
+		};
+		std::vector<Block> blocks;
+		if (camera)
+			blocks.push_back({"CameraData", tge::CameraDatablockId, tge::cameraData("", m_packetStrings)});
+		if (player)
+			blocks.push_back({"PlayerData", tge::PlayerDatablockId, tge::playerData("", m_packetStrings, player->tgeShape)});
+		for (size_t i = 0; i < blocks.size(); ++i)
+		{
+			if (const auto classId = datablockClassId(m_profile, blocks[i].className))
+				postEvent("SimDataBlockEvent", tge::simDataBlockEvent(blocks[i].id, *classId, static_cast<uint32_t>(i),
+																	  static_cast<uint32_t>(blocks.size()), blocks[i].data));
 		}
 		postEvent("ConnectionMessageEvent", tge::connectionMessageEvent(m_missionSeq, tge::message::DataBlocksDone, 0));
-		log("datablocks sent (1), then DataBlocksDone");
+		log("datablocks sent (" + std::to_string(blocks.size()) + "), then DataBlocksDone");
 	}
 
 	void Connection::advanceTge()
@@ -244,14 +263,26 @@ namespace graal3d
 		{
 			// GameConnection::writePacket, protocol 19: move ack, then the control
 			// object with its packet data, no camera, no field of view.
+			// A Player that moved since its packet data last went out sends it again.
 			std::optional<tge::ServerControl> control;
-			if (controlPending())
+			const bool first = controlPending();
+			const bool moved = !first && m_controlDelivered && m_controlMoved && m_controlKey && m_ghosts.contains(*m_controlKey);
+			if (first || moved)
 			{
 				const auto& g = m_ghosts.at(*m_controlKey);
-				control = tge::ServerControl{static_cast<uint32_t>(nowMs), g.index, g.object.tgeCamera};
-				note.control = true;
-				m_controlInFlight = true;
-				log("control object (Camera ghost " + std::to_string(g.index) + ") sent in seq " + std::to_string(note.sequence));
+				control = tge::ServerControl{static_cast<uint32_t>(nowMs), g.index, g.object.tgeCamera, std::nullopt};
+				if (g.object.kind == GhostObject::Kind::TgePlayer)
+					control->player = g.object.tgePlayer;
+				m_controlMoved = false;
+				if (first)
+				{
+					note.control = true;
+					m_controlInFlight = true;
+					log("control object (" + std::string(g.object.className()) + " ghost " + std::to_string(g.index) + ") sent in seq " +
+						std::to_string(note.sequence));
+				}
+				else
+					note.controlUpdate = true;
 			}
 			tge::writeServerGame(w, m_lastMoveAck, control);
 		}
@@ -352,9 +383,9 @@ namespace graal3d
 
 	void Connection::setGhost(ObjectKey key, const GhostObject& object)
 	{
-		// Each era ghosts only its own kinds: protocol 19 the TGE Camera, the
-		// GameObject era everything else.
-		if (!m_profile.gamePackets() || object.isTge() != m_profile.tgePackets)
+		// Each era ghosts only its own kinds: protocol 19 the TGE Camera and
+		// Player, the GameObject era everything else; a Sky goes to both.
+		if (!m_profile.gamePackets() || !object.sentTo(m_profile.tgePackets))
 			return;
 
 		auto it = m_ghosts.find(key);
@@ -562,7 +593,7 @@ namespace graal3d
 			BitWriter payload;
 			payload.setPacketStrings(m_packetStrings);
 			if (!g.kill)
-				g.object.writeUpdate(payload, mask);
+				g.object.writeUpdate(payload, mask, m_controlKey == c.key);
 			if (payload.bitPosition() >= (1u << 14))
 			{
 				log("ghost update too large, dropped: " + g.object.object.name);
@@ -595,6 +626,8 @@ namespace graal3d
 
 	void Connection::ghostNotify(const Notify& note, bool delivered)
 	{
+		if (note.controlUpdate && !delivered)
+			m_controlMoved = true; // the Player's latest state goes out again
 		if (note.control)
 		{
 			m_controlInFlight = false;
@@ -692,17 +725,39 @@ namespace graal3d
 		}
 		if (!game->sendsState && !game->moves.empty())
 		{
-			// Ack every move the client has sent; the Camera is not simulated here,
-			// the client predicts its own control object.
+			// Ack every move the client has sent. A Player control object takes
+			// each new move once (a move can come again in later packets until the
+			// client sees it acked); a Camera is not simulated here, the client
+			// predicts it.
 			const uint32_t next = game->firstMove + static_cast<uint32_t>(game->moves.size());
 			if (next > m_lastMoveAck)
 			{
+				Ghost* player = nullptr;
+				if (m_controlDelivered && m_controlKey)
+				{
+					if (auto it = m_ghosts.find(*m_controlKey); it != m_ghosts.end() && it->second.object.kind == GhostObject::Kind::TgePlayer)
+						player = &it->second;
+				}
+				for (uint32_t i = std::max(m_lastMoveAck, game->firstMove); i < next && player; ++i)
+					tge::applyMove(player->object.tgePlayer, game->moves[i - game->firstMove]);
+				if (player)
+					m_controlMoved = true;
 				m_movesReceived += next - std::max(m_lastMoveAck, game->firstMove);
 				m_lastMoveAck = next;
 				m_ackOwed = true;
 			}
 		}
 		return true;
+	}
+
+	std::optional<tge::PlayerState> Connection::controlPlayer() const
+	{
+		if (!m_controlKey)
+			return std::nullopt;
+		const auto it = m_ghosts.find(*m_controlKey);
+		if (it == m_ghosts.end() || it->second.object.kind != GhostObject::Kind::TgePlayer)
+			return std::nullopt;
+		return it->second.object.tgePlayer;
 	}
 
 	void Connection::readDataPacket(BitReader& r)
