@@ -634,7 +634,7 @@ TEST_CASE("protocol 19 accept lists Camera, Player, Sky, their datablocks and th
 	};
 	REQUIRE(table.size() > classes.size());
 	for (size_t i = 0; i < classes.size(); ++i)
-		REQUIRE(table[i] == classes[i]);
+		REQUIRE((table[i] == classes[i])); // parenthesised: Catch's decomposer and tuple <=> clash under clang
 	for (size_t i = classes.size(); i < table.size(); ++i)
 		REQUIRE(std::get<0>(table[i]) == 2);
 }
