@@ -1,4 +1,4 @@
-// Seihai project, 2026-11-13: see CHANGES-SEIHAI.md.
+// Seihai project, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
 //
 // This file is part of the Seihai fork of GServer-v2 and is released under the
 // GNU General Public License version 3 (see LICENSE.md).
@@ -12,7 +12,11 @@
 #ifndef LEGACYPLAYERPROPS_H
 #define LEGACYPLAYERPROPS_H
 
+#include <cstdint>
+#include <functional>
+#include <optional>
 #include <set>
+#include <string>
 #include <string_view>
 
 #include <CString.h>
@@ -46,6 +50,15 @@ CString rewritePropsForPre21(const CString& props, int versionId, bool forOtherP
 /// `fromPre21Client` is as for rewritePropsForPre21: whether the player the
 /// props describe is itself a 1.x client.
 CString rewritePacketForPre21(const CString& packet, int versionId, const std::set<int>& alsoDrop = {}, bool fromPre21Client = false);
+
+/// @brief Seihai (#107): rewrite a props stream written by a classic server (prop 10 in the 1.x bow form) for a
+/// client of 2.0 or later, which reads prop 10 as a gani: the bow value is replaced by `gani` (empty means "idle").
+/// The other props are copied as they are. A stream with no prop 10 comes back unchanged.
+CString rewriteBowPropForPost20(const CString& props, std::string_view gani);
+
+/// @brief The same for a whole PLO_PLAYERPROPS or PLO_OTHERPLPROPS packet; `ganiFor` gives the gani of the player the
+/// props describe (`std::nullopt` for the receiving client itself). Any other packet is returned unchanged.
+CString rewritePacketForPost20OnClassic(const CString& packet, const std::function<std::string(std::optional<uint16_t>)>& ganiFor);
 
 /// @brief The serveroptions.txt `legacyprops_drop` list (prop ids, comma
 /// separated): props also left out for 1.x clients. A lab switch, to find
