@@ -19,6 +19,7 @@ Each file we changed carries a one-line notice at its top.
 | The sanitizer build uses Clang on Linux, whose libstdc++ `<stacktrace>` needs `stdc++exp` as GCC 14 does; it is linked there too. | `server/CMakeLists.txt`, `CHANGES-SEIHAI.md` | none (build) |
 | An NC gets `Server: GServer-v2 (Seihai) VERSION` as its first line after login, so seihai-rc knows this server doubles backslashes inside quoted NC text (seihai-rc #56). | `server/src/player/PlayerNC.cpp`, `CHANGES-SEIHAI.md` | seihai-rc; other RCs show it as a console line |
 | Release: the macOS job runs seihai-gs2lib's unit tests at the pinned commit (seihai-gs2lib #28). | `.github/workflows/seihai-release.yml`, `CHANGES-SEIHAI.md` | none (CI) |
+| The Scripting tests failed on some runs (the `seihai` release build has been red since 2026-11-18). Catch2 3 runs test cases in random order, and `ServerFixture` left its `Server`, with an NPC-Server, registered in BabyDI; a `Script::minify` test that ran after it got the whole script back, because minify keeps the source when an NPC-Server is present. The fixture now releases its server, and the minify tests release any leftover one. Seeds 4 and 7 reproduced it. | `Catch_tests/Scripting/Script_tests.cpp`, `CHANGES-SEIHAI.md` | none (tests) |
 
 ## 2026-11-18
 
