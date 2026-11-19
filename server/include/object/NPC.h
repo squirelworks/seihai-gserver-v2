@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-13, 2026-11-16: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-13, 2026-11-16, 2026-11-19: see CHANGES-SEIHAI.md.
 #ifndef NPC_H
 #define NPC_H
 
@@ -500,6 +500,7 @@ private:
 	// Seihai: the clientside script compiled for bytecode clients, keyed by the text it was compiled from.
 	mutable std::optional<std::string> m_gs1ByteCodeSource;
 	mutable std::vector<uint8_t> m_gs1ByteCode;
+	mutable bool m_gs1ByteCodeIsGS2 = false; // Seihai (#113): the clientside script was GS2 as written.
 
 	std::optional<size_t> m_initialIndexInLevelFile;
 	std::string m_initialLevel;

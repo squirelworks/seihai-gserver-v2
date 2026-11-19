@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -34,6 +34,31 @@ static ServerGeneration getServerGeneration()
 {
 	const auto server = BabyDI::Get<Server>();
 	return server->Generation;
+}
+
+namespace
+{
+	// Seihai (#107): the version of the client whose props this thread is reading, 0 when not known.
+	thread_local int t_readingClientVersion = 0;
+
+	// Whether prop 10 is read in the 1.x bow form.
+	bool readBowForm()
+	{
+		if (t_readingClientVersion != 0 && t_readingClientVersion != CLVER_UNKNOWN)
+			return t_readingClientVersion < CLVER_2_0;
+		return getServerGeneration() == ServerGeneration::CLASSIC;
+	}
+} // namespace
+
+ClientVersionScope::ClientVersionScope(const int versionId) noexcept
+	: m_previous(t_readingClientVersion)
+{
+	t_readingClientVersion = versionId;
+}
+
+ClientVersionScope::~ClientVersionScope()
+{
+	t_readingClientVersion = m_previous;
 }
 
 bool isModernGeneration()
@@ -244,8 +269,9 @@ CString PropertyGaniOrBowGif::serialize() const
 
 void PropertyGaniOrBowGif::deserialize(CString& data)
 {
-	// Gani for later clients.
-	if (getServerGeneration() != ServerGeneration::CLASSIC)
+	// Gani for later clients. Seihai (#107): the form follows the sending client when it is known, so a 2.x client
+	// on a classic server is read as a gani, not as a bow power followed by the gani's letters as prop ids.
+	if (!readBowForm())
 	{
 		gani = data.readChars(data.readGUChar());
 	}

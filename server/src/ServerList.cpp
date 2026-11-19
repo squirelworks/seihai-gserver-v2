@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -22,6 +22,7 @@
 
 #include <Server.h>
 #include <ServerList.h>
+#include <misc/ServerWarpText.h>
 #include <filesystem/FileSystem.h>
 #include <filesystem/FileSystemTypes.h>
 #include <npcserver/NPCServer.h>
@@ -973,7 +974,15 @@ void ServerList::msgSVI_FILEEND3(CString& pPacket)
 void ServerList::msgSVI_SERVERINFO(CString& pPacket)
 {
 	const int pid = pPacket.readGUShort();
-	const CString serverpacket = pPacket.readString("");
+	CString serverpacket = pPacket.readString("");
+
+	// Seihai (#114): a name starting with "3 " made 5.12 take the server for a 3D one and drop after ~15 s.
+	bool trimmed = false;
+	if (auto text = serverwarp::stripThreeDPrefix(serverpacket.toStringView(), trimmed); trimmed)
+	{
+		log::printLine(log::server, "Server warp for player {}: the leading \"3 \" was taken off the server name ({}), so the client does not treat it as a 3D server.", pid, serverpacket.toStringView());
+		serverpacket = CString{text};
+	}
 
 	// A hack to allow v5 clients to serverwarp to servers
 	const auto player = m_server->getPlayer(pid, PLTYPE_ANYCLIENT);

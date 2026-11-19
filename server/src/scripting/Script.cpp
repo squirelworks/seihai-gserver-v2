@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-19: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <any>
 #include <array>
@@ -521,6 +521,15 @@ void Script::compileScript() noexcept
 		std::replace(clientside, m_modified_source.end(), '\n', '\xa7');
 
 		// Compile serverside scripts.
+		m_server_script = npcServer->scripting.getCompiledServerScript(m_who, m_serverside);
+		if (m_server_script != nullptr && m_server_script->identifier.empty())
+			m_server_script->identifier = m_who.empty() ? "(server:unnamed)" : m_who;
+	}
+	// Seihai (#106): a classic server with an NPC-server runs serverside scripts too, as the 2001 NPC-server did for
+	// 1.x worlds. Before, no branch compiled them, so `created`, `timeout` and `playerenters` never fired there. The
+	// clientside text is left as it was: classic clients get it unchanged.
+	else if (server->Generation == ServerGeneration::CLASSIC)
+	{
 		m_server_script = npcServer->scripting.getCompiledServerScript(m_who, m_serverside);
 		if (m_server_script != nullptr && m_server_script->identifier.empty())
 			m_server_script->identifier = m_who.empty() ? "(server:unnamed)" : m_who;

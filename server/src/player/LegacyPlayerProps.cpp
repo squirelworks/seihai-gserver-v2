@@ -1,4 +1,4 @@
-// Seihai project, 2026-11-13: see CHANGES-SEIHAI.md.
+// Seihai project, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
 //
 // This file is part of the Seihai fork of GServer-v2 and is released under the
 // GNU General Public License version 3 (see LICENSE.md).
@@ -12,6 +12,8 @@
 #include <cctype>
 #include <cstddef>
 #include <exception>
+#include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -254,6 +256,65 @@ CString rewritePacketForPre21(const CString& packet, const int versionId, const 
 
 	if (packetId == PLO_OTHERPLPROPS && packet.length() >= 3)
 		return CString() >> (char)PLO_OTHERPLPROPS << packet.subString(1, 2) << rewritePropsForPre21(packet.subString(3), versionId, true, alsoDrop, fromPre21Client);
+
+	return packet;
+}
+
+CString rewriteBowPropForPost20(const CString& props, const std::string_view gani)
+{
+	CString in{props};
+	in.setRead(0);
+	CString out;
+	bool changed = false;
+
+	while (in.bytesLeft() > 0)
+	{
+		const int start = in.readPos();
+		const int propId = in.readGUChar();
+		if (propId < 0 || propId >= PLAYERPROP_COUNT)
+			return props;
+
+		try
+		{
+			// The classic server's reader of each prop tells where its value ends.
+			auto prop = Player::constructPropFor(static_cast<PlayerProp>(propId));
+			prop->deserialize(in);
+		}
+		catch (const std::exception&)
+		{
+			return props;
+		}
+
+		if (propId == PROPID(PlayerProp::GANI))
+		{
+			const std::string name{gani.empty() ? std::string_view{"idle"} : gani};
+			const auto len = std::min<size_t>(name.size(), 223);
+			out >> (char)propId >> (char)len << std::string_view{name}.substr(0, len);
+			changed = true;
+		}
+		else
+			out << props.subString(start, in.readPos() - start);
+	}
+
+	return changed ? out : props;
+}
+
+CString rewritePacketForPost20OnClassic(const CString& packet, const std::function<std::string(std::optional<uint16_t>)>& ganiFor)
+{
+	if (packet.length() < 1)
+		return packet;
+
+	const int packetId = static_cast<unsigned char>(packet[0]) - 32;
+	if (packetId == PLO_PLAYERPROPS)
+		return CString() >> (char)PLO_PLAYERPROPS << rewriteBowPropForPost20(packet.subString(1), ganiFor(std::nullopt));
+
+	if (packetId == PLO_OTHERPLPROPS && packet.length() >= 3)
+	{
+		CString idBytes = packet.subString(1, 2);
+		idBytes.setRead(0);
+		const auto otherId = static_cast<uint16_t>(idBytes.readGUShort());
+		return CString() >> (char)PLO_OTHERPLPROPS << packet.subString(1, 2) << rewriteBowPropForPost20(packet.subString(3), ganiFor(otherId));
+	}
 
 	return packet;
 }
