@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12 and 2026-11-19: see CHANGES-SEIHAI.md.
 // New file: regression tests for the built-in NPC-server's GS1 fixes from the
 // 2026-10-31 lab note (docs/lab/2026-10-31-npcserver-gs1.md) and issue #33.
 #include <catch2/catch_all.hpp>
@@ -16,6 +16,7 @@
 
 #include <BabyDI.h>
 #include <Server.h>
+#include <level/Level.h>
 #include <npcserver/NPCServer.h>
 #include <object/NPC.h>
 #include <object/Player.h>
@@ -206,6 +207,50 @@ TEST_CASE_METHOD(GS1Fixture, "bare shootball is accepted", "[GS1][issue33]")
 	CHECK_THAT(scriptLog(), Catch::Matchers::ContainsSubstring("invalid arguments: shootball"));
 
 	log::npc.disabled = true;
+}
+
+TEST_CASE_METHOD(GS1Fixture, "bare shootball with no event player aims at the nearest player in the level", "[GS1][issue106]")
+{
+	// A timeout or created has no player on the stack. Those shots took the NPC's own direction; the lab saw
+	// only the first shot (from playerenters) go toward the player (#106).
+	auto near = std::make_shared<PlayerClient>(new CSocket(), server->getPlayerIdGenerator().getAvailableId());
+	near->setType(PLTYPE_CLIENT2);
+	server->addPlayer(near, near->getId());
+	auto far = std::make_shared<PlayerClient>(new CSocket(), server->getPlayerIdGenerator().getAvailableId());
+	far->setType(PLTYPE_CLIENT2);
+	server->addPlayer(far, far->getId());
+
+	auto level = std::make_shared<Level>();
+	level->levelName = "shootball.nw";
+	npc()->setLevel(level);
+	npc()->character.direction = 2; // facing down
+	level->addPlayer(near->getId());
+	level->addPlayer(far->getId());
+
+	const auto shotDirection = [&](float nearX, float nearY)
+	{
+		near->account.character.localPixelX = static_cast<int16_t>(nearX * 16);
+		near->account.character.localPixelY = static_cast<int16_t>(nearY * 16);
+		far->account.character.localPixelX = 20 * 16;
+		far->account.character.localPixelY = 60 * 16;
+		level->getArrows().clear();
+		REQUIRE(run("if (created) { shootball; }").empty());
+		REQUIRE(level->getArrows().size() == 1);
+		return level->getArrows().front().direction;
+	};
+
+	CHECK(shotDirection(40.0f, 30.0f) == 3); // right
+	CHECK(shotDirection(2.0f, 30.0f) == 1);  // left
+	CHECK(shotDirection(20.0f, 10.0f) == 0); // up
+
+	// No players at all: the way the NPC faces.
+	level->getPlayers().clear();
+	level->getArrows().clear();
+	REQUIRE(run("if (created) { shootball; }").empty());
+	REQUIRE(level->getArrows().size() == 1);
+	CHECK(level->getArrows().front().direction == 2);
+
+	npc()->setLevel(nullptr);
 }
 
 TEST_CASE_METHOD(GS1Fixture, "#a, #g and #G name the player in an NPC event, not the NPC", "[GS1][issue33]")
