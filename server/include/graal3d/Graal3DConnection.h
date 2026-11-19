@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
 // New file: one accepted Graal 3D (Torque) UDP connection, server side. It keeps
 // Torque's notify protocol (sequence numbers, acks, pings), resends guaranteed
 // events that were lost, drives the mission start phases and carries Graal's
@@ -14,13 +14,16 @@
 // position and its control object's changes in every packet (onClientState).
 //
 // Protocol 19 (3.153, 4.04r2, the stock TGE game layer; see Graal3DTge.h): the
-// mission start has three phases. After phase 1's ack the connection sends its one
-// datablock (a CameraData) and DataBlocksDone; once the client says the datablocks
-// are loaded it sends phase 2, GhostAlwaysStarting and lets ghosts out (the owner
-// gives it one TgeCamera); once phase 2 is acked and every ghost is in, it sends
-// GhostAlwaysDone and phase 3, and after phase 3's ack the Camera becomes the
-// control object. The client then sends moves, which are acknowledged but not
-// applied.
+// mission start has three phases. After phase 1's ack the connection sends the
+// datablock its control object uses (a PlayerData for a TgePlayer, a CameraData
+// for a TgeCamera) and DataBlocksDone; once the client says the datablocks are
+// loaded it sends phase 2, GhostAlwaysStarting and lets ghosts out (the owner gives
+// it a Sky and one TgePlayer or TgeCamera); once phase 2 is acked and every ghost
+// is in, it sends GhostAlwaysDone and phase 3, and after phase 3's ack the Player
+// or Camera becomes the control object. The client then sends moves, which are
+// acknowledged. A Player's are applied (a plain walk, see tge::applyMove), and its
+// packet data goes out again in the next packet after each change; a Camera's are
+// not applied.
 
 #ifndef SEIHAI_GRAAL3D_GRAAL3DCONNECTION_H
 #define SEIHAI_GRAAL3D_GRAAL3DCONNECTION_H
@@ -127,6 +130,8 @@ namespace graal3d
 		// moves it has sent.
 		[[nodiscard]] uint32_t lastMoveAck() const { return m_lastMoveAck; }
 		[[nodiscard]] size_t movesReceived() const { return m_movesReceived; }
+		// Protocol 19: the control object's state, if it is a Player.
+		[[nodiscard]] std::optional<tge::PlayerState> controlPlayer() const;
 		[[nodiscard]] size_t pendingEvents() const { return m_sendQueue.size(); }
 		[[nodiscard]] size_t unackedEvents() const { return m_events.size(); }
 
@@ -178,6 +183,7 @@ namespace graal3d
 			std::vector<int32_t> events; // guaranteed event sequence numbers
 			std::vector<GhostSent> ghosts;
 			bool control = false;
+			bool controlUpdate = false; // protocol 19: a moved Player's packet data again
 		};
 
 		void postEvent(std::string_view className, BitWriter payload);
@@ -259,6 +265,7 @@ namespace graal3d
 		bool m_phase2Acked = false;
 		uint32_t m_lastMoveAck = 0;
 		size_t m_movesReceived = 0;
+		bool m_controlMoved = false; // the Player moved since its packet data last went out
 
 		// The client's own control object, as its echoes describe it.
 		GameObjectState m_clientObject;

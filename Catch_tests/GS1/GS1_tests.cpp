@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-13, 2026-11-16: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-13, 2026-11-16, 2026-11-19: see CHANGES-SEIHAI.md.
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch_all.hpp>
 #include <catch2/catch_message.hpp>
@@ -975,6 +975,27 @@ TEST_CASE_METHOD(ServerFixture, "ScriptEngineGS1 npc and player bindings and cro
 		CHECK(npc != nullptr);
 		CHECK(npcstore->contains("myvar"));
 		CHECK_THAT(npcstore->getValue<double>("myvar").value_or(0.0), Catch::Matchers::WithinRel(50.0));
+	}
+
+	SECTION("setcharprop reads its text for the player, not the NPC")
+	{
+		// npcdemo's `setcharprop #c,Welcome #n!` greeted the NPC by its own name (lab 2026-11-19).
+		client->account.character.nickName = "Visitor";
+		auto npc = server->getNPC(testNPC);
+		REQUIRE(npc != nullptr);
+		npc->character.nickName = "Greeter";
+
+		constexpr std::string_view script = R"(
+			if (playerenters) {
+				setcharprop #c,Welcome #n!;
+			}
+		)";
+		ScriptEvent enters{.type = ScriptEventType::PLAYERENTERS, .initiator = source::FromPlayer(client->getId())};
+		auto result = engine->compileScript(ScriptCompilationTarget::SERVER, "test_script", script);
+		REQUIRE(execute_script(*engine, enters, source::FromNPC(testNPC), result));
+
+		CHECK(npc->character.chatMessage == "Welcome Visitor!");
+		CHECK(npc->character.nickName == "Greeter");
 	}
 
 	SECTION("message code bindings")

@@ -1,4 +1,4 @@
-// Seihai project, 2026-11-13: see CHANGES-SEIHAI.md.
+// Seihai project, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
 //
 // This file is part of the Seihai fork of GServer-v2 and is released under the
 // GNU General Public License version 3 (see LICENSE.md).
@@ -12,6 +12,8 @@
 #include <cctype>
 #include <cstddef>
 #include <exception>
+#include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -254,6 +256,115 @@ CString rewritePacketForPre21(const CString& packet, const int versionId, const 
 
 	if (packetId == PLO_OTHERPLPROPS && packet.length() >= 3)
 		return CString() >> (char)PLO_OTHERPLPROPS << packet.subString(1, 2) << rewritePropsForPre21(packet.subString(3), versionId, true, alsoDrop, fromPre21Client);
+
+	return packet;
+}
+
+CString rewriteBowPropForPost20(const CString& props, const std::string_view gani, const std::string_view body)
+{
+	CString in{props};
+	in.setRead(0);
+	CString out;
+	bool changed = false;
+	bool sawHead = false;
+	bool sawBody = false;
+
+	while (in.bytesLeft() > 0)
+	{
+		const int start = in.readPos();
+		const int propId = in.readGUChar();
+		if (propId < 0 || propId >= PLAYERPROP_COUNT)
+			return props;
+
+		try
+		{
+			// The classic server's reader of each prop tells where its value ends.
+			auto prop = Player::constructPropFor(static_cast<PlayerProp>(propId));
+			prop->deserialize(in);
+		}
+		catch (const std::exception&)
+		{
+			return props;
+		}
+
+		if (propId == PROPID(PlayerProp::GANI))
+		{
+			const std::string name{gani.empty() ? std::string_view{"idle"} : gani};
+			const auto len = std::min<size_t>(name.size(), 223);
+			out >> (char)propId >> (char)len << std::string_view{name}.substr(0, len);
+			changed = true;
+		}
+		else if (propId == PROPID(PlayerProp::SWORDIMAGE) || propId == PROPID(PlayerProp::SHIELDIMAGE))
+		{
+			// A stock sword or shield named as a .gif (what a classic account names) goes as the .png 2.x ships.
+			const bool sword = propId == PROPID(PlayerProp::SWORDIMAGE);
+			const int named = sword ? 30 : 10;
+			CString value = props.subString(start + 1, in.readPos() - start - 1);
+			value.setRead(0);
+			const int power = value.readGUChar();
+			std::string image = power >= named ? value.readChars(value.readGUChar()).toString() : std::string{};
+			if (stockImageNumber(image, sword ? "sword" : "shield") >= 0 && endsWithNoCase(image, ".gif"))
+			{
+				image.replace(image.size() - 4, 4, ".png");
+				out >> (char)propId >> (char)power >> (char)image.length() << image;
+				changed = true;
+			}
+			else
+				out << props.subString(start, in.readPos() - start);
+		}
+		else if (propId == PROPID(PlayerProp::HEADIMAGE))
+		{
+			sawHead = true;
+			CString value = props.subString(start + 1, in.readPos() - start - 1);
+			value.setRead(0);
+			const int first = value.readGUChar();
+			std::string image = first >= 100 ? value.readChars(first - 100).toString() : std::string{};
+			if (stockImageNumber(image, "head") >= 0 && endsWithNoCase(image, ".gif"))
+			{
+				image.replace(image.size() - 4, 4, ".png");
+				out >> (char)propId >> (char)(100 + image.length()) << image;
+				changed = true;
+			}
+			else
+				out << props.subString(start, in.readPos() - start);
+		}
+		else
+		{
+			sawBody = sawBody || propId == PROPID(PlayerProp::BODYIMAGE);
+			out << props.subString(start, in.readPos() - start);
+		}
+	}
+
+	if (sawHead && !sawBody && !body.empty())
+	{
+		const auto len = std::min<size_t>(body.size(), 223);
+		out >> (char)PROPID(PlayerProp::BODYIMAGE) >> (char)len << body.substr(0, len);
+		changed = true;
+	}
+
+	return changed ? out : props;
+}
+
+CString rewritePacketForPost20OnClassic(const CString& packet, const std::function<Post20Look(std::optional<uint16_t>)>& lookFor)
+{
+	if (packet.length() < 1)
+		return packet;
+
+	const int packetId = static_cast<unsigned char>(packet[0]) - 32;
+	if (packetId == PLO_PLAYERPROPS)
+	{
+		const auto look = lookFor(std::nullopt);
+		return CString() >> (char)PLO_PLAYERPROPS << rewriteBowPropForPost20(packet.subString(1), look.gani, look.body);
+	}
+
+	if (packetId == PLO_OTHERPLPROPS && packet.length() >= 3)
+	{
+		CString idBytes = packet.subString(1, 2);
+		idBytes.setRead(0);
+		const auto otherId = static_cast<uint16_t>(idBytes.readGUShort());
+		const auto look = lookFor(otherId);
+		return CString() >> (char)PLO_OTHERPLPROPS << packet.subString(1, 2) << rewriteBowPropForPost20(packet.subString(3), look.gani, look.body);
+	}
 
 	return packet;
 }

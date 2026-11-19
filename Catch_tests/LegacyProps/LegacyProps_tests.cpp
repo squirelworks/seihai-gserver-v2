@@ -1,4 +1,4 @@
-// Seihai project, 2026-11-13: see CHANGES-SEIHAI.md.
+// Seihai project, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
 //
 // This file is part of the Seihai fork of GServer-v2 and is released under the
 // GNU General Public License version 3 (see LICENSE.md).
@@ -21,6 +21,7 @@
 #include <player/LegacyPlayerProps.h>
 #include <player/PlayerProps.h>
 #include <utilities/CommonTypes.h>
+#include <utilities/PropertySerializers.h>
 
 using namespace preagonal;
 
@@ -219,4 +220,90 @@ TEST_CASE("1.x clients get player props in the pre-2.1 forms", "[legacy]")
 		REQUIRE_FALSE(legacy::isPre21Client(CLVER_UNKNOWN));
 		REQUIRE_FALSE(legacy::isPre21Client(CLVER_NW_2_02));
 	}
+}
+
+TEST_CASE("prop 10 follows the client on a classic server (#107)", "[legacy]")
+{
+	BabyDI_RELEASE(Server);
+	auto* server = BabyDI_PROVIDE(Server, new Server("test"));
+	server->Generation = ServerGeneration::CLASSIC;
+
+	SECTION("a 2.22 client's walk gani is read as a gani, not as bow power 4 and prop 87")
+	{
+		CString in;
+		in << str("walk");
+		in.setRead(0);
+		const props::ClientVersionScope scope{CLVER_2_22};
+		props::PropertyGaniOrBowGif prop;
+		prop.deserialize(in);
+		REQUIRE(prop.gani.has_value());
+		CHECK(prop.gani.value() == "walk");
+		CHECK_FALSE(prop.bowGif.has_value());
+		CHECK(in.bytesLeft() == 0);
+	}
+
+	SECTION("a 1.39 client's prop 10 is still a bow")
+	{
+		CString in;
+		in >> (char)(10 + 8) << "bow1.gif";
+		in.setRead(0);
+		const props::ClientVersionScope scope{CLVER_1_39};
+		props::PropertyGaniOrBowGif prop;
+		prop.deserialize(in);
+		REQUIRE(prop.bowGif.has_value());
+		CHECK(prop.bowGif->first == "bow1.gif");
+	}
+
+	SECTION("a 2.x client is sent the gani in place of the bow form")
+	{
+		CString props;
+		props >> (char)PROPID(PlayerProp::NICKNAME) << str("m139");
+		props >> (char)PROPID(PlayerProp::GANI) >> (char)(10 + 8) << "bow1.gif";
+		props >> (char)PROPID(PlayerProp::X) >> (char)60;
+
+		CString out = legacy::rewriteBowPropForPost20(props, "walk");
+		out.setRead(0);
+		CHECK(out.readGUChar() == PROPID(PlayerProp::NICKNAME));
+		CHECK(out.readChars(out.readGUChar()) == "m139");
+		CHECK(out.readGUChar() == PROPID(PlayerProp::GANI));
+		CHECK(out.readChars(out.readGUChar()) == "walk");
+		CHECK(out.readGUChar() == PROPID(PlayerProp::X));
+		CHECK(out.readGUChar() == 60);
+		CHECK(out.bytesLeft() == 0);
+
+		// A head from the classic account goes as the .png 2.x ships, and the body follows it.
+		CString full;
+		full >> (char)PROPID(PlayerProp::GANI) >> (char)(10 + 8) << "bow1.gif";
+		full >> (char)PROPID(PlayerProp::HEADIMAGE) >> (char)(100 + 9) << "head0.gif";
+		CString look = legacy::rewriteBowPropForPost20(full, "idle", "body.png");
+		CHECK(look.find("head0.png") >= 0);
+		CHECK(look.find("head0.gif") < 0);
+		look.setRead(0);
+		look.readGUChar(); look.readChars(look.readGUChar());   // gani
+		look.readGUChar(); look.readChars(look.readGUChar() - 100); // head
+		CHECK(look.readGUChar() == PROPID(PlayerProp::BODYIMAGE));
+		CHECK(look.readChars(look.readGUChar()) == "body.png");
+		CHECK(look.bytesLeft() == 0);
+
+		// Stock sword and shield too; a preset number is left alone.
+		CString gear;
+		gear >> (char)PROPID(PlayerProp::SWORDIMAGE) >> (char)(1 + 30) << str("sword1.gif");
+		gear >> (char)PROPID(PlayerProp::SHIELDIMAGE) >> (char)(1 + 10) << str("shield1.gif");
+		gear >> (char)PROPID(PlayerProp::SHIELDIMAGE) >> (char)2;
+		const CString gearOut = legacy::rewriteBowPropForPost20(gear, "idle");
+		CHECK(gearOut.find("sword1.png") >= 0);
+		CHECK(gearOut.find("shield1.png") >= 0);
+		CHECK(gearOut.find(".gif") < 0);
+		CHECK(gearOut.length() == gear.length());
+
+		// No gani known: idle.
+		CHECK(legacy::rewriteBowPropForPost20(props, "").find("idle") >= 0);
+
+		// No prop 10: unchanged.
+		CString noGani;
+		noGani >> (char)PROPID(PlayerProp::X) >> (char)60;
+		CHECK(legacy::rewriteBowPropForPost20(noGani, "walk") == noGani);
+	}
+
+	BabyDI_RELEASE(Server);
 }

@@ -1,4 +1,4 @@
-// Seihai project, 2026-11-13: see CHANGES-SEIHAI.md.
+// Seihai project, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
 //
 // This file is part of the Seihai fork of GServer-v2 and is released under the
 // GNU General Public License version 3 (see LICENSE.md).
@@ -50,12 +50,21 @@ struct ClientByteCode
 	std::vector<uint8_t> bytecode;
 	std::string gs2Source;
 	std::vector<std::string> errors;
+	// The script was GS2 as written (a `//#GS2` marker, or text GS1 cannot read that compiles as GS2), so a client
+	// that runs GS1 text but also reads GS2 bytecode (4.x to 5.07) must be sent the bytecode, not the text.
+	bool gs2 = false;
 
 	[[nodiscard]] bool ok() const noexcept { return !bytecode.empty(); }
 };
 
-// Compile a clientside script for a bytecode client. A script that starts with `//#GS2` is already GS2 and is compiled
-// as written; anything else is read as GS1 and translated first. The NPC-server's \xa7 line separators are accepted.
+// Whether a clientside script carries a `//#GS2` marker among its leading `//#` lines (so `//#CLIENTSIDE` may come
+// first). Case does not matter. The NPC-server's \xa7 line separators are accepted.
+[[nodiscard]] bool hasGS2Marker(std::string_view clientSource);
+
+// Compile a clientside script for a bytecode client. A script with a `//#GS2` marker (hasGS2Marker) is already GS2 and
+// is compiled as written; anything else is read as GS1 and translated first. If GS1 cannot even lex or parse it, it
+// is tried as GS2, so an unmarked GS2 script (`function onCreated() { echo("x"); }`) still compiles (#110).
+// The NPC-server's \xa7 line separators are accepted.
 [[nodiscard]] ClientByteCode compileClientScript(std::string_view clientSource);
 
 ///////////////////////////////////////////////////////////////////////////////

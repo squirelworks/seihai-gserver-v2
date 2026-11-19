@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-01, 2026-11-04, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-18: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-01, 2026-11-04, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-18, 2026-11-19: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -537,6 +537,26 @@ void Player::sendPacket(const CString& packet, const PacketQueue channel)
 			const CString rewritten = legacy::rewritePacketForPre21(packet, m_versionId, alsoDrop, fromPre21Client);
 			if (rewritten.length() <= (packetId == PLO_OTHERPLPROPS ? 3 : 1))
 				return;
+			return sendPacketUnchecked(rewritten, channel);
+		}
+	}
+
+	// Seihai (#107): a classic server writes prop 10 in the 1.x bow form, but 2.0 and later read it as a gani. They
+	// drew no players at all; they now get the player's gani in its place, a stock head as .png and the body.
+	if (isClient() && m_server != nullptr && m_server->Generation == ServerGeneration::CLASSIC
+		&& m_versionId >= CLVER_2_0 && m_versionId != CLVER_UNKNOWN)
+	{
+		if (const auto packetId = static_cast<unsigned char>(packet[0]) - 32; packetId == PLO_PLAYERPROPS || packetId == PLO_OTHERPLPROPS)
+		{
+			const CString rewritten = legacy::rewritePacketForPost20OnClassic(packet, [this](const std::optional<uint16_t> otherId) -> legacy::Post20Look
+			{
+				if (!otherId.has_value())
+					return {account.character.gani, account.character.bodyImage};
+				const auto other = m_server->getPlayer(static_cast<PlayerID>(otherId.value()));
+				if (other == nullptr)
+					return {};
+				return {other->account.character.gani, other->account.character.bodyImage};
+			});
 			return sendPacketUnchecked(rewritten, channel);
 		}
 	}

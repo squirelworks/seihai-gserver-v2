@@ -1,4 +1,4 @@
-// Seihai project, 2026-11-13: see CHANGES-SEIHAI.md.
+// Seihai project, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
 //
 // This file is part of the Seihai fork of GServer-v2 and is released under the
 // GNU General Public License version 3 (see LICENSE.md).
@@ -12,7 +12,11 @@
 #ifndef LEGACYPLAYERPROPS_H
 #define LEGACYPLAYERPROPS_H
 
+#include <cstdint>
+#include <functional>
+#include <optional>
 #include <set>
+#include <string>
 #include <string_view>
 
 #include <CString.h>
@@ -46,6 +50,26 @@ CString rewritePropsForPre21(const CString& props, int versionId, bool forOtherP
 /// `fromPre21Client` is as for rewritePropsForPre21: whether the player the
 /// props describe is itself a 1.x client.
 CString rewritePacketForPre21(const CString& packet, int versionId, const std::set<int>& alsoDrop = {}, bool fromPre21Client = false);
+
+/// @brief Seihai (#107): rewrite a props stream written by a classic server (prop 10 in the 1.x bow form) for a
+/// client of 2.0 or later, which reads prop 10 as a gani: the bow value is replaced by `gani` (empty means "idle").
+/// A stock head, sword or shield that is a `.gif` (`head0.gif`, `sword1.gif`, what a classic account names) goes as
+/// the `.png` a 2.x client ships.
+/// A stream that carries the head but no body gets `body` (prop 35) after it: a classic server never sends the body,
+/// so 2.x drew players as a head only. The other props are copied as they are; a stream with none of these comes back
+/// unchanged.
+CString rewriteBowPropForPost20(const CString& props, std::string_view gani, std::string_view body = {});
+
+/// @brief What rewritePacketForPost20OnClassic needs to know about the player whose props are rewritten.
+struct Post20Look
+{
+	std::string gani;
+	std::string body;
+};
+
+/// @brief The same for a whole PLO_PLAYERPROPS or PLO_OTHERPLPROPS packet; `lookFor` gives the gani and body of the
+/// player the props describe (`std::nullopt` for the receiving client itself). Any other packet is returned unchanged.
+CString rewritePacketForPost20OnClassic(const CString& packet, const std::function<Post20Look(std::optional<uint16_t>)>& lookFor);
 
 /// @brief The serveroptions.txt `legacyprops_drop` list (prop ids, comma
 /// separated): props also left out for 1.x clients. A lab switch, to find

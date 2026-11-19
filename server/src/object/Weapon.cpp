@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-18: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-18, 2026-11-19: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -188,7 +188,12 @@ void Weapon::registerWeaponWithPlayer(const std::shared_ptr<Player>& player) con
 
 	// Classic GS1-as-text weapons (no bytecode): keep the text form for builds
 	// that still take classic script packets; modern builds need bytecode.
-	if (m_script.getClientByteCode().empty() && !scriptPackets::usesModernScriptCache(player->getVersion()))
+	// Seihai (#113): a GS2 clientside script goes as bytecode to every build that reads it (4.042 on), not as text.
+	// Seihai: 5.08 to 5.12 no longer run GS1 text at all (5.12 ignored a GS1 weapon, lab 2026-11-19), so they get the
+	// translated bytecode as level NPCs already do (NPC::sendsGS1ByteCodeTo).
+	if (m_script.getClientByteCode().empty() && !scriptPackets::usesModernScriptCache(player->getVersion())
+		&& !(scriptPackets::usesClassicScriptBytecode(player->getVersion())
+			 && (clientScriptIsGS2() || (player->getVersion() > CLVER_5_07 && !getClientByteCode().empty()))))
 	{
 		// Seihai: without an NPC-server nothing turned the weapon file's newlines into \xa7.
 		const std::string script = gs1WireText(getClientSideScript());
@@ -393,6 +398,7 @@ const ScriptByteCode& Weapon::getClientByteCode() const
 		return m_gs1ByteCode;
 
 	m_gs1ByteCode.clear();
+	m_gs1ByteCodeIsGS2 = false;
 	if (!source.empty())
 	{
 		auto compiled = gs1::compileClientScript(source);
@@ -403,10 +409,18 @@ const ScriptByteCode& Weapon::getClientByteCode() const
 				log::printLine(log::server, "  {}", error);
 		}
 		m_gs1ByteCode = std::move(compiled.bytecode);
+		m_gs1ByteCodeIsGS2 = compiled.gs2;
 	}
 	m_gs1ByteCodeSource = std::move(source);
 	calculateHeaderChecksum(m_gs1ByteCode);
 	return m_gs1ByteCode;
+}
+
+bool Weapon::clientScriptIsGS2() const
+{
+	if (!m_script.getClientByteCode().empty())
+		return false;
+	return !getClientByteCode().empty() && m_gs1ByteCodeIsGS2;
 }
 
 void Weapon::calculateHeaderChecksum(const ScriptByteCode& bytecode) const

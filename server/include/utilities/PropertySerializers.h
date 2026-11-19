@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-19: see CHANGES-SEIHAI.md.
 #ifndef PROPSCONTAINER_H
 #define PROPSCONTAINER_H
 
@@ -53,6 +54,21 @@ using GBYTE3_signed = int32_t;
 bool isModernGeneration();
 bool isNewWorldMode();
 bool exBodyColorsEnabled();
+
+/// @brief Seihai (#107): while one of these is alive on a thread, props read on that thread come from a client of
+/// version `versionId` (0 for unknown). Prop 10 is then read in the bow form for a 1.x client and in the gani form for
+/// 2.0 and later, whatever the server generation; with no scope, or an unknown version, the generation decides.
+class ClientVersionScope
+{
+public:
+	explicit ClientVersionScope(int versionId) noexcept;
+	~ClientVersionScope();
+	ClientVersionScope(const ClientVersionScope&) = delete;
+	ClientVersionScope& operator=(const ClientVersionScope&) = delete;
+
+private:
+	int m_previous;
+};
 
 //////////////////////////////////////////////////
 // SetBy and SetResults
