@@ -19,6 +19,8 @@
 
 #include <BabyDI.h>
 #include <Server.h>
+#include <filesystem>
+#include <filesystem/File.h>
 #include <level/LevelBaddy.h>
 #include <player/PlayerClient.h>
 #include <utilities/Log.h>
@@ -151,5 +153,44 @@ TEST_CASE_METHOD(SweepFixture, "Every client id with an empty body is handled wi
 		client->handlePacket(static_cast<uint8_t>(id), empty);
 		server->deletePlayer(client);
 	}
+	SUCCEED();
+}
+
+// fuzz_handlers (#87): file and level names that ztd.text could not map to Windows-1252
+// (bytes that are not UTF-8, or U+031F) sent its replacement path into memcpy with a null
+// source. The names now convert without it.
+TEST_CASE("File names convert to and from Windows-1252", "[fuzz][filenames]")
+{
+	using preagonal::fs::fromANSIFileName;
+	using preagonal::fs::getANSIFileName;
+
+	CHECK(getANSIFileName(std::filesystem::path{"level1.nw"}) == "level1.nw");
+	CHECK(getANSIFileName(std::filesystem::path{u8"café.png"}) == "caf\xe9.png");
+	CHECK(getANSIFileName(std::filesystem::path{u8"€.png"}) == "\x80.png");
+	// No Windows-1252 form: '?'.
+	CHECK(getANSIFileName(std::filesystem::path{u8"a̟b.nw"}) == "a?b.nw");
+#ifndef _WIN32
+	// Not UTF-8 at all: the bytes go out as they are.
+	CHECK(getANSIFileName(std::filesystem::path{std::string{"\xff\xff" "body.png"}}) == "\xff\xff" "body.png");
+#endif
+
+	CHECK(fromANSIFileName("caf\xe9.png") == std::filesystem::path{u8"café.png"});
+	CHECK(fromANSIFileName("\x80.png") == std::filesystem::path{u8"€.png"});
+	// 0x81 is undefined in Windows-1252.
+	CHECK(fromANSIFileName("\x81.png") == std::filesystem::path{u8"�.png"});
+}
+
+TEST_CASE_METHOD(SweepFixture, "WANTFILE and LEVELWARP with names Windows-1252 cannot hold", "[fuzz][sweep]")
+{
+	auto client = newClient();
+	CString want;
+	want << "\xff\xff\xff\xff\xff\xff\xff" "body.png";
+	client->handlePacket(PLI_WANTFILE, want);
+
+	CString warp;
+	warp.writeGChar(60).writeGChar(40) << "\x08\xcc\x9fr.test";
+	client->handlePacket(PLI_LEVELWARP, warp);
+
+	server->deletePlayer(client);
 	SUCCEED();
 }
