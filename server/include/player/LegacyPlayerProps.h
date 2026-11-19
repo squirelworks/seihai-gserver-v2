@@ -29,6 +29,12 @@ namespace preagonal::legacy
 /// @brief True for the client versions before 2.1 (1.20 to 1.41r1).
 bool isPre21Client(int versionId);
 
+/// @brief PLO_ARROWADD (19) for a 1.x client: without the GSHORT player id after the packet id.
+/// 1.39 reads x*2, y*2, flags, sprite and type straight after the id (lab 2026-11-19, #106); with
+/// the id in front it drew a wrong sprite at the level's top-left corner. Another packet, or one too
+/// short to hold the id, comes back unchanged.
+CString stripArrowAddPlayerId(const CString& packet);
+
 /// @brief Whether a 1.x client can read prop id `propId`.
 /// @param forOtherPlayer true for PLO_OTHERPLPROPS (another player), false for PLO_PLAYERPROPS (itself).
 bool pre21KnowsProp(int versionId, int propId, bool forOtherPlayer);
