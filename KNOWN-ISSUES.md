@@ -80,8 +80,11 @@ These are tracked work where outside help is welcome. They are not one bug each.
 - **Crash hunting** ([#87](https://github.com/squirelworks/seihai-gserver-v2/issues/87)).
   There is a sanitizer CI job and two weekly libFuzzer targets (see
   `fuzz/README.md`): one over `processBuffer`, and `fuzz_handlers`, which
-  drives the real client packet handlers as six client versions. Wanted: a
-  replay corpus built from loopback lab sessions. Every crash found should come with a
+  drives the real client packet handlers as six client versions standing in a
+  small level, and the RC and NC handlers. Wanted: an NPC-server and a gmap in
+  its world, a replay corpus built from loopback lab sessions, and an
+  explanation for a few `stack-use-after-return` reports from long runs that
+  didn't reproduce on their own. Every crash found should come with a
   regression test.
 - **Graal 3D control object** ([#105](https://github.com/squirelworks/seihai-gserver-v2/issues/105)).
   Protocol 19 clients (3.153, 4.04r2) used to get only a stock TGE `Camera` as
@@ -103,6 +106,8 @@ Each is in `CHANGES-SEIHAI.md` with the details.
 |---|---|---|
 | 1.x drew no ball for `shootball` or another player's arrow ([#106](https://github.com/squirelworks/seihai-gserver-v2/issues/106), part 2) | #124 | `PLO_ARROWADD` (19) went to 1.x in the 2.x form, with a player id in front, so 1.39 read the wrong bytes and drew nothing in place. 1.20 to 1.41r1 now get it without the id. |
 | A file or level name Windows-1252 cannot hold crashed the server ([#87](https://github.com/squirelworks/seihai-gserver-v2/issues/87)) | #124 | Found by `fuzz_handlers`: on Linux and macOS a `WANTFILE` with bytes that are not UTF-8, or a `LEVELWARP` with U+031F, sent ztd.text's replacement path into `memcpy` with a null source. |
+| A level or file name with a byte from 0xF5 to 0xFF hung the server | #124 | ztd.text's UTF-8 decoder never returned on such a byte (Windows-1252 õ to ÿ, so `Müller.nw` too), so one `PLI_LEVELWARP`, `PLI_WANTFILE` or localhost login froze the main loop for every player. Also in stock `beta4`. |
+| RC Server Options crashed a world with no `serveroptions.txt` | #125 | `msgPLI_RC_SERVEROPTIONSGET` used the unopened file. Also in stock `beta4`. |
 | Bare `shootball` aimed the NPC's way after the first shot ([#106](https://github.com/squirelworks/seihai-gserver-v2/issues/106), part 2) | #122 | In a timeout or `created` event there was no player, so every shot after the one from `playerenters` used the NPC's own direction. Now one ball is shot at each player in the level. |
 | GS1 `triggeraction` sent the action name as its params ([#112](https://github.com/squirelworks/seihai-gserver-v2/issues/112)) | #120 | `fn_triggeraction` read `action` and `params` from the same argument, so `ping,p1,p2` went out as `ping,ping`. |
 | A GS2 weapon with a string literal never compiled ([#110](https://github.com/squirelworks/seihai-gserver-v2/issues/110)) | #120 | The GS1 lexer rejected the `"` and that also stopped the GS2 compile; 5.24r4 and 6.03r7 got only PLO 33. |

@@ -11,7 +11,11 @@
 #include <catch2/catch_all.hpp>
 
 #include <atomic>
+#include <chrono>
+#include <cstdlib>
+#include <future>
 #include <memory>
+#include <string>
 
 #include <CSocket.h>
 #include <CString.h>
@@ -23,6 +27,7 @@
 #include <filesystem/File.h>
 #include <level/LevelBaddy.h>
 #include <player/PlayerClient.h>
+#include <player/PlayerRC.h>
 #include <utilities/Log.h>
 #include <utilities/manager/ITranslationManager.h>
 #include <utilities/manager/TranslationManagerClassic.h>
@@ -154,6 +159,62 @@ TEST_CASE_METHOD(SweepFixture, "Every client id with an empty body is handled wi
 		server->deletePlayer(client);
 	}
 	SUCCEED();
+}
+
+// A level name with a byte from 0xF5 to 0xFF (Windows-1252 õ to ÿ) made ztd.text's
+// UTF-8 decoder loop forever in fs::getANSIFileName, so one PLI_LEVELWARP hung the
+// server (found by fuzz/handlers). A hang must fail the test, not stall it.
+template <typename F>
+static void requireFinishes(F&& f)
+{
+	auto done = std::async(std::launch::async, std::forward<F>(f));
+	if (done.wait_for(std::chrono::seconds(10)) != std::future_status::ready)
+	{
+		FAIL_CHECK("did not finish within 10 seconds");
+		std::_Exit(1);
+	}
+}
+
+TEST_CASE("getANSIFileName keeps a raw Windows-1252 name", "[ansi]")
+{
+	for (int b = 0xF5; b <= 0xFF; ++b)
+	{
+		CAPTURE(b);
+		const std::string name = std::string("M") + static_cast<char>(b) + "ller.nw";
+		std::string out;
+		requireFinishes([&] { out = fs::getANSIFileName(std::filesystem::path{name}); });
+		CHECK(out == name);
+	}
+	CHECK(fs::getANSIFileName(std::filesystem::path{"dir/plain.nw"}) == "plain.nw");
+}
+
+TEST_CASE_METHOD(SweepFixture, "LEVELWARP to a name with 0xFC returns", "[ansi]")
+{
+	auto client = newClient();
+	CString warp;
+	warp.writeGChar(60).writeGChar(60);
+	warp << "M\xfcller.nw";
+	requireFinishes([&] { client->handlePacket(PLI_LEVELWARP, warp); });
+	server->deletePlayer(client);
+}
+
+struct OptionsRC : PlayerRC
+{
+	using PlayerRC::PlayerRC;
+	using PlayerRC::handlePacket;
+};
+
+TEST_CASE_METHOD(SweepFixture, "RC server options on a world with no serveroptions.txt", "[rc]")
+{
+	// The test world has no config folder, so the file cannot be opened. This was a
+	// null dereference (found by fuzz/handlers).
+	auto rc = std::make_shared<OptionsRC>(new CSocket(), server->getPlayerIdGenerator().getAvailableId());
+	rc->setType(PLTYPE_RC2);
+	rc->account.name = "OptionsRC";
+	server->addPlayer(rc, rc->getId());
+	CString empty;
+	CHECK(rc->handlePacket(PLI_RC_SERVEROPTIONSGET, empty) == HandlePacketResult::Handled);
+	server->deletePlayer(rc);
 }
 
 // fuzz_handlers (#87): file and level names that ztd.text could not map to Windows-1252

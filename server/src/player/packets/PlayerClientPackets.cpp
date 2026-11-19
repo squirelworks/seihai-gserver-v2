@@ -238,7 +238,7 @@ HandlePacketResult PlayerClient::msgPLI_BOMBADD(CString& pPacket)
 		{
 			const auto position = toPixelPosition(getSubLevelOrigin(), LocalTilePosition{loc[0], loc[1]});
 			if (level->addBombFromClient(position, power, m_id, timeToExplode) == nullptr)
-				sendPacket(CString() >> (char)PLO_BOMBDEL >> (char)(loc[0] * 2) >> (char)(loc[1] * 2));
+				sendPacket(CString() >> (char)PLO_BOMBDEL >> (char)static_cast<int>(loc[0] * 2) >> (char)static_cast<int>(loc[1] * 2));
 		}
 		else
 		{
@@ -359,7 +359,7 @@ HandlePacketResult PlayerClient::msgPLI_ITEMADD(CString& pPacket)
 	// If item drops are disabled, tell the client to delete the item and roll back the changes.
 	if (m_server->cached.disableItemDropping.getValue())
 	{
-		sendPacket(CString() >> (char)PLO_ITEMDEL >> (char)(loc[0] * 2) >> (char)(loc[1] * 2));
+		sendPacket(CString() >> (char)PLO_ITEMDEL >> (char)static_cast<int>(loc[0] * 2) >> (char)static_cast<int>(loc[1] * 2));
 		if (m_server->hasNPCServer())
 			addItem(inform_client, itemType);
 		return HandlePacketResult::Handled;
@@ -375,7 +375,7 @@ HandlePacketResult PlayerClient::msgPLI_ITEMADD(CString& pPacket)
 			// If the item was ultimately not dropped on the level (e.g., a gralats NPC was created), tell the client to delete it.
 			if (!dropItem(toPixelPosition(getSubLevelOrigin(), LocalTilePosition{loc[0], loc[1]}), itemType))
 			{
-				sendPacket(CString() >> (char)PLO_ITEMDEL >> (char)(loc[0] * 2) >> (char)(loc[1] * 2));
+				sendPacket(CString() >> (char)PLO_ITEMDEL >> (char)static_cast<int>(loc[0] * 2) >> (char)static_cast<int>(loc[1] * 2));
 				return HandlePacketResult::Handled;
 			}
 		}
@@ -384,7 +384,7 @@ HandlePacketResult PlayerClient::msgPLI_ITEMADD(CString& pPacket)
 			level->addItem(toPixelPosition(getSubLevelOrigin(), LocalTilePosition{loc[0], loc[1]}), itemType);
 		}
 
-		m_server->sendPacketToOneLevelPart(CString() >> (char)PLO_ITEMADD >> (char)(loc[0] * 2) >> (char)(loc[1] * 2) >> (char)item, getGlobalPosition(), level, {m_id});
+		m_server->sendPacketToOneLevelPart(CString() >> (char)PLO_ITEMADD >> (char)static_cast<int>(loc[0] * 2) >> (char)static_cast<int>(loc[1] * 2) >> (char)item, getGlobalPosition(), level, {m_id});
 	}
 
 	return HandlePacketResult::Handled;
@@ -873,7 +873,7 @@ HandlePacketResult PlayerClient::msgPLI_EXPLOSION(CString& pPacket)
 	if (const auto level = getLevel(); level != nullptr)
 	{
 		// Send the packet out.
-		const CString packet = CString() >> (char)PLO_EXPLOSION >> (short)m_id >> (char)eradius >> (char)(loc[0] * 2) >> (char)(loc[1] * 2) >> (char)epower;
+		const CString packet = CString() >> (char)PLO_EXPLOSION >> (short)m_id >> (char)eradius >> (char)static_cast<int>(loc[0] * 2) >> (char)static_cast<int>(loc[1] * 2) >> (char)epower;
 		m_server->sendPacketToOneLevelPart(packet, getGlobalPosition(), level, {m_id});
 
 		// Add it to the level.
@@ -1064,7 +1064,7 @@ HandlePacketResult PlayerClient::msgPLI_HITOBJECTS(CString& pPacket)
 	CString nPacket;
 	nPacket >> (char)PLO_HITOBJECTS;
 	nPacket >> (short)((nid == -1) ? m_id : 0); // If it came from an NPC, send 0 for the id.
-	nPacket >> (char)power >> (char)(loc[0] * 2) >> (char)(loc[1] * 2);
+	nPacket >> (char)power >> (char)static_cast<int>(loc[0] * 2) >> (char)static_cast<int>(loc[1] * 2);
 	if (nid != -1) nPacket >> (int)nid;
 
 	if (m_server->hasNPCServer())

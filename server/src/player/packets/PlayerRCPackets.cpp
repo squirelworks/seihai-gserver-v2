@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-04, 2026-11-07, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-04, 2026-11-07, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
@@ -53,6 +53,13 @@ HandlePacketResult PlayerRC::msgPLI_RC_SERVEROPTIONSGET(CString& pPacket)
 	}
 
 	const auto settings = m_server->getFileSystemServer().openi(fs::FileCategory::CONFIG, "serveroptions.txt");
+	// Seihai: a world without serveroptions.txt runs on defaults; the RC then gets an
+	// empty list instead of a null dereference that ends the server.
+	if (settings == nullptr)
+	{
+		sendPacket(CString() >> (char)PLO_RC_SERVEROPTIONSGET);
+		return HandlePacketResult::Handled;
+	}
 	// Seihai: quoted the way the RC tokenizes, or it splits each line at its spaces.
 	auto options = rcTokenizeLines(settings->readAllLines());
 
