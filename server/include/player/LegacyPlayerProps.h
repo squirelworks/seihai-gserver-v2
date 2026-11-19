@@ -53,12 +53,22 @@ CString rewritePacketForPre21(const CString& packet, int versionId, const std::s
 
 /// @brief Seihai (#107): rewrite a props stream written by a classic server (prop 10 in the 1.x bow form) for a
 /// client of 2.0 or later, which reads prop 10 as a gani: the bow value is replaced by `gani` (empty means "idle").
-/// The other props are copied as they are. A stream with no prop 10 comes back unchanged.
-CString rewriteBowPropForPost20(const CString& props, std::string_view gani);
+/// A stock head that is a `.gif` (`head0.gif`, what a classic account names) goes as the `.png` a 2.x client ships.
+/// A stream that carries the head but no body gets `body` (prop 35) after it: a classic server never sends the body,
+/// so 2.x drew players as a head only. The other props are copied as they are; a stream with none of these comes back
+/// unchanged.
+CString rewriteBowPropForPost20(const CString& props, std::string_view gani, std::string_view body = {});
 
-/// @brief The same for a whole PLO_PLAYERPROPS or PLO_OTHERPLPROPS packet; `ganiFor` gives the gani of the player the
-/// props describe (`std::nullopt` for the receiving client itself). Any other packet is returned unchanged.
-CString rewritePacketForPost20OnClassic(const CString& packet, const std::function<std::string(std::optional<uint16_t>)>& ganiFor);
+/// @brief What rewritePacketForPost20OnClassic needs to know about the player whose props are rewritten.
+struct Post20Look
+{
+	std::string gani;
+	std::string body;
+};
+
+/// @brief The same for a whole PLO_PLAYERPROPS or PLO_OTHERPLPROPS packet; `lookFor` gives the gani and body of the
+/// player the props describe (`std::nullopt` for the receiving client itself). Any other packet is returned unchanged.
+CString rewritePacketForPost20OnClassic(const CString& packet, const std::function<Post20Look(std::optional<uint16_t>)>& lookFor);
 
 /// @brief The serveroptions.txt `legacyprops_drop` list (prop ids, comma
 /// separated): props also left out for 1.x clients. A lab switch, to find
