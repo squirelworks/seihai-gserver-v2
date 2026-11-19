@@ -156,7 +156,7 @@ too. The server never sends a player's position back to that player.
 | Scripts in 3D mode | with `weapon3d` lines: `addweapon` and `weaponscript` over the 3D text channel. A 5.12 lab client compiled and ran one, and its `keydown2` saw the arrow keys. |
 | Walking | a script's `triggerserver(..., "g3dpos", x, y, z)` and the gserver moves the player's object. Lab 15 showed the trigger reaching the gserver; the move is not yet run with a real client. |
 | `TerrainBlock`, `movetype` | **not sent.** |
-| 3.15x and 4.04r2 game packets | done up to a walking `Player` control object and a `Sky`. A real 4.04r2 runs a `Camera` session with the `Sky` (lab 2026-11-19); the `Player` needs a TGE `.dts` (`tgeplayershape`), which no lab has had yet. See "Protocol 19" below. |
+| 3.15x and 4.04r2 game packets | done up to a walking `Player` control object and a `Sky`. A real 4.04r2 runs a `Camera` session with the `Sky`, and a `Player` session once `tgeplayershape` names a loadable TGE `.dts` (lab 2026-11-19). See "Protocol 19" below. |
 
 ## Protocol 19 (3.151 Linux, 3.153, 4.04r2)
 
@@ -180,8 +180,11 @@ crashes without one, so a protocol 19 `Sky`'s list is padded to seven entries
 with its first name (`g3d_sky` for the plain one). The `Player`, `PlayerData` and `Player` packet data layouts were read from
 the 4.04r2 `Graal3DEngine.dll` on 2026-11-19; they are stock TGE 1.x, with Graal's
 md3 model name in `PlayerData`. 4.04r2's `Player::onNewDataBlock` fails without a
-shape it can load, so the `Player` is only sent with `tgeplayershape`; no TGE `.dts`
-with the player sequences is held yet.
+shape it can load, so the `Player` is only sent with `tgeplayershape`. 4.04r2 loads
+`.dts` version 24 and older; a shape with no sequences is accepted (the lab used a
+version 24 `octahedron.dts`). The shape can sit next to the client, or in the
+server's world folder for the client to download over TCP. No `.dts` with the real
+player sequences is held yet, so the ghost has no walk animation.
 
 Not done for these clients: other players' `Player`s, the world's objects (they are
 `GameObject`s, a 4.20r6 and later class), `Sun`, terrain, and damage flash or
@@ -192,7 +195,7 @@ Labs 2026-11-14 and 2026-11-19, with real clients:
 | Client | How far it gets |
 |---|---|
 | Linux 3.151, Mac 3.153 | Every step above with a `Camera` and no `Sky`, up to the control object, and their moves are acked. Then each crashes on its first frame (a null read while drawing). Likely the missing `Sky`, which 4.04r2 also needs (2026-11-19); not rerun yet. |
-| Windows 4.04r2 | 2026-11-14: crashes while starting its own 3D engine, before it opens the UDP port (on Windows 10, and under Wine, where a 2D server works). 2026-11-19, under Wine with no memory patch: with a shapeless `Player` it drops the link at once; with a `Camera` and a seven-entry `Sky` it draws the sky and fog, holds the link about two minutes and sends its moves. |
+| Windows 4.04r2 | 2026-11-14: crashes while starting its own 3D engine, before it opens the UDP port (on Windows 10, and under Wine, where a 2D server works). 2026-11-19, under Wine with no memory patch: with a `Camera` and the `Sky` (padded to seven materials by the server) it draws the sky and fog and holds the link; with `tgeplayershape` naming a loadable version 24 `.dts`, the `Player` ghost is accepted and walks (193 move packets, the position tracked from spawn), whether the shape sits next to the client or is downloaded from the server's world folder. A `Player` with no reachable shape drops the link in under a second. |
 | Seihai's Ato client, as 4.04r2 and 3.153 | Every step, and the server reads its moves. |
 | 4.20r8 | Not protocol 19: it speaks protocol 24 and plays a full 3D session. |
 
