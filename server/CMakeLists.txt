@@ -516,7 +516,7 @@ endif()
 # ----------------------------
 # Tests
 
-if (TESTS)
+if (TESTS OR FUZZ_HANDLERS)
 	set(APP_LIBRARY_NAME_TESTREF "${TARGET_NAME}" PARENT_SCOPE)
 endif()
 

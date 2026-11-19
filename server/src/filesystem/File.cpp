@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-19: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <cerrno>
 #include <chrono>
@@ -48,12 +49,114 @@ static auto readGPacked(std::istream& stream) -> std::conditional_t<C <= 2, std:
 	return result;
 }
 
+#ifndef PLATFORM_WINDOWS
+// Seihai (#87): Windows-1252 <-> UTF-8 for file names without ztd.text. ztd's
+// replacement path calls memcpy with a null source whenever a character has no
+// mapping (a level or file name from a client with U+031F, or with bytes that are
+// not UTF-8; found by fuzz_handlers). Unmappable characters become '?' going to
+// 1252 and U+FFFD coming back, as ztd's replacement handler gave; bytes that are
+// not UTF-8 pass through unchanged.
+namespace
+{
+	// Windows-1252 0x80-0x9F; 0 marks the five undefined bytes.
+	constexpr char16_t kCp1252High[32] = {
+		0x20AC, 0, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, 0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0, 0x017D, 0,
+		0, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014, 0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0, 0x017E, 0x0178,
+	};
+
+	char toCp1252(uint32_t cp)
+	{
+		if (cp < 0x80 || (cp >= 0xA0 && cp <= 0xFF))
+			return static_cast<char>(cp);
+		for (int i = 0; i < 32; ++i)
+			if (kCp1252High[i] != 0 && kCp1252High[i] == cp)
+				return static_cast<char>(0x80 + i);
+		return '?';
+	}
+
+	void appendUtf8(std::string& out, uint32_t cp)
+	{
+		if (cp < 0x80)
+			out += static_cast<char>(cp);
+		else if (cp < 0x800)
+		{
+			out += static_cast<char>(0xC0 | (cp >> 6));
+			out += static_cast<char>(0x80 | (cp & 0x3F));
+		}
+		else
+		{
+			out += static_cast<char>(0xE0 | (cp >> 12));
+			out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+			out += static_cast<char>(0x80 | (cp & 0x3F));
+		}
+	}
+
+	// One UTF-8 sequence at s[i]: its code point and length, or 0 when malformed.
+	size_t readUtf8(std::string_view s, size_t i, uint32_t& cp)
+	{
+		const auto c = static_cast<uint8_t>(s[i]);
+		size_t n;
+		if (c < 0x80) { cp = c; return 1; }
+		if (c >= 0xC2 && c <= 0xDF) { n = 1; cp = c & 0x1F; }
+		else if (c >= 0xE0 && c <= 0xEF) { n = 2; cp = c & 0x0F; }
+		else if (c >= 0xF0 && c <= 0xF4) { n = 3; cp = c & 0x07; }
+		else return 0;
+		if (i + n >= s.size())
+			return 0;
+		for (size_t k = 1; k <= n; ++k)
+		{
+			const auto b = static_cast<uint8_t>(s[i + k]);
+			if ((b & 0xC0) != 0x80)
+				return 0;
+			cp = (cp << 6) | (b & 0x3F);
+		}
+		if ((n == 1 && cp < 0x80) || (n == 2 && (cp < 0x800 || (cp >= 0xD800 && cp <= 0xDFFF))) || (n == 3 && (cp < 0x10000 || cp > 0x10FFFF)))
+			return 0;
+		return n + 1;
+	}
+
+std::string utf8ToCp1252(std::string_view s)
+{
+	std::string out;
+	out.reserve(s.size());
+	for (size_t i = 0; i < s.size();)
+	{
+		uint32_t cp = 0;
+		const size_t n = readUtf8(s, i, cp);
+		if (n == 0)
+		{
+			out += s[i++];
+			continue;
+		}
+		out += toCp1252(cp);
+		i += n;
+	}
+	return out;
+}
+
+std::string cp1252ToUtf8(std::string_view s)
+{
+	std::string out;
+	out.reserve(s.size());
+	for (const char ch : s)
+	{
+		const auto c = static_cast<uint8_t>(ch);
+		if (c >= 0x80 && c <= 0x9F)
+			appendUtf8(out, kCp1252High[c - 0x80] != 0 ? kCp1252High[c - 0x80] : 0xFFFD);
+		else
+			appendUtf8(out, c);
+	}
+	return out;
+}
+}
+#endif
+
 std::string getANSIFileName(const std::filesystem::path& file)
 {
 #ifdef PLATFORM_WINDOWS
 	return ztd::text::transcode(file.filename().native(), ztd::text::wide_utf16, ztd::text::windows_1252, ztd::text::replacement_handler);
 #else
-	return ztd::text::transcode(file.filename().native(), ztd::text::compat_utf8, ztd::text::windows_1252, ztd::text::replacement_handler);
+	return utf8ToCp1252(file.filename().native());
 #endif
 }
 
@@ -62,7 +165,7 @@ std::filesystem::path fromANSIFileName(const std::string& file)
 #ifdef PLATFORM_WINDOWS
 	return std::filesystem::path{ztd::text::transcode(file, ztd::text::windows_1252, ztd::text::wide_utf16, ztd::text::replacement_handler)};
 #else
-	return std::filesystem::path{ztd::text::transcode(file, ztd::text::windows_1252, ztd::text::compat_utf8, ztd::text::replacement_handler)};
+	return std::filesystem::path{cp1252ToUtf8(file)};
 #endif
 }
 

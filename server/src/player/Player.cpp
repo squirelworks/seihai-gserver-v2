@@ -541,6 +541,10 @@ void Player::sendPacket(const CString& packet, const PacketQueue channel)
 		}
 	}
 
+	// Seihai (#106): 1.x reads PLO_ARROWADD with no player id in front; with it, 1.39 drew no ball.
+	if (isClient() && legacy::isPre21Client(m_versionId) && static_cast<unsigned char>(packet[0]) - 32 == PLO_ARROWADD)
+		return sendPacketUnchecked(legacy::stripArrowAddPlayerId(packet), channel);
+
 	// Seihai (#107): a classic server writes prop 10 in the 1.x bow form, but 2.0 and later read it as a gani. They
 	// drew no players at all; they now get the player's gani in its place, a stock head as .png and the body.
 	if (isClient() && m_server != nullptr && m_server->Generation == ServerGeneration::CLASSIC

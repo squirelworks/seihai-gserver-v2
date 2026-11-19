@@ -1,5 +1,6 @@
-# Modified by the Seihai project, 2026-11-16: see CHANGES-SEIHAI.md.
-# Weekly libFuzzer smoke for #87. Standalone fuzz/ project (gs2lib only).
+# Modified by the Seihai project, 2026-11-16, 2026-11-19: see CHANGES-SEIHAI.md.
+# Weekly libFuzzer runs for #87: the standalone fuzz/ project (framing, gs2lib
+# only) and fuzz_handlers (the real client packet handlers, full server build).
 name: fuzz
 
 on:
@@ -36,6 +37,45 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: fuzz-crashers
+          path: |
+            crash-*
+            leak-*
+            timeout-*
+          if-no-files-found: ignore
+
+  handlers:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      ASAN_OPTIONS: detect_leaks=0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools and libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-18 ninja-build openjdk-21-jre-headless \
+            libantlr4-runtime-dev libsodium-dev libtomcrypt-dev libtommath-dev \
+            libbz2-dev zlib1g-dev uuid-dev pkgconf libclang-rt-18-dev libfuzzer-18-dev
+      - name: ANTLR 4.10.1 tool
+        run: curl -sSfL -o "$RUNNER_TEMP/antlr.jar" https://repo1.maven.org/maven2/org/antlr/antlr4/4.10.1/antlr4-4.10.1-complete.jar
+      - name: Configure
+        run: |
+          CC=clang-18 CXX=clang++-18 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+            -DTESTS=OFF -DUPNP=OFF -DSANITIZE=ON -DFUZZ_HANDLERS=ON \
+            -DANTLR4_JAR_LOCATION="$RUNNER_TEMP/antlr.jar"
+      - name: Build
+        run: cmake --build build --target fuzz_handlers
+      - name: Run fuzz_handlers
+        run: |
+          mkdir -p "$RUNNER_TEMP/corpus"
+          cp fuzz/corpus/handlers/* "$RUNNER_TEMP/corpus/"
+          ./bin/fuzz_handlers -max_total_time=1200 -max_len=4096 -timeout=10 \
+            "$RUNNER_TEMP/corpus"
+      - name: Upload crashers
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-handlers-crashers
           path: |
             crash-*
             leak-*
