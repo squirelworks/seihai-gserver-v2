@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-19: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <cerrno>
 #include <chrono>
@@ -53,7 +54,15 @@ std::string getANSIFileName(const std::filesystem::path& file)
 #ifdef PLATFORM_WINDOWS
 	return ztd::text::transcode(file.filename().native(), ztd::text::wide_utf16, ztd::text::windows_1252, ztd::text::replacement_handler);
 #else
-	return ztd::text::transcode(file.filename().native(), ztd::text::compat_utf8, ztd::text::windows_1252, ztd::text::replacement_handler);
+	// Seihai: ztd.text's UTF-8 decoder never returns from a byte 0xF5 to 0xFF with the
+	// replacement handler (no UTF-8 sequence starts with one). Names chosen by a client
+	// (a warp, a file request, a localhost login name) arrive here as raw Windows-1252,
+	// where those bytes are õ to ÿ, so such a name is already in the form wanted.
+	const std::filesystem::path name = file.filename();
+	const auto& native = name.native();
+	if (std::ranges::any_of(native, [](const char c) { return static_cast<unsigned char>(c) >= 0xF5; }))
+		return native;
+	return ztd::text::transcode(native, ztd::text::compat_utf8, ztd::text::windows_1252, ztd::text::replacement_handler);
 #endif
 }
 

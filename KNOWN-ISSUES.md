@@ -94,11 +94,13 @@ notes.
 These are tracked work where outside help is welcome. They are not one bug each.
 
 - **Crash hunting** ([#87](https://github.com/squirelworks/seihai-gserver-v2/issues/87)).
-  There is a sanitizer CI job and a weekly libFuzzer target over
-  `processBuffer` (see `fuzz/README.md`), but the fuzzer still uses a stub
-  handler. Wanted: a harness that drives the real packet handlers, and a replay
-  corpus built from loopback lab sessions. Every crash found should come with a
-  regression test.
+  There is a sanitizer CI job, a weekly libFuzzer target over `processBuffer`,
+  and now `fuzz/handlers`, which drives the real client, RC and NC handlers
+  (see `fuzz/README.md`). Its first runs found the two bugs fixed below. Still
+  wanted: an NPC-server and a gmap in its world, a replay corpus built from
+  loopback lab sessions, and an explanation for a few `stack-use-after-return`
+  reports that didn't reproduce on their own. Every crash found should come
+  with a regression test.
 - **Graal 3D control object** ([#105](https://github.com/squirelworks/seihai-gserver-v2/issues/105)).
   Protocol 19 clients (3.153, 4.04r2) used to get only a stock TGE `Camera` as
   their control object, and real 3.151 Linux and Mac 3.153 crashed right after
@@ -117,6 +119,8 @@ Each is in `CHANGES-SEIHAI.md` with the details.
 
 | Bug | Fixed in | Symptom on older builds |
 |---|---|---|
+| A level or file name with a byte from 0xF5 to 0xFF hung the server | this PR | ztd.text's UTF-8 decoder never returns on such a byte. Windows-1252 õ to ÿ, so `Müller.nw` too, in a `PLI_LEVELWARP`, `PLI_WANTFILE` or localhost login name froze the main loop for every player. Also in stock `beta4`. |
+| RC Server Options crashed a world with no `serveroptions.txt` | this PR | `msgPLI_RC_SERVEROPTIONSGET` used the unopened file. Also in stock `beta4`. |
 | Bare `shootball` aimed the NPC's way after the first shot ([#106](https://github.com/squirelworks/seihai-gserver-v2/issues/106), part 2) | #122 | In a timeout or `created` event there was no player, so every shot after the one from `playerenters` used the NPC's own direction. Now one ball is shot at each player in the level. |
 | GS1 `triggeraction` sent the action name as its params ([#112](https://github.com/squirelworks/seihai-gserver-v2/issues/112)) | #120 | `fn_triggeraction` read `action` and `params` from the same argument, so `ping,p1,p2` went out as `ping,ping`. |
 | A GS2 weapon with a string literal never compiled ([#110](https://github.com/squirelworks/seihai-gserver-v2/issues/110)) | #120 | The GS1 lexer rejected the `"` and that also stopped the GS2 compile; 5.24r4 and 6.03r7 got only PLO 33. |

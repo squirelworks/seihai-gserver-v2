@@ -154,6 +154,19 @@ if(SANITIZE)
 	add_link_options(-fsanitize=address,undefined)
 endif()
 
+# Seihai: libFuzzer target that drives the real packet handlers (#87). Needs Clang,
+# SANITIZE and TESTS; every target gets coverage instrumentation for the fuzzer.
+option(FUZZ_HANDLERS "Build fuzz/handlers (Clang libFuzzer over the real packet handlers)." OFF)
+if(FUZZ_HANDLERS)
+	if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR NOT SANITIZE OR NOT TESTS)
+		message(FATAL_ERROR "FUZZ_HANDLERS needs Clang, -DSANITIZE=ON and -DTESTS=ON.")
+	endif()
+	add_compile_options(-fsanitize=fuzzer-no-link)
+	# ztd.text copies zero bytes from a null pointer when it replaces invalid UTF-8
+	# (a level name from a client can hit it). Harmless, but it stops every run.
+	add_compile_options(-fno-sanitize=nonnull-attribute)
+endif()
+
 # Static runtime.
 option(STATIC "Compile as a static runtime." ON)
 if(STATIC)
@@ -226,4 +239,8 @@ if (TESTS)
 	message("Including tests")
 	enable_testing()
 	add_subdirectory(${PROJECT_SOURCE_DIR}/Catch_tests)
+endif()
+
+if (FUZZ_HANDLERS)
+	add_subdirectory(${PROJECT_SOURCE_DIR}/fuzz/handlers)
 endif()
