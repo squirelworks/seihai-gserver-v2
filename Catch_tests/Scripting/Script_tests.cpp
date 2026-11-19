@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-19: see CHANGES-SEIHAI.md.
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch_all.hpp>
 
@@ -67,6 +67,17 @@ struct ServerFixture
 		npcServer->playerLogin(client);
 	}
 
+	// Release the server, so a later test (Catch2 runs them in random order)
+	// does not find this one through BabyDI. Script::minify keeps the whole
+	// source when a server with an NPC-Server is registered.
+	~ServerFixture()
+	{
+		client.reset();
+		engine.reset();
+		npcServer.reset();
+		BabyDI_RELEASE(Server);
+	}
+
 	NPCID testNPC = NPCID_GEN_DATABASE_LOCALN;
 	Server* server = nullptr;
 	std::shared_ptr<NPCServer> npcServer;
@@ -78,6 +89,9 @@ struct ServerFixture
 
 TEST_CASE("Script minify handles block comments at end of input", "[Scripting][Script]")
 {
+	// Without a registered server: minify the whole script.
+	BabyDI_RELEASE(Server);
+
 	SECTION("Unterminated comment consumes the remaining source")
 	{
 		CHECK(Script::minify("/* unfinished").empty());
@@ -117,6 +131,8 @@ TEST_CASE("Script client bytecode", "[Scripting][Script]")
 
 TEST_CASE("Script minify with block comments", "[Scripting][Script]")
 {
+	BabyDI_RELEASE(Server);
+
 	// A comment that is closed drops only the comment.
 	const auto closed = Script::minify("//#CLIENTSIDE\nmessage before;\n/* a\nb */\nmessage after;\n");
 	CHECK(closed.find("message before;") != std::string::npos);

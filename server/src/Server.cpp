@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-16: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-19: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -2485,6 +2485,10 @@ void Server::sendPacketToOneLevelPart(const CString& packet, const PixelPosition
 
 void Server::sendPacketToOneLevelPart(const CString& packet, const LevelPtr& level, const MapPosition& mapPosition, const std::set<PlayerID>& exclude, const PlayerPredicate& sendIf) const
 {
+	// Seihai: a client that is not in a level yet (THROWCARRIED and others before the
+	// first level, #87) has no level part to send to.
+	if (level == nullptr) return;
+
 	for (const auto& id : level->findPlayersInLevelPart(mapPosition))
 	{
 		if (exclude.contains(id)) continue;

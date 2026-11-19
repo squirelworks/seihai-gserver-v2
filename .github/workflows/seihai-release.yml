@@ -1,7 +1,7 @@
 # Seihai: build gs2emu for Linux, Windows and macOS. A tag push (v*), or a manual
 # run with a version, also makes a DRAFT GitHub release with the four archives and
 # the full source, as the GPL asks. The tag is made when the owner presses Publish.
-# Modified by the Seihai project, 2026-11-04, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-11-04, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-19: see CHANGES-SEIHAI.md.
 name: Seihai build and release
 
 on:
@@ -82,7 +82,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cmake -S . -B build -DTESTS=ON
-          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin ClientPing Scripting LegacyProps GS1ToGS2 GS1 FileSend ServerOptions
+          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin ClientPing Scripting LegacyProps GS1ToGS2 GS1 FileSend ServerOptions ShortPackets
           timeout 60 bin/RC
           timeout 60 bin/Gpak
           timeout 60 bin/Graal3D
@@ -96,7 +96,8 @@ jobs:
           timeout 60 bin/Scripting
           timeout 120 bin/GS1
           timeout 60 bin/ServerOptions
-          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin bin/ClientPing bin/Scripting bin/LegacyProps bin/GS1ToGS2 bin/GS1 bin/FileSend bin/ServerOptions
+          timeout 60 bin/ShortPackets
+          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin bin/ClientPing bin/Scripting bin/LegacyProps bin/GS1ToGS2 bin/GS1 bin/FileSend bin/ServerOptions bin/ShortPackets
           python3 -m unittest tools/lab/test_labcheck.py
       - name: Package
         shell: bash
@@ -203,7 +204,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cmake -S . -B build -DTESTS=ON
-          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin ClientPing Scripting LegacyProps GS1ToGS2 GS1 FileSend ServerOptions
+          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin ClientPing Scripting LegacyProps GS1ToGS2 GS1 FileSend ServerOptions ShortPackets
           timeout 60 bin/RC
           timeout 60 bin/Gpak
           timeout 60 bin/Graal3D
@@ -217,7 +218,8 @@ jobs:
           timeout 60 bin/Scripting
           timeout 120 bin/GS1
           timeout 60 bin/ServerOptions
-          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin bin/ClientPing bin/Scripting bin/LegacyProps bin/GS1ToGS2 bin/GS1 bin/FileSend bin/ServerOptions
+          timeout 60 bin/ShortPackets
+          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin bin/ClientPing bin/Scripting bin/LegacyProps bin/GS1ToGS2 bin/GS1 bin/FileSend bin/ServerOptions bin/ShortPackets
           python3 -m unittest tools/lab/test_labcheck.py
       - name: Package
         shell: bash
@@ -233,6 +235,14 @@ jobs:
       - name: Check the architecture
         if: matrix.cross != ''
         run: file dist/${{ matrix.name }}/gs2emu | tee /dev/stderr | grep -q "${{ matrix.cross }}"
+      # seihai-gs2lib must build and pass its tests on macOS at release time
+      # (squirelworks/seihai-gs2lib#28): its unit tests, at the commit this build pins.
+      - name: gs2lib unit tests at the pinned commit
+        if: matrix.cross == ''
+        run: |
+          cmake -S build/dependencies/fc/gs2lib-src -B build-gs2lib -G Ninja -DCMAKE_BUILD_TYPE=Debug -DGS2LIB_TESTS=ON
+          cmake --build build-gs2lib
+          ctest --test-dir build-gs2lib --output-on-failure
       - name: Lab world smoke test
         if: matrix.cross == ''
         shell: bash

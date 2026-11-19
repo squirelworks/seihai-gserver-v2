@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-12, 2026-11-13, 2026-11-16: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-19: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -173,7 +173,13 @@ HandlePacketResult PlayerClient::msgPLI_BOARDMODIFY(CString& pPacket)
 HandlePacketResult PlayerClient::msgPLI_REQUESTUPDATEBOARD(CString& pPacket)
 {
 	// {130}{CHAR level length}{level}{INT5 modtime}{SHORT x}{SHORT y}{SHORT width}{SHORT height}
-	const CString level = pPacket.readChars(pPacket.readGUChar());
+	// Seihai: a short body read past its end gave x, y, w and h of -4128 (#103).
+	if (pPacket.bytesLeft() < 1)
+		return HandlePacketResult::Handled;
+	const unsigned char levelLength = pPacket.readGUChar();
+	if (pPacket.bytesLeft() < levelLength + 5 + 4 * 2)
+		return HandlePacketResult::Handled;
+	const CString level = pPacket.readChars(levelLength);
 
 	const auto modTime = static_cast<time_t>(pPacket.readGUInt5());
 
@@ -536,33 +542,53 @@ HandlePacketResult PlayerClient::msgPLI_BADDYHURT(CString& pPacket)
 	return HandlePacketResult::Handled;
 }
 
+std::optional<PlayerClient::BaddyAddRequest> PlayerClient::readBaddyAdd(CString& packet)
+{
+	// {17}{GCHAR x*2}{GCHAR y*2}{GCHAR type}{GCHAR power}{image}
+	// Seihai: a body shorter than four bytes read its missing bytes as 0 - 32, making a
+	// type-224 baddy at tile 112,112 that sent the 6.03r7 client to crush.wav and closed it (#103).
+	if (packet.bytesLeft() < 4)
+		return std::nullopt;
+
+	BaddyAddRequest req;
+	req.x = static_cast<float>(packet.readGUChar()) / 2.0f;
+	req.y = static_cast<float>(packet.readGUChar()) / 2.0f;
+	req.type = packet.readGUChar();
+	req.power = std::min(packet.readGUChar(), 12_ui8); // Hard-limit to 6 hearts.
+	req.image = packet.readString("");
+
+	// No client has a baddy type past the dragon, and a level is 64 tiles across.
+	if (req.type >= BADDYTYPE_COUNT || req.x >= 64.0f || req.y >= 64.0f)
+		return std::nullopt;
+
+	// Fix the image for 1.41 clients.
+	if (!req.image.isEmpty() && getExtension(req.image).isEmpty())
+		req.image << ".gif";
+
+	return req;
+}
+
 HandlePacketResult PlayerClient::msgPLI_BADDYADD(CString& pPacket)
 {
 	// Don't add a baddy if we aren't in a level!
 	if (m_currentLevel.expired())
 		return HandlePacketResult::Handled;
 
-	const float loc[2] = {static_cast<float>(pPacket.readGUChar()) / 2.0f, static_cast<float>(pPacket.readGUChar()) / 2.0f};
-	uint8_t bType = pPacket.readGUChar();
-	uint8_t bPower = pPacket.readGUChar();
-	CString bImage = pPacket.readString("");
-	bPower = std::min(bPower, 12_ui8); // Hard-limit to 6 hearts.
+	const auto req = readBaddyAdd(pPacket);
+	if (!req)
+		return HandlePacketResult::Handled;
 
 	const auto level = getLevel();
 	if (level == nullptr)
 		return HandlePacketResult::Handled;
 
-	// Fix the image for 1.41 clients.
-	if (!bImage.isEmpty() && getExtension(bImage).isEmpty())
-		bImage << ".gif";
-
 	// Add the baddy.
-	LevelBaddy* baddy = level->addBaddy(toLocalPixelPosition(LocalTilePosition{loc[0], loc[1]}), static_cast<BaddyType>(bType));
+	LevelBaddy* baddy = level->addBaddy(toLocalPixelPosition(LocalTilePosition{req->x, req->y}), static_cast<BaddyType>(req->type));
 	if (baddy == nullptr) return HandlePacketResult::Handled;
 
 	// Set the baddy props.
 	baddy->setRespawn(false);
-	baddy->setPropsFromPacket(CString() >> (char)BaddyProp::POWERIMAGE >> (char)bPower >> (char)bImage.length() << bImage);
+	baddy->setPropsFromPacket(CString() >> (char)BaddyProp::POWERIMAGE >> (char)req->power >> (char)req->image.length() << req->image);
 
 	// Send the props to everybody in the level.
 	m_server->sendPacketToOneLevelPart(CString() >> (char)PLO_BADDYPROPS >> (char)baddy->id << baddy->getProps(), getGlobalPosition(), level);
@@ -1520,6 +1546,11 @@ HandlePacketResult PlayerClient::msgPLI_SHOOT2(CString& pPacket)
 HandlePacketResult PlayerClient::msgPLI_SERVERWARP(CString& pPacket)
 {
 	const CString servername = pPacket.readString("");
+
+	// Seihai: an empty name is not a server to warp to (#103).
+	if (servername.isEmpty())
+		return HandlePacketResult::Handled;
+
 	log::printLine(log::server, "{} is requesting serverwarp to {}", account.name, servername);
 	m_server->getServerList().sendPacket(CString() >> (char)SVO_SERVERINFO >> (short)m_id << servername);
 	return HandlePacketResult::Handled;
@@ -1532,6 +1563,19 @@ HandlePacketResult PlayerClient::msgPLI_PROCESSLIST(CString& pPacket)
 }
 
 HandlePacketResult PlayerClient::msgPLI_ENTERLEVEL(CString& pPacket)
+{
+	return HandlePacketResult::Handled;
+}
+
+// Seihai: 43 and 45 are sent by real clients (the player list's mute, and the answer to
+// PLO_ISPROCESSRUNNING). They were unhandled, so three of them disconnected the client
+// for "sending invalid packets" (#103). Accept them and do nothing.
+HandlePacketResult PlayerClient::msgPLI_MUTEPLAYER(CString& pPacket)
+{
+	return HandlePacketResult::Handled;
+}
+
+HandlePacketResult PlayerClient::msgPLI_PROCESSRUNNING(CString& pPacket)
 {
 	return HandlePacketResult::Handled;
 }

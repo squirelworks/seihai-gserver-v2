@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-07, 2026-11-18: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-07, 2026-11-18, 2026-11-19: see CHANGES-SEIHAI.md.
 #ifndef IPACKETHANDLER_H
 #define IPACKETHANDLER_H
 
@@ -67,6 +67,7 @@ namespace preagonal
 	DO(PLI_SERVERWARP) \
 	DO(PLI_MUTEPLAYER) \
 	DO(PLI_PROCESSLIST) \
+	DO(PLI_PROCESSRUNNING) \
 	DO(PLI_ENTERLEVEL) \
 	DO(PLI_VERIFYWANTSEND) \
 	DO(PLI_SHOOT2) \

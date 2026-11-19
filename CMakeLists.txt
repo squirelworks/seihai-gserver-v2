@@ -1,3 +1,4 @@
+# Modified by the Seihai project, 2026-11-19: see CHANGES-SEIHAI.md.
 #
 #  CMakeLists.txt
 #
@@ -140,6 +141,18 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # Unit testing
 option(TESTS "Compile tests" OFF)
+
+# Seihai: AddressSanitizer and UndefinedBehaviorSanitizer for the crash-hunting CI job (#87).
+# Applies to every target, including fetched dependencies, and links the tests dynamically.
+option(SANITIZE "Build with -fsanitize=address,undefined (GCC or Clang)." OFF)
+if(SANITIZE)
+	if(MSVC)
+		message(FATAL_ERROR "SANITIZE is for GCC and Clang builds.")
+	endif()
+	message(STATUS "[${PROJECT_NAME}] Compile with AddressSanitizer and UndefinedBehaviorSanitizer")
+	add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined)
+	add_link_options(-fsanitize=address,undefined)
+endif()
 
 # Static runtime.
 option(STATIC "Compile as a static runtime." ON)
