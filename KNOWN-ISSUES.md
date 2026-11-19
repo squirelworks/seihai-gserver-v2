@@ -393,9 +393,10 @@ These are tracked work where outside help is welcome. They are not one bug each.
   corpus built from loopback lab sessions. Every crash found should come with a
   regression test.
 - **Graal 3D control object** ([#105](https://github.com/squirelworks/seihai-gserver-v2/issues/105)).
-  Protocol 19 clients (3.153, 4.04r2) get a stock TGE `Camera` as their control
-  object and no `Player`. Real 3.151 Linux and Mac 3.153 crash right after it.
-  A draft is open as #111.
+  Protocol 19 clients (3.153, 4.04r2) used to get only a stock TGE `Camera` as
+  their control object, and real 3.151 Linux and Mac 3.153 crashed right after
+  it. #111 now ghosts a `Sky` and a walking `Player` control object, but no real
+  3.15x client has been run against it yet. That lab run is the open step.
 - **Short client packets.** #103 was fixed in #104, but only for the ids the
   2026-11-18 sweep tested. Any handler that reads a fixed number of bytes from
   a client packet without checking its length is worth a look.

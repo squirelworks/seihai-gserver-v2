@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
 // New file: GameObject and Sun updates for the Graal 3D world. See Graal3DObjects.h.
 
 #include <graal3d/Graal3DObjects.h>
@@ -334,7 +334,7 @@ namespace graal3d
 		return sky;
 	}
 
-	void GhostObject::writeUpdate(BitWriter& w, uint32_t mask) const
+	void GhostObject::writeUpdate(BitWriter& w, uint32_t mask, bool controlled) const
 	{
 		if (kind == Kind::Sun)
 		{
@@ -349,6 +349,11 @@ namespace graal3d
 		if (kind == Kind::TgeCamera)
 		{
 			tge::writeCameraUpdate(w, tgeCamera, datablockId, (mask & TgeDatablock) != 0);
+			return;
+		}
+		if (kind == Kind::TgePlayer)
+		{
+			tge::writePlayerUpdate(w, tgePlayer, datablockId, (mask & TgeDatablock) != 0, controlled);
 			return;
 		}
 		writeGameObjectUpdate(w, object, mask);
@@ -373,6 +378,8 @@ namespace graal3d
 			const auto& b = before.tgeCamera;
 			return a.position == b.position && a.pitch == b.pitch && a.yaw == b.yaw ? 0u : TgeMove;
 		}
+		if (kind == Kind::TgePlayer)
+			return tgePlayer == before.tgePlayer ? 0u : TgeMove;
 		return gameObjectChanges(before.object, object);
 	}
 
@@ -495,6 +502,16 @@ namespace graal3d
 			}
 			else if (w[0] == "spawn" && w.size() == 4)
 				ok = toFloats(w, 1, world.spawn.position.data(), 3);
+			else if (w[0] == "tgecontrol" && w.size() == 2 && (w[1] == "player" || w[1] == "camera"))
+			{
+				world.tgeControl = w[1] == "camera" ? World::TgeControl::Camera : World::TgeControl::Player;
+				ok = true;
+			}
+			else if (w[0] == "tgeplayershape" && w.size() == 2)
+			{
+				world.tgePlayerShape = w[1];
+				ok = true;
+			}
 			else if (w[0] == "camera" && w.size() == 4)
 			{
 				std::array<float, 3> offset{};
