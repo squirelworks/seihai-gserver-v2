@@ -307,3 +307,24 @@ TEST_CASE("prop 10 follows the client on a classic server (#107)", "[legacy]")
 
 	BabyDI_RELEASE(Server);
 }
+
+TEST_CASE("PLO_ARROWADD goes to 1.x without the player id", "[legacy][arrowadd]")
+{
+	// The server's form: id 19, GSHORT 0, x*2, y*2, flags, sprite 131 (ball), type 0.
+	CString ball;
+	ball >> (char)PLO_ARROWADD >> (short)0 >> (char)50 >> (char)80 >> (char)3 >> (char)131 >> (char)0;
+	const CString out = legacy::stripArrowAddPlayerId(ball);
+	// What the real 1.39 drew in the lab: 0x33, x*2+32, y*2+32, dir+32, 0xA3, 0x20.
+	CString want;
+	want >> (char)PLO_ARROWADD >> (char)50 >> (char)80 >> (char)3 >> (char)131 >> (char)0;
+	CHECK(out == want);
+	CHECK(static_cast<unsigned char>(out[4]) == 0xA3);
+
+	// Another packet, or one too short to hold the id: unchanged.
+	CString other;
+	other >> (char)PLO_BOMBADD >> (short)0 >> (char)1;
+	CHECK(legacy::stripArrowAddPlayerId(other) == other);
+	CString shortOne;
+	shortOne >> (char)PLO_ARROWADD;
+	CHECK(legacy::stripArrowAddPlayerId(shortOne) == shortOne);
+}

@@ -7,7 +7,7 @@ how to see it for yourself, what we already know about the cause, and where in
 the code to start. Most entries stop short of a fix on purpose: we would rather
 you look at the evidence and decide.
 
-Last checked against branch `seihai` at the #122 merge (2026-11-19). The
+Last checked against branch `seihai` at the #122 merge, plus #124 (2026-11-19). The
 tracking issue for each bug is linked; comment there if you find something, or
 open a pull request against `seihai`.
 
@@ -21,7 +21,6 @@ below were found here and are still in upstream.
 
 - [Before you start](#before-you-start)
 - [Open bugs](#open-bugs)
-  1. [1.39 draws no ball for a bare `shootball`](#1-139-draws-no-ball-for-a-bare-shootball) (#106)
 - [Open areas, not single bugs](#open-areas-not-single-bugs)
 - [Recently fixed](#recently-fixed)
 
@@ -71,22 +70,7 @@ steps say which version showed the bug.
 
 ## Open bugs
 
-### 1. 1.39 draws no ball for a bare `shootball`
-
-Issue: [#106](https://github.com/squirelworks/seihai-gserver-v2/issues/106),
-part 2. Area: GS1 commands.
-
-**What you see.** A level NPC runs a bare `shootball` on a newmain world. The
-server sends `PLO_ARROWADD` (19), but a real 1.39 client draws no ball over two
-shots. The aiming half of this bug was fixed in #122 (see Recently fixed).
-
-**What we know.** Either 19 is not the packet 1.39 draws for a thrown ball, or
-1.39 is missing the image. Answering that needs a capture of what a 1.x-era
-server sent for the same script.
-
-**Where to start.** The `shootball` command in `GS1Commands.cpp`, and the
-packet ids 1.x clients handle for projectiles in the Graal_analysis protocol
-notes.
+None right now. The last one (#106) is in Recently fixed.
 
 
 ## Open areas, not single bugs
@@ -94,10 +78,10 @@ notes.
 These are tracked work where outside help is welcome. They are not one bug each.
 
 - **Crash hunting** ([#87](https://github.com/squirelworks/seihai-gserver-v2/issues/87)).
-  There is a sanitizer CI job and a weekly libFuzzer target over
-  `processBuffer` (see `fuzz/README.md`), but the fuzzer still uses a stub
-  handler. Wanted: a harness that drives the real packet handlers, and a replay
-  corpus built from loopback lab sessions. Every crash found should come with a
+  There is a sanitizer CI job and two weekly libFuzzer targets (see
+  `fuzz/README.md`): one over `processBuffer`, and `fuzz_handlers`, which
+  drives the real client packet handlers as six client versions. Wanted: a
+  replay corpus built from loopback lab sessions. Every crash found should come with a
   regression test.
 - **Graal 3D control object** ([#105](https://github.com/squirelworks/seihai-gserver-v2/issues/105)).
   Protocol 19 clients (3.153, 4.04r2) used to get only a stock TGE `Camera` as
@@ -117,6 +101,8 @@ Each is in `CHANGES-SEIHAI.md` with the details.
 
 | Bug | Fixed in | Symptom on older builds |
 |---|---|---|
+| 1.x drew no ball for `shootball` or another player's arrow ([#106](https://github.com/squirelworks/seihai-gserver-v2/issues/106), part 2) | #124 | `PLO_ARROWADD` (19) went to 1.x in the 2.x form, with a player id in front, so 1.39 read the wrong bytes and drew nothing in place. 1.20 to 1.41r1 now get it without the id. |
+| A file or level name Windows-1252 cannot hold crashed the server ([#87](https://github.com/squirelworks/seihai-gserver-v2/issues/87)) | #124 | Found by `fuzz_handlers`: on Linux and macOS a `WANTFILE` with bytes that are not UTF-8, or a `LEVELWARP` with U+031F, sent ztd.text's replacement path into `memcpy` with a null source. |
 | Bare `shootball` aimed the NPC's way after the first shot ([#106](https://github.com/squirelworks/seihai-gserver-v2/issues/106), part 2) | #122 | In a timeout or `created` event there was no player, so every shot after the one from `playerenters` used the NPC's own direction. Now one ball is shot at each player in the level. |
 | GS1 `triggeraction` sent the action name as its params ([#112](https://github.com/squirelworks/seihai-gserver-v2/issues/112)) | #120 | `fn_triggeraction` read `action` and `params` from the same argument, so `ping,p1,p2` went out as `ping,ping`. |
 | A GS2 weapon with a string literal never compiled ([#110](https://github.com/squirelworks/seihai-gserver-v2/issues/110)) | #120 | The GS1 lexer rejected the `"` and that also stopped the GS2 compile; 5.24r4 and 6.03r7 got only PLO 33. |
