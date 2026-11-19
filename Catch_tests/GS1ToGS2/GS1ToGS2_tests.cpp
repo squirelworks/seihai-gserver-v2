@@ -244,7 +244,7 @@ TEST_CASE("GS2 client scripts are found whether or not they are marked (#110, #1
 	// #113: the marker after //#CLIENTSIDE counts.
 	CHECK(gs1::hasGS2Marker("//#GS2\nfunction onCreated() {}"));
 	CHECK(gs1::hasGS2Marker("//#CLIENTSIDE\n//#gs2\nfunction onCreated() {}"));
-	CHECK(gs1::hasGS2Marker("//#CLIENTSIDE\xa7//#GS2\xa7function onCreated() {}"));
+	CHECK(gs1::hasGS2Marker("//#CLIENTSIDE\xa7//#GS2\xa7" "function onCreated() {}"));
 	CHECK_FALSE(gs1::hasGS2Marker("//#CLIENTSIDE\nif (created) setimg a.png;\n//#GS2\n"));
 	CHECK_FALSE(gs1::hasGS2Marker("if (created) setimg a.png;"));
 
