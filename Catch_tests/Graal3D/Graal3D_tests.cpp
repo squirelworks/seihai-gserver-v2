@@ -1,9 +1,10 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-20: see CHANGES-SEIHAI.md.
 // New file: tests for the Graal 3D (Torque) UDP side. The client bytes are from the
 // 2026-10-30 Wine lab, where the real 5.12 client joined a test 3D server
 // (Graal_analysis torque/network.md, "The full handshake, live").
 #include "catch2/catch_all.hpp"
 
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -946,6 +947,56 @@ SCENARIO("A Camera ghost becomes the client's camera once it is in")
 		REQUIRE(world.errors.empty());
 		REQUIRE(world.cameraOffset);
 		REQUIRE((*world.cameraOffset)[1] == -3.0f);
+		REQUIRE_FALSE(world.cameraRotation);
+	}
+
+	THEN("the camera line may turn the camera")
+	{
+		const auto world = parseWorld("camera 0 -8 3 1 0 0 -0.3\ncamera 0 -8 3 1 0 0\n");
+		REQUIRE(world.errors.size() == 1); // the second line has no angle
+		REQUIRE(world.cameraRotation);
+		REQUIRE((*world.cameraRotation)[3] == -0.3f);
+		const auto t = cameraTransform(world);
+		REQUIRE(t.position == std::array<float, 3>{0.0f, -8.0f, 3.0f});
+		REQUIRE(t.angle == -0.3f);
+	}
+}
+
+SCENARIO("Without a camera rotation the Camera faces the spawn point")
+{
+	const auto near = [](std::array<float, 3> a, std::array<float, 3> b) {
+		for (size_t i = 0; i < 3; ++i)
+			if (std::abs(a[i] - b[i]) > 1e-4f)
+				return false;
+		return true;
+	};
+	const std::array<float, 3> from{0.0f, -5.0f, 3.0f};
+	for (const auto& to : std::vector<std::array<float, 3>>{
+			 {0.0f, 0.0f, 1.0f}, {3.0f, 4.0f, 0.0f}, {-2.0f, -9.0f, 3.0f}, {0.0f, 5.0f, 3.0f}, {0.0f, -5.0f, -4.0f}})
+	{
+		const auto t = facing(from, to);
+		std::array<float, 3> d{to[0] - from[0], to[1] - from[1], to[2] - from[2]};
+		const float l = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+		REQUIRE(near(forwardOf(t), {d[0] / l, d[1] / l, d[2] / l}));
+		REQUIRE(t.position == from);
+	}
+	REQUIRE(facing(from, {0.0f, 0.0f, 3.0f}).angle == 0.0f);
+
+	// What the lab saw: +angle about +x looks down, about +z turns right.
+	Transform down;
+	down.axis = {1.0f, 0.0f, 0.0f};
+	down.angle = 0.38f;
+	REQUIRE(forwardOf(down)[2] < 0.0f);
+	Transform right;
+	right.angle = 0.3f;
+	REQUIRE(forwardOf(right)[0] > 0.0f);
+
+	GIVEN("a world with a spawn point and no camera line")
+	{
+		const auto world = parseWorld("spawn 1 2 3\n");
+		const auto t = cameraTransform(world);
+		REQUIRE(t.position == std::array<float, 3>{1.0f, -3.0f, 5.0f});
+		REQUIRE(near(forwardOf(t), {0.0f, 5.0f / std::sqrt(29.0f), -2.0f / std::sqrt(29.0f)}));
 	}
 }
 
