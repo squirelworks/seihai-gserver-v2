@@ -2,7 +2,7 @@
 
 This is the Seihai project's fork of [GServer-v2](https://github.com/xtjoeytx/GServer-v2)
 `beta4`, the open-source Graal game server, with fixes so that real 1.33 to 2.31
-clients (and later ones in the lab world) play on it correctly. It uses the
+clients play on it correctly. It uses the
 Seihai fork of its support library,
 [seihai-gs2lib](https://github.com/squirelworks/seihai-gs2lib).
 
