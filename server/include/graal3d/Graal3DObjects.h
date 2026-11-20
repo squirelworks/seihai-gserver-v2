@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
 // New file: the ghosted objects of a Graal 3D world in the GameObject era (4.20r6
 // and 5.x): GameObject, the Graal class every 3D thing is, and Sun. Their update
 // layouts come from a static read of the 5.00r7 Graal3DEngine.dll (protocol 24,
@@ -216,8 +216,10 @@ namespace graal3d
 	//   sun <dir x> <dir y> <dir z> <r> <g> <b> <a> <ambient r> <g> <b> <a>
 	//   playershape <shape>       the shape of every player's own object
 	//   spawn <x> <y> <z>         where a player's object starts
-	//   camera <x> <y> <z>        give each client a Camera, placed this far from
-	//                             the spawn point (off without this line)
+	//   camera <x> <y> <z> [<axis x> <axis y> <axis z> <angle>]
+	//                             where each client's Camera sits from the spawn
+	//                             point (default 0 -5 2), and how it turns; without
+	//                             a rotation it faces the spawn point
 	//   sky <textures> [<visible distance> [<fog r> <g> <b>]]
 	//                             a Sky; the textures are six names, comma
 	//                             separated and without spaces ("-" for none)
@@ -244,6 +246,7 @@ namespace graal3d
 		std::string playerShape;
 		Transform spawn;
 		std::optional<std::array<float, 3>> cameraOffset;
+		std::optional<std::array<float, 4>> cameraRotation; // axis and angle (radians); none: face the spawn
 		enum class TgeControl
 		{
 			Player,
@@ -261,6 +264,26 @@ namespace graal3d
 	};
 
 	World parseWorld(std::string_view text);
+
+	// Where a protocol 21/24 client's Camera sits from the spawn point when the
+	// world file has no camera line: behind it and above.
+	inline constexpr std::array<float, 3> DefaultCameraOffset{0.0f, -5.0f, 2.0f};
+
+	// At `position`, turned so its forward axis (+y, Torque's) points at
+	// `target`: a turn about z, then a tilt about the turned x. The clients
+	// turn the opposite way from the right-hand rule (lab 2026-11-20, 5.12 and
+	// 4.20r6): a positive angle about +x tilts the view down, one about +z
+	// turns it right. So the angle is negated.
+	Transform facing(const std::array<float, 3>& position, const std::array<float, 3>& target);
+
+	// Where the forward axis (+y) points after the transform's rotation, as
+	// the clients turn it.
+	std::array<float, 3> forwardOf(const Transform& t);
+
+	// The Camera every protocol 21/24 client gets: the world's camera offset
+	// (or DefaultCameraOffset) from the spawn, turned by the camera line's
+	// rotation, or else facing the spawn point.
+	Transform cameraTransform(const World& world);
 
 } // namespace graal3d
 

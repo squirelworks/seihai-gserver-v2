@@ -1,6 +1,6 @@
 # Graal 3D (Seihai)
 
-<!-- Modified by the Seihai project, 2026-11-14: reconcile recorded lab coverage; 2026-11-19: protocol 19 Sky and Player. -->
+<!-- Modified by the Seihai project, 2026-11-14: reconcile recorded lab coverage; 2026-11-19: protocol 19 Sky and Player; 2026-11-20: default Camera facing the spawn. -->
 
 This file is part of the Seihai fork (GPL-3.0, see `LICENSE.md` and `CHANGES-SEIHAI.md`).
 
@@ -60,8 +60,9 @@ sun 0.57 0.57 -0.57  0.8 0.8 0.8 1  0.3 0.3 0.35 1
 playershape player.dts
 spawn 0 0 1
 
-# optional: give each client a Camera, this far from the spawn point
-camera 0 -3 2
+# optional: where each client's Camera sits from the spawn point (default
+# 0 -5 2), and an axis and angle to turn it; without one it faces the spawn
+camera 0 -5 2
 
 # optional, protocol 19 (3.153, 4.04r2) only: the control object, a stock TGE
 # Player that walks (the default) or the Camera of the 2026-11-14 labs
@@ -118,12 +119,21 @@ start is done, by when the downloads are in. A real 5.12 client drew the sky box
 this way in the lab. `skyoptions 1 0 0` and `1 1 1` gave a light box fading into
 the fog; `0 0 0` a more saturated one.
 
-With a `camera` line each client also gets its own `Camera` ghost
+Each 4.20r6 and 5.x client also gets its own `Camera` ghost
 (`G3DCamera_<account>`), and the server names it as the client's camera
 (`ServerConnection.camera` in the client's scripts) once the client has it. The
-server sets no camera mode and no followed object: the client's scripts set
-`cameramode`, `position` and `eulerrotation` themselves. Without the line no camera
-is sent, which login steps 5 and 6 do not need.
+5.x client draws its 3D view only through a Camera: with just the control object
+the window stays black (lab 2026-11-20, real 5.12 on Windows 10). It sits 0 -5 2
+from the spawn point, or where the `camera` line says, and faces the spawn point
+unless that line gives a rotation. The server sets no camera mode and no followed
+object: the client's scripts may set `cameramode`, `position` and `eulerrotation`.
+
+Rotations are an axis and an angle in radians, and the clients turn the opposite
+way from the right-hand rule: a positive angle about +x tilts the view down, one
+about +z turns it right. For `spawn 0 0 1` the default camera is
+`camera 0 -5 2 1 0 0 0.38`. A `.3ds` shape needs a material: one with only
+vertices and faces loads without an error but is not drawn (5.12 and 4.20r6,
+lab 2026-11-20).
 
 A shape is a file name the client loads: `.dts`, `.dif`, `.3ds` or `.ft`. A client
 asks the gserver over TCP for any file it does not have, and stays at login step 5
@@ -151,7 +161,7 @@ too. The server never sends a player's position back to that player.
 | Control object (4.20r6, 5.x) | done. Once the client has its player object and has acked both mission phases, the server makes that object the control object, which is login step 5. It must come after the mission start, because `MissionStartPhase2` sets the 5.x client's login step back to 3 and step 5 is only set by the first control object. Step 6 follows once every TCP file request is answered. With `graal3d` on, a missing file gets `PLO_FILESENDFAILED` for these clients, so it does not hold the login up. |
 | From the client: its own object | read in every packet: the position, and the client's changes to the object (moves, chat, shape). Other players see them. |
 | "Connecting..." window | The 5.x client builds its 3D view itself (`GUIContainer`, `GraalControl3D`, from GS2 built into the client) and shows it at login step 6. Its "Connecting..." window stays on top until the TCP side sends `PLO_SERVERLISTCONNECTED`, so with `graal3d` on, every 3.153 to 5.x client gets that packet at login, with or without a listserver. |
-| Camera | with a `camera` line in the world file: one `Camera` per client, named as its camera in every packet once its ghost is in |
+| Camera | one `Camera` per client, facing the spawn point unless the `camera` line says otherwise, named as its camera in every packet once its ghost is in |
 | `Sky` | with a `sky` line: init and material list, the later sections (storm, wind, fog changes) left clear. Layout from the 5.12 client; a real 5.12 client drew the sky box in the lab (see "The world"). |
 | Scripts in 3D mode | with `weapon3d` lines: `addweapon` and `weaponscript` over the 3D text channel. A 5.12 lab client compiled and ran one, and its `keydown2` saw the arrow keys. |
 | Walking | a script's `triggerserver(..., "g3dpos", x, y, z)` and the gserver moves the player's object. Lab 15 showed the trigger reaching the gserver; the move is not yet run with a real client. |

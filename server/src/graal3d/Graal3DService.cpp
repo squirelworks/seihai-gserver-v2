@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-14, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-14, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
 // New file: the gserver's Graal 3D UDP side. See Graal3DService.h.
 
 #include <graal3d/Graal3DService.h>
@@ -465,19 +465,17 @@ namespace graal3d
 			connection.setGhost(avatarKey(other), avatar);
 		connection.setControlObject(avatarKey(playerId));
 
-		// A Camera of its own, placed off the spawn point, when the world asks
-		// for one. The client's scripts move it (cameramode, position).
-		if (m_world.cameraOffset)
-		{
-			GhostObject camera;
-			camera.kind = GhostObject::Kind::Camera;
-			camera.object.name = "G3DCamera_" + account;
-			camera.object.transform = m_world.spawn;
-			for (size_t i = 0; i < 3; ++i)
-				camera.object.transform.position[i] += (*m_world.cameraOffset)[i];
-			connection.setGhost(cameraKey(playerId), camera);
-			connection.setCameraObject(cameraKey(playerId));
-		}
+		// A Camera of its own. The 5.x client draws its 3D view only through
+		// one: with just the control object the window stays black (lab
+		// 2026-11-20, real 5.12 on Windows 10). It faces the spawn point from
+		// the world's camera offset (DefaultCameraOffset without a camera
+		// line); the client's scripts may move it (cameramode, position).
+		GhostObject camera;
+		camera.kind = GhostObject::Kind::Camera;
+		camera.object.name = "G3DCamera_" + account;
+		camera.object.transform = cameraTransform(m_world);
+		connection.setGhost(cameraKey(playerId), camera);
+		connection.setCameraObject(cameraKey(playerId));
 		log::printLine(log::server, "Graal3D: {} gets {} world objects and {} players.", account, m_world.objects.size(), m_avatars.size());
 	}
 

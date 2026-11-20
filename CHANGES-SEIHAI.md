@@ -9,6 +9,12 @@ Every change below was checked on a private loopback lab with real Graal
 clients and with the [Seihai](https://github.com/squirelworks/seihai) client.
 Each file we changed carries a one-line notice at its top.
 
+## 2026-11-20
+
+| Change | Files | Clients it fixes |
+|---|---|---|
+| The 5.x 3D window stayed black unless the world had a `camera` line: 5.12 draws its 3D view only through a Camera. Every protocol 21/24 client now gets its own Camera, 0 -5 2 from the spawn point by default, facing the spawn point. The `camera` line takes an optional rotation (`camera <x> <y> <z> [<axis x> <axis y> <axis z> <angle>]`); angles follow the clients' sense, the opposite of the right-hand rule (+ about +x looks down, + about +z turns right). Same change as seihai-gserver's; lab 2026-11-20 on that server: real 5.12 (Windows 10 VM) and real Linux 4.20r6 show the world's cube centred from the default camera. Docs note that a `.3ds` with no material is not drawn. Catch tests in `Graal3D`. | `server/include/graal3d/Graal3DObjects.h`, `server/src/graal3d/Graal3DObjects.cpp`, `server/src/graal3d/Graal3DService.cpp`, `Catch_tests/Graal3D/Graal3D_tests.cpp`, `bin/docs/graal3d.md`, `CHANGES-SEIHAI.md` | 4.20r6, 5.x (3D view) |
+
 ## 2026-11-19
 
 | Change | Files | Clients it fixes |

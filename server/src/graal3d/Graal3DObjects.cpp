@@ -1,8 +1,9 @@
-// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
 // New file: GameObject and Sun updates for the Graal 3D world. See Graal3DObjects.h.
 
 #include <graal3d/Graal3DObjects.h>
 
+#include <cmath>
 #include <cstdlib>
 
 namespace graal3d
@@ -512,18 +513,73 @@ namespace graal3d
 				world.tgePlayerShape = w[1];
 				ok = true;
 			}
-			else if (w[0] == "camera" && w.size() == 4)
+			else if (w[0] == "camera" && (w.size() == 4 || w.size() == 8))
 			{
 				std::array<float, 3> offset{};
+				std::array<float, 4> rotation{};
 				ok = toFloats(w, 1, offset.data(), 3);
+				if (ok && w.size() == 8)
+					ok = toFloats(w, 4, rotation.data(), 4);
 				if (ok)
+				{
 					world.cameraOffset = offset;
+					world.cameraRotation.reset();
+					if (w.size() == 8)
+						world.cameraRotation = rotation;
+				}
 			}
 
 			if (!ok)
 				world.errors.push_back("line " + std::to_string(lineNo) + ": " + std::string(line));
 		}
 		return world;
+	}
+
+	graal3d::Transform facing(const std::array<float, 3>& position, const std::array<float, 3>& target)
+	{
+		graal3d::Transform t;
+		t.position = position;
+		const float dx = target[0] - position[0], dy = target[1] - position[1], dz = target[2] - position[2];
+		const float flat = std::hypot(dx, dy);
+		if (flat == 0.0f && dz == 0.0f)
+			return t;
+		const float yaw = flat == 0.0f ? 0.0f : std::atan2(-dx, dy);
+		const float pitch = std::atan2(dz, flat);
+		const float sz = std::sin(yaw / 2), cz = std::cos(yaw / 2);
+		const float sx = std::sin(pitch / 2), cx = std::cos(pitch / 2);
+		// The quaternion of the turn times the tilt.
+		const float w = cz * cx;
+		const std::array<float, 3> v{cz * sx, sz * sx, sz * cx};
+		const float len = std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+		if (len < 1e-6f)
+			return t;
+		t.axis = {v[0] / len, v[1] / len, v[2] / len};
+		t.angle = -2.0f * std::atan2(len, w); // the clients' sense (see the header)
+		return t;
+	}
+
+	std::array<float, 3> forwardOf(const graal3d::Transform& t)
+	{
+		const auto [x, y, z] = t.axis;
+		const float s = std::sin(-t.angle), c = std::cos(t.angle), k = 1.0f - c;
+		// The middle column of the axis-angle matrix.
+		return {k * x * y - s * z, k * y * y + c, k * y * z + s * x};
+	}
+
+	graal3d::Transform cameraTransform(const World& world)
+	{
+		const auto offset = world.cameraOffset.value_or(DefaultCameraOffset);
+		std::array<float, 3> at = world.spawn.position;
+		for (size_t i = 0; i < 3; ++i)
+			at[i] += offset[i];
+		if (!world.cameraRotation)
+			return facing(at, world.spawn.position);
+		graal3d::Transform t;
+		t.position = at;
+		const auto& r = *world.cameraRotation;
+		t.axis = {r[0], r[1], r[2]};
+		t.angle = r[3];
+		return t;
 	}
 
 } // namespace graal3d
