@@ -1,4 +1,4 @@
-// Added by the Seihai project, 2026-11-19: see CHANGES-SEIHAI.md.
+// Added by the Seihai project, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
 // GR-V1.05 levels: the one-byte layer count, extra-layer empty tiles, and malformed
 // files that used to end the process.
 #include "catch2/catch_all.hpp"
@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
 #include <limits>
 #include <string>
 #include <vector>
@@ -164,4 +165,26 @@ TEST_CASE("short NPC, chest and sign lines are skipped", "[level]")
 	CHECK(data->npcs.empty());
 	CHECK(data->chests.empty());
 	CHECK(data->signs.empty());
+}
+
+TEST_CASE("a sign keeps a Latin-1 letter as #K(code) with the byte value", "[level][sign]")
+{
+	heldServer();
+	// 0xE9 is e acute. `char` is signed, so it used to be written as #K(-23).
+	const LevelSign sign{LocalWholeTilePosition{1, 2}, "caf\xe9 \xc4\n"};
+
+	// Sign codes are GCHARs (code + 32): `#K(` is 86 10 69, `)` is 70, and the
+	// digits 0 to 9 are 52 to 61 (`-` would be 64).
+	const auto code = [](std::initializer_list<int> codes)
+	{
+		std::string out;
+		for (const int c : codes)
+			out.push_back(static_cast<char>(c + 32));
+		return out;
+	};
+	const auto k233 = code({86, 10, 69, 54, 55, 55, 70});
+	const auto k196 = code({86, 10, 69, 53, 61, 58, 70});
+	CHECK(sign.encodedText.find(k233) != std::string::npos);
+	CHECK(sign.encodedText.find(k196) != std::string::npos);
+	CHECK(sign.encodedText.find(static_cast<char>(64 + 32)) == std::string::npos);
 }

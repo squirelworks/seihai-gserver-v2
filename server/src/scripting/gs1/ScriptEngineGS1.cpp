@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-14, 2026-11-16: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-14, 2026-11-16, 2026-11-20: see CHANGES-SEIHAI.md.
 #include <any>
 #include <cstdint>
 #include <exception>
@@ -32,6 +32,7 @@
 #include <scripting/ScriptTypes.h>
 #include <scripting/gs1/GS1ErrorListener.h>
 #include <scripting/gs1/GS1Flags.h>
+#include <scripting/gs1/GS1InputStream.h>
 #include <scripting/gs1/GS1ToGS2.h>
 #include <scripting/gs1/GS1Variables.h>
 #include <scripting/gs1/GS1Visitor.h>
@@ -175,9 +176,9 @@ GS1ScriptWrapper::GS1ScriptWrapper(const std::string_view who, const std::string
 	errorListenerLexer = std::make_shared<GS1ErrorListener>("lexing", who);
 	errorListenerParser = std::make_shared<GS1ErrorListener>("parsing", who);
 
-	// Load the script (lenient UTF-8 parsing).
-	input = std::make_shared<antlr4::ANTLRInputStream>();
-	input->load(script.data(), script.length(), true);
+	// Load the script as bytes: GS1 text is Latin-1, and a UTF-8 load turned
+	// every letter over 127 into U+FFFD (Seihai, 2026-11-20).
+	input = std::make_shared<GS1InputStream>(script);
 
 	// Create the lexer.
 	// We don't need to keep this around.
