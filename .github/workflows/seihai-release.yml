@@ -194,6 +194,9 @@ jobs:
             # writes and cannot read LLVM 23 LTO bitcode.
             EXTRA="-DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=$(brew --prefix lld)/bin/ld64.lld"
             if [ -n "${{ matrix.cross }}" ]; then EXTRA="$EXTRA -DCMAKE_OSX_ARCHITECTURES=${{ matrix.cross }}"; fi
+            # The libtomcrypt overlay builds for the triplet's CPU (#132); without
+            # this, vcpkg uses its own port, which builds x86_64 on an Intel runner.
+            EXTRA="$EXTRA -DVCPKG_OVERLAY_PORTS=$GITHUB_WORKSPACE/vcpkg-overlays/ports"
           fi
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DTESTS=OFF -DUPNP=OFF \
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_DIR/scripts/buildsystems/vcpkg.cmake" \
