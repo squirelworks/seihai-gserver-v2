@@ -1,9 +1,9 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-13, 2026-11-20: see CHANGES-SEIHAI.md.
 [generation-range]
 
 classic = GNW13110           // 1.41r1
-newmain = GNW24011:GNW28015, G3D03014:G3D28015  // 2.00 - 2.31, 3.04 - 3.153 (Seihai)
-modern = G3D14097:G3D0511C   // 5.12 - 6.037
+newmain = GNW24011:GNW28015, G3D16053:G3D28015  // 2.00 - 2.31, 3.0 - 3.153 (Seihai)
+modern = G3D14097:GNP1905C   // 5.12 - 6.1.1.3
 
 //newmain = GNW03014           // 2.22 (no npc-server)
 //modern = G3D22067            // 5.007 (last version to support clientside GS1)
