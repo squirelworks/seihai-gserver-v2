@@ -1,4 +1,4 @@
-# Modified by the Seihai project, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-18, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-18, 2026-11-19: see CHANGES-SEIHAI.md.
 #
 #  server/src/CMakeLists.txt
 #
@@ -322,8 +322,9 @@ FetchContent_Declare(gs2lib
 	# seihai-gs2lib #18, + version ids for the 13 catalogue game tokens it
 	# lacked and G3D27076 renamed CLVER_4_102_MAC, seihai-gs2lib #19, + the
 	# bounds and socket fixes of seihai-gs2lib #22 to #26 and #30, + the gen-5
-	# step rounded down for every client, #38 and #39, + the 6.1.1.3 version id
-	# GNP1905C, #40). Upstream 6dd10ff took our poll-based socket wait itself.
+	# compressed-step round-down for every client, seihai-gs2lib #38, + the
+	# 6.1.1.3 version id GNP1905C, seihai-gs2lib #40). Upstream 6dd10ff took our
+	# poll-based socket wait itself.
 	GIT_REPOSITORY https://github.com/squirelworks/seihai-gs2lib.git
 	GIT_TAG        efaabb30b3b2744db9a4d8fdbb72ff1fa8644c19
 )
