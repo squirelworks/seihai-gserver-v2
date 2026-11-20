@@ -1,7 +1,7 @@
 # Seihai: build gs2emu for Linux, Windows and macOS. A tag push (v*), or a manual
 # run with a version, also makes a DRAFT GitHub release with the four archives and
 # the full source, as the GPL asks. The tag is made when the owner presses Publish.
-# Modified by the Seihai project, 2026-11-04, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-19: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-11-04, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
 name: Seihai build and release
 
 on:
@@ -316,7 +316,8 @@ jobs:
 
   # Adds the macOS archives to the draft if and when they are built.
   add-macos:
-    if: startsWith(github.ref, 'refs/tags/v') || inputs.version != ''
+    # Runs when one macOS build fails too, so the other's archive still reaches the draft.
+    if: ${{ always() && needs.release.result == 'success' && (startsWith(github.ref, 'refs/tags/v') || inputs.version != '') }}
     needs: [release, build-macos]
     runs-on: ubuntu-latest
     steps:
@@ -331,6 +332,7 @@ jobs:
           INPUT_VERSION: ${{ inputs.version }}
         run: |
           if [ -n "$INPUT_VERSION" ]; then TAG="v$INPUT_VERSION"; else TAG="$GITHUB_REF_NAME"; fi
+          if ! ls dist/* > /dev/null 2>&1; then echo "No macOS archives were built."; exit 0; fi
           ls -l dist
           if [ "$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json isDraft -q .isDraft)" = true ]; then
             gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber dist/*
