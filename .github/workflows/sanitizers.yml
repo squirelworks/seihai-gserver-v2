@@ -1,7 +1,8 @@
 # Seihai project, 2026-11-19: see CHANGES-SEIHAI.md.
 # Crash hunting (#87): build gs2emu and the Seihai regression tests with AddressSanitizer
 # and UndefinedBehaviorSanitizer (-DSANITIZE=ON) and run them, including ShortPackets,
-# which sends every client id with an empty body through the real handlers.
+# which sends every client id with an empty body through the real handlers. Then a
+# scripted client session against the npcdemo world (tools/lab/ci-session-steps.txt).
 # Ubuntu's own libraries instead of vcpkg, so the job stays short; the release workflow
 # keeps the vcpkg build. Clang, because GCC 14 with -fsanitize=address rejects
 # ztd.text's constexpr encoding lookup.
@@ -18,6 +19,8 @@ on:
       - 'CMakeLists.txt'
       - 'cmake/**'
       - '.github/workflows/sanitizers.yml'
+      - 'tools/lab/ci-session-steps.txt'
+      - 'bin/servers/npcdemo/**'
   schedule:
     - cron: '17 6 * * 1'
   workflow_dispatch:
@@ -71,4 +74,33 @@ jobs:
           kill $p1 2>/dev/null || true; wait $p1 2>/dev/null || true
           tail -n 40 default.out
           if grep -E "ERROR: AddressSanitizer|runtime error:" default.out; then ok=0; fi
+          [ $ok = 1 ]
+      # A scripted loopback session under the sanitizers (#87): login, GS1 NPCs on the
+      # NPC-server, a file request and a level change, from seihai-servertools' probe
+      # client at a pinned commit. Each expect in the steps file must be answered.
+      - name: Probe client
+        run: |
+          cargo install --locked --root "$RUNNER_TEMP/probe" \
+            --git https://github.com/squirelworks/seihai-servertools \
+            --rev 6ce378ba2cf79e0f22f51b8e2e10c1272b9d2fb0 suite-stress
+      - name: Scripted session under the sanitizers
+        shell: bash
+        run: |
+          cd bin
+          printf 'seihai-ci' > servers/npcdemo/world/images/ciprobe.png
+          exe=$(ls gs2emu* | head -1)
+          ./$exe --server npcdemo > npcdemo.out 2>&1 & p1=$!
+          ok=1; up=0
+          for i in $(seq 1 60); do (echo > /dev/tcp/127.0.0.1/14804) 2>/dev/null && { up=1; break; }; sleep 1; done
+          [ $up = 1 ] || { echo "nothing listens on 127.0.0.1:14804"; ok=0; }
+          for v in 2.00 2.31 4.04r2 5.12; do
+            echo "== probe as $v"
+            [ $ok = 1 ] || break
+            STEP_MS=300 timeout 120 "$RUNNER_TEMP/probe/bin/seihai-suite-stress" probe \
+              127.0.0.1:14804 "$v" "ci${v//./}" ../tools/lab/ci-session-steps.txt > "probe-$v.out" 2>&1 \
+              || { echo "probe as $v failed"; tail -n 30 "probe-$v.out"; ok=0; }
+          done
+          kill $p1 2>/dev/null || true; wait $p1 2>/dev/null || true
+          tail -n 40 npcdemo.out
+          if grep -E "ERROR: AddressSanitizer|runtime error:" npcdemo.out; then ok=0; fi
           [ $ok = 1 ]
