@@ -6,7 +6,7 @@ same in every Seihai repo.
 
 ## This repo
 
-- **Current version:** 4.0.0-seihai.3.
+- **Current version:** 4.0.0-seihai.5.
 - **Where the version lives:** the release tag, `v<upstream version>-seihai.N`. The upstream version is `project(GS2Emu VERSION …)` in `CMakeLists.txt`, and it changes only when upstream's does.
 - **Public surface** (the things a version number makes promises about):
   - what each client version sees on the wire;
@@ -17,7 +17,7 @@ same in every Seihai repo.
 - **Unreleased notes:** the dated rows of `CHANGES-SEIHAI.md` since the last release.
 - **Release notes:** `docs/releases/v<version>.md`.
 - **How a release is made:** After the notes merge, someone runs "Seihai build and release" (`.github/workflows/seihai-release.yml`) by hand with the version. It makes a **draft**, and the owner presses Publish. There's no `version-guard` here, because no file holds the `-seihai.N` part.
-- **Next milestone:** [#108](https://github.com/squirelworks/seihai-gserver-v2/issues/108) (4.0.0-seihai.4).
+- **Next milestone:** none set; the next release follows the rules below.
 - **1.0.0 criteria:** none: the fork's end state is retirement to a reference, [#35](https://github.com/squirelworks/seihai-gserver-v2/issues/35).
 - **Long-term roadmap:** [#35](https://github.com/squirelworks/seihai-gserver-v2/issues/35).
 - **Check:** No `version-guard` check: the version isn't kept in a file this repo's PRs change.
