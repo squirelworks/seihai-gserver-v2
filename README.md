@@ -36,6 +36,51 @@ To try the built-in NPC-server, run `./gs2emu --server npcdemo` from `bin/`. It
 is a loopback sample world described in `bin/servers/npcdemo/README.md`. The GS1
 it does not support yet is listed in `docs/lab/2026-10-31-npcserver-gs1.md`.
 
+## Getting started
+
+Download the archive for your system from the
+[Releases page](https://github.com/squirelworks/seihai-gserver-v2/releases) and
+unpack it, or build from source (see "Building" in the upstream README below;
+the program is then in `bin/`). From the `bin` folder:
+
+```
+./gs2emu --server default      # gs2emu.exe on Windows
+```
+
+That starts the lab world's `default` server on `127.0.0.1:14802`. To set up a
+server of your own, follow [bin/docs/start-here.md](bin/docs/start-here.md):
+make your account, add it to `staff=` in `config/serveroptions.txt`, and choose
+the server's generation.
+
+## Command line
+
+| Option | What it does |
+| --- | --- |
+| `-s DIR`, `--server DIR` | Runs the server in `servers/DIR` |
+| `-p PORT`, `--port PORT` | The port to listen on, instead of the one in the server's settings |
+| `--interface IP` | The address to listen on |
+| `--serverip IP` | The address the listserver gives players for this server |
+| `--localip IP` | The address given to players on the same network as the server |
+| `--staff ACCOUNT` | Adds `ACCOUNT` to the staff list, and makes the account from `YOURACCOUNT` if it does not exist yet |
+| `-h`, `--help` | Prints the usage |
+
+These options come from upstream and have two quirks. The long forms `--port`,
+`--interface`, `--serverip`, `--localip` and `--staff` are only read when they
+come before `--server`, while the short `-p` is only read after `-s`. And
+`--name NAME` (or `SERVERNAME`) is accepted but has no effect yet.
+
+Without `--server`, gs2emu picks the server this way: the current folder, if it
+has `config/serveroptions.txt`; else the folder named in `startupserver.txt`
+(`default` in the lab world); else the only folder in `servers/`.
+
+With the environment variable `USE_ENV` set, the command line is ignored and the
+same settings come from `SERVER`, `PORT`, `INTERFACE`, `SERVERIP`, `LOCALIP`,
+`SERVERNAME` and `STAFFACCOUNT` instead, as the Docker image uses them
+([Docker.md](Docker.md)).
+
+The server's own settings are text files in its `config/` folder, chiefly
+`serveroptions.txt`; [bin/docs/server.md](bin/docs/server.md) describes them.
+
 ## Fuzzing
 
 A standalone Clang libFuzzer project under `fuzz/` exercises packet framing,
