@@ -1,0 +1,24 @@
+# Seihai project, 2026-11-20: see CHANGES-SEIHAI.md.
+# Scripted loopback session for the sanitizer job (#87): seihai-suite-stress probe
+# against the npcdemo world (bin/servers/npcdemo, 127.0.0.1:14804), from
+# seihai-servertools (docs/lab/probe/). Each expect fails the run if its text
+# does not arrive. npcdemo takes 2.00-2.31 and 3.04-5.12; the job runs 2.00, 2.31,
+# 4.04r2 and 5.12. Start at 30,40 in npcdemo_start.nw.
+expect 5 npcdemo_start.nw
+# The Greeter's server-side GS1 script answers the login.
+expect 5 The NPC-server is running
+# 6 Listener (15,45): playerchats
+walk 16 46 1
+chat hello
+expect 5 I heard you on the server
+# 2 sign (20,36): the server half of a sign
+walk 25 35 1
+walk 21.5 35 1
+expect 5 the built-in NPC-server
+# A file request: the job writes images/ciprobe.png before the server starts.
+want ciprobe.png
+expect 5 id 102 
+# Level change
+warp npcdemo_room.nw 30 30
+expect 5 npcdemo_room.nw
+wait 1
