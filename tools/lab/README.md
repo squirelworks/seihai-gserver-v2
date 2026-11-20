@@ -1,3 +1,4 @@
+<!-- Seihai project, 2026-11-20: see CHANGES-SEIHAI.md. -->
 # Lab tools
 
 Loopback-only helpers for this fork's own lab world. Never point them at a
@@ -8,6 +9,7 @@ public server or the official listserver.
 | `mknpcdemo.py` | Writes `bin/servers/npcdemo/world/*.nw`. Edit the NPC scripts here, then rerun. |
 | `graalnpcs.py` | Lists the NPC scripts in binary `.graal` levels (rough). |
 | `scan.py` | Static scan of a folder of `.graal` levels against the fork's GS1 command and function lists. |
+| `netdump2session.py` | Turns a packet-logging server's logs into `.session` files for `replay_handlers` (#87; see `fuzz/README.md`). Tests: `python3 -m unittest tools/lab/test_netdump2session.py`. |
 | `labcheck.py` | Expected-vs-actual checks for the real-client lab runs (#25, #26, #27, #34) from a packet-logging server's logs. Runbooks: `docs/lab/runbooks/`. Tests: `python3 -m unittest tools/lab/test_labcheck.py`. |
 
 The 1.x levels used for the sweep are not in this repo; keep them out.

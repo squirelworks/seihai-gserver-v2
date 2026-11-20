@@ -1,8 +1,9 @@
-# Seihai project, 2026-11-19: see CHANGES-SEIHAI.md.
+# Seihai project, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
 # Crash hunting (#87): build gs2emu and the Seihai regression tests with AddressSanitizer
 # and UndefinedBehaviorSanitizer (-DSANITIZE=ON) and run them, including ShortPackets,
 # which sends every client id with an empty body through the real handlers. Then a
-# scripted client session against the npcdemo world (tools/lab/ci-session-steps.txt).
+# scripted client session against the npcdemo world (tools/lab/ci-session-steps.txt),
+# and replay_handlers over recorded and hand-written sessions and the fuzz corpus.
 # Ubuntu's own libraries instead of vcpkg, so the job stays short; the release workflow
 # keeps the vcpkg build. Clang, because GCC 14 with -fsanitize=address rejects
 # ztd.text's constexpr encoding lookup.
@@ -20,6 +21,10 @@ on:
       - 'cmake/**'
       - '.github/workflows/sanitizers.yml'
       - 'tools/lab/ci-session-steps.txt'
+      - 'tools/lab/netdump2session.py'
+      - 'tools/lab/fixtures/**'
+      - 'fuzz/handlers/**'
+      - 'fuzz/corpus/**'
       - 'bin/servers/npcdemo/**'
   schedule:
     - cron: '17 6 * * 1'
@@ -49,11 +54,13 @@ jobs:
       - name: Configure
         run: |
           CC=clang-18 CXX=clang++-18 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
-            -DTESTS=ON -DUPNP=OFF -DSANITIZE=ON -DANTLR4_JAR_LOCATION="$RUNNER_TEMP/antlr.jar"
+            -DTESTS=ON -DUPNP=OFF -DSANITIZE=ON -DREPLAY_HANDLERS=ON \
+            -DANTLR4_JAR_LOCATION="$RUNNER_TEMP/antlr.jar"
       # The server first, so the generated GS1 parser exists before the tests build.
       - name: Build
         run: |
           cmake --build build --target gs2emu
+          cmake --build build --target replay_handlers
           cmake --build build --target ShortPackets RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin ClientPing Scripting LegacyProps GS1ToGS2 FileSend ServerOptions LevelLoad GS1 ServerWarp
       - name: Regression tests under the sanitizers
         run: |
@@ -61,6 +68,17 @@ jobs:
             echo "== $t"; timeout 300 bin/$t
           done
           echo "== GS1"; timeout 600 bin/GS1
+      # Recorded sessions through the real handlers under the sanitizers (#87): the
+      # modern-3clients lab capture, converted by netdump2session.py, the hand-written
+      # sessions and the fuzz_handlers corpus.
+      - name: Replay sessions under the sanitizers
+        shell: bash
+        run: |
+          python3 -m unittest tools/lab/test_netdump2session.py
+          python3 tools/lab/netdump2session.py tools/lab/fixtures/modern-3clients "$RUNNER_TEMP/sessions"
+          mkdir -p "$RUNNER_TEMP/replay" && cd "$RUNNER_TEMP/replay"
+          timeout 600 "$GITHUB_WORKSPACE/bin/replay_handlers" "$RUNNER_TEMP"/sessions/*.session \
+            "$GITHUB_WORKSPACE"/fuzz/corpus/sessions/*.session "$GITHUB_WORKSPACE"/fuzz/corpus/handlers/*
       # The packaged lab worlds start and listen under the sanitizers too.
       - name: Lab world smoke test under the sanitizers
         shell: bash

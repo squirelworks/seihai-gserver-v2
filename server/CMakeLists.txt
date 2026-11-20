@@ -1,4 +1,4 @@
-# Modified by the Seihai project, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-18, 2026-11-19: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-18, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
 #
 #  server/src/CMakeLists.txt
 #
@@ -518,7 +518,7 @@ endif()
 # ----------------------------
 # Tests
 
-if (TESTS OR FUZZ_HANDLERS)
+if (TESTS OR FUZZ_HANDLERS OR REPLAY_HANDLERS)
 	set(APP_LIBRARY_NAME_TESTREF "${TARGET_NAME}" PARENT_SCOPE)
 endif()
 

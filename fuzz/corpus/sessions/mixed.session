@@ -1,0 +1,17 @@
+# Hand-written replay_handlers session (#87): a 2.0 client, a 6.03r7 client,
+# an RC and an NC online together. Bodies are Graal-encoded (+32).
+login p1 20 GNW24011
+login p2 25 G3D0311C
+login r1 26 GSERV025
+login n1 23 NCL21075
+p1 2 20 25 70 31 6e 69 63
+p1 6 68 65 6c 6c 6f 20 66 72 6f 6d 20 32 2e 30
+p2 2 2c 22 68 69
+p2 23 62 69 67 6d 61 70 2e 74 78 74
+p1 4 3e 3e 21 20
+r1 51
+r1 53
+r1 73 20 22
+n1 150
+n1 103 20 20 20 21
+p2 6 62 79 65
