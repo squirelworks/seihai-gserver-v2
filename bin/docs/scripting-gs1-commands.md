@@ -2597,7 +2597,9 @@ Shoots a ball projectile at the player.
 **gs2emu** adds an optional [direction](scripting-gs1-variables.md#directions) in the serverside version.
 Without the extension enabled, serverside `shootball` will shoot towards the player in one of the 4 cardinal directions, but will not shoot directly at the player's position.  This is because the packet to spawn a projectile only sends one of the 4 directions and does not include an exact flight path.
 
-**Seihai** accepts the bare form serverside too, as the 1.x levels use it. The server's balls fly in four directions, so a bare `shootball;` aims along the dominant axis from the NPC to the event's player. In an event with no player (`timeout`, `created`) it shoots one ball at each player in the level, as each 1.x client ran the script against its own player. With no players in the level it shoots the way the NPC faces.
+**Seihai: the serverside bare form is not standard.** The official NPC-server never had `shootball` (its 2001 command list has no shoot command at all), and in 1.x it ran clientside only: each client ran the level script and shot a ball straight at its own player, with an exact flight path. A server cannot reproduce that: `PLO_ARROWADD` (19) carries only a position, a two-bit direction, a sprite and a type, and the client flies the shot one tile per tick along that direction, so a server-made ball can only go up, left, down or right.
+
+By default (`levelnpcscripts = clientside`) a 1.x level script with no `//#CLIENTSIDE` line goes to the client, so `shootball;` there runs on the client and aims exactly, as in 1.x. Only in a script that runs on the NPC-server (an opted-in level, a `serversidescriptlevels` match, or the serverside half of a split script) does Seihai accept the bare form as an approximation: it shoots along the dominant axis from the NPC to the event's player, and in an event with no player (`timeout`, `created`) one ball at each player in the level, each along the axis towards that player. With no players in the level it shoots the way the NPC faces. For an exact aim, put `shootball;` after `//#CLIENTSIDE`.
 
 ---
 ## shootfireball
