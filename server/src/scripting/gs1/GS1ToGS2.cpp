@@ -1,4 +1,4 @@
-// Seihai project, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
+// Seihai project, 2026-11-13, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
 //
 // This file is part of the Seihai fork of GServer-v2 and is released under the
 // GNU General Public License version 3 (see LICENSE.md).
@@ -33,6 +33,7 @@
 
 #include <compiler/GS2Context.h>
 
+#include <scripting/gs1/GS1InputStream.h>
 #include <scripting/gs1/GS1ToGS2.h>
 
 using namespace std::literals;
@@ -1676,8 +1677,9 @@ GS2Translation translateToGS2(const std::string_view gs1Source)
 	ErrorCollector lexErrors{result.errors, "GS1 lexing"};
 	ErrorCollector parseErrors{result.errors, "GS1 parsing"};
 
-	antlr4::ANTLRInputStream input;
-	input.load(source.data(), source.length(), true);
+	// Bytes, not UTF-8: GS1 text is Latin-1, and a UTF-8 load turned every
+	// letter over 127 into U+FFFD (Seihai, 2026-11-20).
+	GS1InputStream input{source};
 
 	GS1Lexer lexer{&input};
 	lexer.removeErrorListeners();

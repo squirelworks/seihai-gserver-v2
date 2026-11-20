@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-20: see CHANGES-SEIHAI.md.
 #ifndef SERVERLIST_H
 #define SERVERLIST_H
 
@@ -74,6 +75,9 @@ public:
 
 	// Send New Server-Info
 	void sendServerHQ();
+	/// The HQ level sent to the listserver: 0 when staff-only, 4 (Graal3D) when
+	/// `graal3d` is on, else `hq_level` from adminconfig.txt (default 1).
+	int serverHQLevel() const;
 	void sendVersionConfig();
 
 	// Incoming message parsing functions

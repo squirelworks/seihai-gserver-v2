@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-20: see CHANGES-SEIHAI.md.
 #include <string_view>
 
 #include <CString.h>
@@ -58,12 +59,14 @@ CString encodeSignCode(CString& pText)
 			if (letter != '\r')
 			{
 				// Write the character code directly into the sign.
+				// Seihai: the code is the byte (0 to 255). `char` is signed, so a
+				// Latin-1 letter such as 0xE9 was written as #K(-23).
 				retVal >> (char)86 >> (char)10 >> (char)69; // #K(
-				CString scode(static_cast<int>(letter));
+				CString scode(static_cast<int>(static_cast<unsigned char>(letter)));
 				for (int j = 0; j < scode.length(); ++j)
 				{
 					const int c = signCharacters.find(scode[j]);
-					if (scode != -1) retVal.writeGChar(static_cast<char>(c));
+					if (c != -1) retVal.writeGChar(static_cast<char>(c));
 				}
 				retVal >> (char)70; // )
 			}

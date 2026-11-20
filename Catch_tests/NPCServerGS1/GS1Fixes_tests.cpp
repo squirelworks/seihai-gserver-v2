@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12 and 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-19 and 2026-11-20: see CHANGES-SEIHAI.md.
 // New file: regression tests for the built-in NPC-server's GS1 fixes from the
 // 2026-10-31 lab note (docs/lab/2026-10-31-npcserver-gs1.md) and issue #33.
 #include <catch2/catch_all.hpp>
@@ -290,4 +290,20 @@ TEST_CASE("a script's hurt reaches 1.x to 2.31 clients as a hearts prop", "[GS1]
 	CHECK_FALSE(Server::hurtsByHeartsProp(CLVER_3));
 	CHECK_FALSE(Server::hurtsByHeartsProp(CLVER_6_037));
 	CHECK_FALSE(Server::hurtsByHeartsProp(CLVER_UNKNOWN));
+}
+
+TEST_CASE_METHOD(GS1Fixture, "server-side GS1 keeps Latin-1 letters", "[GS1][latin1]")
+{
+	// 0xE9 (e acute) is not UTF-8 on its own: it used to become U+FFFD.
+	for (const auto& [script, expected] : {
+			 std::pair{"message caf\xe9;"sv, "caf\xe9"s},
+			 std::pair{"if (created) { setstring this.w,Gr\xfc\xdf" "e; message #s(this.w)!; }"sv, "Gr\xfc\xdf" "e!"s},
+			 std::pair{"message #K(233);"sv, "\xe9"s},
+		 })
+	{
+		CAPTURE(script);
+		npc()->character.chatMessage.clear();
+		REQUIRE(run(script).empty());
+		CHECK(npc()->character.chatMessage == expected);
+	}
 }

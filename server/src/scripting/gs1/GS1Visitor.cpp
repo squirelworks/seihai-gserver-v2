@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-20: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <any>
 #include <cassert>
@@ -46,6 +47,7 @@
 #include <scripting/gs1/GS1Commands.h>
 #include <scripting/gs1/GS1ErrorListener.h>
 #include <scripting/gs1/GS1Functions.h>
+#include <scripting/gs1/GS1InputStream.h>
 #include <scripting/gs1/GS1MessageCodes.h>
 #include <scripting/gs1/GS1Visitor.h>
 #include <scripting/gs1/ScriptEngineGS1.h>
@@ -647,7 +649,8 @@ std::any GS1Visitor::reparseExpression(std::string_view expression, const std::s
 	GS1ErrorListener errorListenerParser("parsing", who);
 
 	// Create an input stream for the expression.
-	antlr4::ANTLRInputStream inputStream{expression};
+	// Bytes as written (Latin-1), like the script it came from.
+	GS1InputStream inputStream{expression};
 	GS1Lexer lexer(&inputStream);
 	lexer.removeErrorListeners();
 	lexer.addErrorListener(&errorListenerLexer);

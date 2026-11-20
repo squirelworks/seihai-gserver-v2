@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -281,10 +281,7 @@ bool ServerList::connectServer()
 	sendPacket(CString() >> (char)SVO_NEWSERVER >> (char)name.length() << name >> (char)desc.length() << desc >> (char)language.length() << language >> (char)version.length() << version >> (char)url.length() << url >> (char)ip.length() << ip >> (char)port.length() << port >> (char)localip.length() << localip);
 
 	// Set the level now.
-	if (m_server->getSettings().get<bool>("onlystaff").value_or(false))
-		sendPacket(CString() >> (char)SVO_SERVERHQLEVEL >> (char)0);
-	else
-		sendPacket(CString() >> (char)SVO_SERVERHQLEVEL >> (char)adminsettings.get<int>("hq_level").value_or(1));
+	sendPacket(CString() >> (char)SVO_SERVERHQLEVEL >> (char)serverHQLevel());
 
 	sendVersionConfig();
 
@@ -484,10 +481,22 @@ void ServerList::sendServerHQ()
 
 	const auto& adminsettings = m_server->getAdminSettings();
 	sendPacket(CString() >> (char)SVO_SERVERHQPASS << adminsettings.get<std::string>("hq_password").value_or(""s));
+	sendPacket(CString() >> (char)SVO_SERVERHQLEVEL >> (char)serverHQLevel());
+}
+
+int ServerList::serverHQLevel() const
+{
 	if (m_server->getSettings().get<bool>("onlystaff").value_or(false))
-		sendPacket(CString() >> (char)SVO_SERVERHQLEVEL >> (char)0);
-	else
-		sendPacket(CString() >> (char)SVO_SERVERHQLEVEL >> (char)adminsettings.get<int>("hq_level").value_or(1));
+		return 0;
+
+	// Seihai: a 3D server (`graal3d = true`) is listed at HQ level 4, which the
+	// listserver tags "3 ". The 3.153 to 5.x clients open the 3D link on that tag
+	// alone, and Mac 3.153 reads only the first tag, so a server left at the
+	// default bronze level ("H ") is not seen as 3D even with "3 " in its name.
+	if (m_server->getSettings().get<bool>("graal3d").value_or(false))
+		return 4;
+
+	return m_server->getAdminSettings().get<int>("hq_level").value_or(1);
 }
 
 /*

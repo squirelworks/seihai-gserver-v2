@@ -1,4 +1,4 @@
-// Seihai project, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
+// Seihai project, 2026-11-13, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
 //
 // This file is part of the Seihai fork of GServer-v2 and is released under the
 // GNU General Public License version 3 (see LICENSE.md).
@@ -272,4 +272,12 @@ TEST_CASE("GS2 client scripts are found whether or not they are marked (#110, #1
 	const auto refused = gs1::compileClientScript("if (created) putnpc a.png,x.txt,1,2;");
 	CHECK_FALSE(refused.ok());
 	CHECK_FALSE(refused.gs2);
+}
+
+TEST_CASE("GS1 Latin-1 text reaches GS2 as the same bytes", "[GS1ToGS2]")
+{
+	// 0xE9 and 0xFC are not UTF-8 on their own; they used to become U+FFFD.
+	const auto out = gs2("if (created) { message caf\xe9; say2 Gr\xfc\xdf" "e; }");
+	CHECK(out == "function onCreated() {\n\tmessage(\"caf\xe9\");\n\tsay2(\"Gr\xfc\xdf" "e\");\n}\n");
+	CHECK(out.find("\xef\xbf\xbd") == std::string::npos);
 }
