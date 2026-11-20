@@ -1,3 +1,4 @@
+# Modified by the Seihai project, 2026-11-20: see CHANGES-SEIHAI.md.
 unset(VCPKG_TARGET_IS_WINDOWS)
 
 vcpkg_from_github(
@@ -66,7 +67,16 @@ else()
         set(MAKE_FILE "makefile")
     endif()
 
-    set(ENV{CFLAGS} "-fPIC -DUSE_LTM -DLTM_DESC -I${CURRENT_INSTALLED_DIR}/include")
+    # Seihai: plain make builds for the host CPU. On macOS, build for the triplet's
+    # architectures, so arm64-osx cross-built on an Intel runner gets an arm64 archive.
+    set(ARCH_FLAGS "")
+    if(VCPKG_TARGET_IS_OSX)
+        foreach(arch IN LISTS VCPKG_OSX_ARCHITECTURES)
+            string(APPEND ARCH_FLAGS " -arch ${arch}")
+        endforeach()
+        set(ENV{LDFLAGS} "${ARCH_FLAGS}")
+    endif()
+    set(ENV{CFLAGS} "-fPIC -DUSE_LTM -DLTM_DESC -I${CURRENT_INSTALLED_DIR}/include${ARCH_FLAGS}")
 
     vcpkg_execute_build_process(
         COMMAND make -f ${MAKE_FILE} clean
