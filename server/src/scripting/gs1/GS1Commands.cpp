@@ -3064,7 +3064,8 @@ static std::vector<std::shared_ptr<Player>> playersInLevel(const Level& level)
 
 // shootball;
 // (gr) shootball dir;
-// Seihai: the bare form shoots at the event's player, else one ball at each player in the level, else the way the NPC faces.
+// Seihai (non-standard): the bare form shoots along the nearest of the 4 directions towards the event's player,
+// else one ball at each player in the level, else the way the NPC faces.
 void fn_shootball(GS1Visitor* visitor, const std::vector<GS1ScriptValue*>& arguments)
 {
 	// Conformance.
@@ -3079,9 +3080,11 @@ void fn_shootball(GS1Visitor* visitor, const std::vector<GS1ScriptValue*>& argum
 	{
 		const auto& source = visitor->getOriginalSource();
 
-		// Seihai: 1.x levels use the bare form, shootball;  The documented original shoots at the player. The
-		// server's balls fly in one of four directions, so a bare shootball takes the direction (dominant axis)
-		// from the NPC to its target, or the way the NPC faces when there is no player.
+		// Seihai: 1.x levels use the bare form, shootball;  Not standard: the official NPC-server never had
+		// shootball, and the 1.x client ran it clientside with an exact dx/dy towards its own player.
+		// PLO_ARROWADD only carries a two-bit direction, so a server-made ball cannot aim exactly; the bare
+		// form takes the direction (dominant axis) from the NPC to its target, or the way the NPC faces when
+		// there is no player. Scripts that need an exact aim must run shootball clientside.
 		std::vector<uint8_t> dirs;
 		if (arguments.size() == 1)
 			dirs.push_back(DoubleAsIntegralFloor<uint8_t>(GS1Visitor::getScriptValueAsCopy<double>(*arguments[0]).value_or(0.0)));
