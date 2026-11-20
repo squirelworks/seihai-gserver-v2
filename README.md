@@ -1,37 +1,56 @@
 # Seihai GServer-v2
 
-This is the Seihai fork of GServer-v2 `beta4`, with fixes for real 1.33 to 2.31
-clients. What changed and why is in [CHANGES-SEIHAI.md](CHANGES-SEIHAI.md).
-Known bugs, with how to reproduce them and where to start looking, are in
-[KNOWN-ISSUES.md](KNOWN-ISSUES.md).
-Prebuilt Linux, Windows and macOS builds are on the Releases page, each with its
-source. Licence: GPL-3.0, as upstream.
+This is the Seihai project's fork of [GServer-v2](https://github.com/xtjoeytx/GServer-v2)
+`beta4`, the open-source Graal game server, with fixes so that real 1.33 to 2.31
+clients play on it correctly. It uses the
+Seihai fork of its support library,
+[seihai-gs2lib](https://github.com/squirelworks/seihai-gs2lib).
+
+- What changed and why: [CHANGES-SEIHAI.md](CHANGES-SEIHAI.md).
+- Known bugs, how to reproduce them and where to start looking:
+  [KNOWN-ISSUES.md](KNOWN-ISSUES.md).
+- Prebuilt Linux, Windows and macOS builds, each with its source, are on the
+  [Releases page](https://github.com/squirelworks/seihai-gserver-v2/releases).
+
+The licence is GPL-3.0, as upstream.
 
 ## Lab world
 
 The `bin` folder (and every release archive) holds a lab world that listens on
-`127.0.0.1` only, with UPnP off: `servers/default` for 2.00 to 3.153 on port
-14802, `servers/classic` for 1.33 to 1.41r1 on port 14803, and `servers/modern`
-for 4.04r2 to 6.037 (and the `.gpak` resource packages of 4.20r8 and later) on port 14805. Start
-one with `gs2emu --server default`, `classic` or `modern` from the `bin` folder.
-Any account logs in without a listserver. Details, and how to open a server to
-other machines: [bin/docs/lab-world.md](bin/docs/lab-world.md).
-[seihai-servertools](https://github.com/squirelworks/seihai-servertools) starts a
-lab world in one step (`seihai-servertools lab start`).
+`127.0.0.1` only, with UPnP off. It has three servers:
 
-To try the built-in NPC-server, run `./gs2emu --server npcdemo` from `bin/`
-(a loopback sample world, see `bin/servers/npcdemo/README.md`). What GS1 it
-lacks today: `docs/lab/2026-10-31-npcserver-gs1.md`.
+| Server | Clients | Port |
+| --- | --- | --- |
+| `servers/classic` | 1.33 to 1.41r1 | 14803 |
+| `servers/default` | 2.00 to 3.153 | 14802 |
+| `servers/modern` | 4.04r2 to 6.037, and the `.gpak` packages of 4.20r8 and later | 14805 |
 
-Seihai also makes a new Rust server stack, separate from this fork:
+Start one from the `bin` folder with `gs2emu --server default` (or `classic`,
+or `modern`). Any account logs in without a listserver. The details, and how to
+open a server to other machines, are in
+[bin/docs/lab-world.md](bin/docs/lab-world.md).
+[seihai-servertools](https://github.com/squirelworks/seihai-servertools) can
+start a whole lab world in one step (`seihai-servertools lab start`).
+
+To try the built-in NPC-server, run `./gs2emu --server npcdemo` from `bin/`. It
+is a loopback sample world described in `bin/servers/npcdemo/README.md`. The GS1
+it does not support yet is listed in `docs/lab/2026-10-31-npcserver-gs1.md`.
+
+## Fuzzing
+
+A standalone Clang libFuzzer project under `fuzz/` exercises packet framing,
+decryption and decompression through `processBuffer`. See `fuzz/README.md`; a
+weekly workflow (`.github/workflows/fuzz.yml`) runs it.
+
+## The rest of Seihai
+
+Seihai also writes a new server stack in Rust, separate from this fork:
 [seihai-gserver](https://github.com/squirelworks/seihai-gserver),
 [seihai-listserver](https://github.com/squirelworks/seihai-listserver),
 [seihai-rc](https://github.com/squirelworks/seihai-rc) and
-[seihai-npcserver](https://github.com/squirelworks/seihai-npcserver).
-
-Crash hunting (#87): a standalone Clang libFuzzer project lives under
-`fuzz/` (packet framing / decrypt / decompress via `processBuffer`). See
-`fuzz/README.md` and the weekly `.github/workflows/fuzz.yml` job.
+[seihai-npcserver](https://github.com/squirelworks/seihai-npcserver). The client is
+[seihai](https://github.com/squirelworks/seihai), and the research notes behind
+the fixes are in [Graal_analysis](https://github.com/squirelworks/Graal_analysis).
 
 The upstream README follows.
 
