@@ -1,4 +1,4 @@
-# Modified by the Seihai project, 2026-11-19: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
 #
 #  CMakeLists.txt
 #
@@ -165,6 +165,10 @@ if(FUZZ_HANDLERS)
 	add_compile_options(-fsanitize=fuzzer-no-link)
 endif()
 
+# Seihai: replay_handlers feeds recorded sessions to the same handlers (#87). Any
+# compiler; use SANITIZE=ON to replay under ASan/UBSan.
+option(REPLAY_HANDLERS "Build replay_handlers, which replays recorded sessions through PlayerClient::handlePacket." OFF)
+
 # Static runtime.
 option(STATIC "Compile as a static runtime." ON)
 if(STATIC)
@@ -246,4 +250,9 @@ if (FUZZ_HANDLERS)
 	target_compile_options(fuzz_handlers PRIVATE -fsanitize=fuzzer -Wno-unknown-attributes)
 	target_link_options(fuzz_handlers PRIVATE -fsanitize=fuzzer)
 	target_link_libraries(fuzz_handlers PRIVATE ${APP_LIBRARY_NAME_TESTREF})
+endif()
+if (REPLAY_HANDLERS)
+	add_executable(replay_handlers ${PROJECT_SOURCE_DIR}/fuzz/handlers/replay_handlers.cpp)
+	target_compile_features(replay_handlers PUBLIC cxx_std_23)
+	target_link_libraries(replay_handlers PRIVATE ${APP_LIBRARY_NAME_TESTREF})
 endif()

@@ -100,7 +100,7 @@ jobs:
           timeout 60 bin/LevelLoad
           timeout 60 bin/ServerWarp
           rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin bin/ClientPing bin/Scripting bin/LegacyProps bin/GS1ToGS2 bin/GS1 bin/FileSend bin/ServerOptions bin/ShortPackets bin/LevelLoad bin/ServerWarp
-          python3 -m unittest tools/lab/test_labcheck.py
+          python3 -m unittest tools/lab/test_labcheck.py tools/lab/test_netdump2session.py
       - name: Package
         shell: bash
         run: |
@@ -224,7 +224,7 @@ jobs:
           timeout 60 bin/LevelLoad
           timeout 60 bin/ServerWarp
           rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin bin/ClientPing bin/Scripting bin/LegacyProps bin/GS1ToGS2 bin/GS1 bin/FileSend bin/ServerOptions bin/ShortPackets bin/LevelLoad bin/ServerWarp
-          python3 -m unittest tools/lab/test_labcheck.py
+          python3 -m unittest tools/lab/test_labcheck.py tools/lab/test_netdump2session.py
       - name: Package
         shell: bash
         run: |
