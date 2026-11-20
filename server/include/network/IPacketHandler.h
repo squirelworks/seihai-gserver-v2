@@ -1,7 +1,8 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-07, 2026-11-18, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-07, 2026-11-18, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
 #ifndef IPACKETHANDLER_H
 #define IPACKETHANDLER_H
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <string_view>
@@ -398,12 +399,15 @@ inline void IPacketHandler::parseLoginPacket(CString& buffer)
 #ifdef PACKETLOGGING
 	const std::string_view who = whoAmI();
 	log::printLine(log::networkdump, "> Login Packet from {} ({} bytes)", who, packet.length());
-	const auto nameLength = packet.text()[10] - 32;
-	const auto passwordStart = 10 + 1 + nameLength;
-	log::print(log::networkdump, "{}", std::string_view{packet.text()}.substr(0, passwordStart));
+	// Seihai: show only the first 10 bytes and mask the rest. Upstream took the account
+	// length at offset 10, which assumes a key byte; a 1.x login has none, so the start
+	// of the password could run past the end of the packet (an out-of-bounds read: a
+	// 1.39 login took the lab server down) or land inside the password and log part of it.
+	const int passwordStart = std::min(10, packet.length());
+	log::print(log::networkdump, "{}", std::string_view{packet.text(), static_cast<size_t>(passwordStart)});
 	for (int i = passwordStart; i < packet.length(); ++i)
 		log::print(log::networkdump, "*");
-	if (packet[packet.length() - 1] != '\n')
+	if (packet.length() == 0 || packet[packet.length() - 1] != '\n')
 		log::print(log::networkdump, "\n");
 	for (int i = 0; i < passwordStart; ++i)
 		log::print(log::networkdump, "{:02x} ", (unsigned char)((packet.text())[i]));
