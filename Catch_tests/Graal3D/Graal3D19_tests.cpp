@@ -1,11 +1,11 @@
-// Modified by the Seihai project, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-13, 2026-11-19, 2026-11-21: see CHANGES-SEIHAI.md.
 // New file: tests for the protocol 19 (3.153, 4.04r2) game layer. The client side
 // here is written from the 4.04r2 client's readers as Graal_analysis
 // torque/protocol19-server.md describes them, not from the server's writers, so a
 // layout the two disagree on fails here. The Player, PlayerData and Player packet
-// data readers below follow the 4.04r2 Graal3DEngine.dll's own readers
-// (PlayerData::unpackData 0x100a98b0, Player::unpackUpdate 0x100b3180,
-// Player::readPacketData 0x100b2a70), read on 2026-11-19.
+// data readers below follow the 4.04r2 3D engine's own readers (its stock
+// TGE 1.x PlayerData datablock, Player update and Player packet data
+// readers), read on 2026-11-19.
 #include "catch2/catch_all.hpp"
 
 #include <optional>
@@ -325,7 +325,7 @@ namespace
 		r.readFlag();
 	}
 
-	// PlayerData::unpackData on the 4.04r2 client (0x100a98b0).
+	// The 4.04r2 client's PlayerData datablock reader.
 	struct PlayerData19
 	{
 		std::string shape;

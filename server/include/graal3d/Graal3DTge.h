@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-13, 2026-11-19, 2026-11-21: see CHANGES-SEIHAI.md.
 // New file: the protocol 19 game layer (Graal 3.153 and 4.04r2), the stock Torque
 // Game Engine layer with Graal's changes, as far as a server needs it to take a
 // client through the mission start to a control object.
@@ -21,9 +21,9 @@
 //     and sends its packet data again whenever it moved.
 //
 // The Player, PlayerData and Player packet data layouts were read from the 4.04r2
-// Graal3DEngine.dll on 2026-11-19 (PlayerData::unpackData 0x100a98b0,
-// Player::unpackUpdate 0x100b3180, Player::readPacketData 0x100b2a70); they are
-// stock TGE 1.x with Graal's md3 model name in PlayerData.
+// 3D engine on 2026-11-19 (its PlayerData datablock, Player update and Player
+// packet data readers); they are stock TGE 1.x with Graal's md3 model name in
+// PlayerData.
 
 #ifndef SEIHAI_GRAAL3D_GRAAL3DTGE_H
 #define SEIHAI_GRAAL3D_GRAAL3DTGE_H
@@ -125,8 +125,8 @@ namespace graal3d::tge
 	//   9 x f32: ground impact min speed, shake freq (3), shake amp (3), shake
 	//     duration, shake falloff.
 	// Written with `shape` as its shape file, no sounds or effects and the 4.04r2
-	// constructor's values. The shape must load: 4.04r2's Player::onNewDataBlock
-	// (0x100ab580) fails without a shape instance, and the client then drops the
+	// constructor's values. The shape must load: the 4.04r2 Player's new-datablock
+	// handler fails without a shape instance, and the client then drops the
 	// link with "Invalid packet GameBase::unpackUpdate()" (lab 2026-11-19).
 	BitWriter playerData(std::string_view name, bool packetStrings, std::string_view shape);
 
