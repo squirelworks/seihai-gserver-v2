@@ -1,4 +1,4 @@
-# Modified by the Seihai project, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-18, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-18, 2026-11-19, 2026-11-20, 2026-11-21: see CHANGES-SEIHAI.md.
 #
 #  server/src/CMakeLists.txt
 #
@@ -110,6 +110,7 @@ set(
 	"include/utilities/Random.h"
 	"include/utilities/ScriptCacheDes.h"
 	"include/utilities/SecureLogin.h"
+	"include/utilities/ConnectorCipher.h"
 	"include/utilities/Settings.h"
 	"include/utilities/StringUtils.h"
 	"include/utilities/generator/IdGenerator.h"
@@ -192,6 +193,7 @@ set(
 	"src/utilities/PropertySerializers.cpp"
 	"src/utilities/ScriptCacheDes.cpp"
 	"src/utilities/SecureLogin.cpp"
+	"src/utilities/ConnectorCipher.cpp"
 	"src/utilities/Settings.cpp"
 	"src/utilities/StringUtils.cpp"
 	"src/utilities/manager/GuildManager.cpp"

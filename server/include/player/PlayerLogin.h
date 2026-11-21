@@ -1,8 +1,10 @@
-// Modified by the Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-21: see CHANGES-SEIHAI.md.
 #ifndef PLAYERLOGIN_H
 #define PLAYERLOGIN_H
 
 #include <cstdint>
+#include <chrono>
+#include <memory>
 #include <optional>
 #include <string_view>
 
@@ -14,6 +16,7 @@
 #include <object/Player.h>
 #include <utilities/CommonTypes.h>
 #include <utilities/SecureLogin.h>
+#include <utilities/ConnectorCipher.h>
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace preagonal
@@ -28,6 +31,10 @@ public:
 
 public:
 	bool onRecv() override;
+	bool onSend() override;
+	bool canSend() override;
+	void doMain() override;
+	bool doTimedEvents() override;
 	void onUnregister() override {}
 
 protected:
@@ -38,6 +45,12 @@ public:
 	HandlePacketResult msgLoginPacket(CString& pPacket);
 
 private:
+	connector::Selector m_connectorSelector;
+	std::unique_ptr<connector::Session> m_connector;
+	std::string m_connectorSend;
+	std::chrono::steady_clock::time_point m_connectorStarted = std::chrono::steady_clock::now();
+	bool startConnector();
+
 	// Seihai: SEI00001 (seihai/documentation/secure-login.md). After C1 the connection
 	// stays a PlayerLogin and waits for C2, which opens back into the classic login line.
 	struct PendingSecureLogin

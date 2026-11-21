@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-12, 2026-11-18: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-12, 2026-11-18, 2026-11-21: see CHANGES-SEIHAI.md.
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -20,6 +20,7 @@
 #include <player/PlayerRC.h>
 #include <utilities/CommonTypes.h>
 #include <utilities/Log.h>
+#include <sodium.h>
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace preagonal
@@ -60,6 +61,75 @@ bool PlayerLogin::onRecv()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+
+// The connector's token is RAW, unlike the secure-login token inside a
+// classic length/zlib frame. Select only once, before invoking either parser.
+void PlayerLogin::doMain()
+{
+	const auto route = m_connectorSelector.inspect(m_recvBuffer.toStringView());
+	if (route == connector::Route::Pending) return;
+	if (route == connector::Route::Classic) return Player::doMain();
+	if (!m_connector)
+	{
+		m_recvBuffer.removeI(0, static_cast<int>(connector::Token.size()));
+		if (!startConnector()) { disconnect(); return; }
+	}
+	const bool valid = m_connector->feed(m_recvBuffer.toStringView());
+	m_recvBuffer.clear();
+	if (!valid) { disconnect(); return; }
+	m_connectorSend += m_connector->takeReply();
+	// The key exchange is not account admission. Pending account/game bytes
+	// remain bounded in Session; no player is created or authenticated here.
+}
+
+bool PlayerLogin::startConnector()
+{
+	const auto& settings = m_server->getSettings();
+	if (!settings.get<bool>("connector_login").value_or(false)) return false;
+	if (!m_server->isClientVersionAllowed(getVersionID("GNP1905C"))) return false;
+	auto secret = connector::readPem(settings.get<std::string>("connector_server_key").value_or("config/lab-server-key.pem"), true);
+	auto parse = connector::readPem(settings.get<std::string>("connector_parse_key").value_or("config/lab-parse-key.pub.pem"), false);
+	if (!secret || !parse)
+	{
+		if (secret) sodium_memzero(secret->data(), secret->size());
+		return false;
+	}
+	auto serverKey = connector::Rsa2048::import(*secret, true);
+	auto parseKey = connector::Rsa2048::import(*parse, false);
+	sodium_memzero(secret->data(), secret->size());
+	if (!serverKey || !parseKey) return false;
+	m_connector = std::make_unique<connector::Session>(
+		[serverKey](std::string_view block) { return serverKey->unwrap(block); },
+		[parseKey](std::string_view plain) { return parseKey->wrap(plain); });
+	return true;
+}
+
+bool PlayerLogin::canSend()
+{
+	if (m_connectorSelector.route() != connector::Route::Connector) return Player::canSend();
+	return !m_connectorSend.empty();
+}
+
+bool PlayerLogin::onSend()
+{
+	if (m_connectorSelector.route() != connector::Route::Connector) return Player::onSend();
+	if (m_playerSock == nullptr || m_playerSock->getState() == SOCKET_STATE_DISCONNECTED) return false;
+	unsigned int remaining = static_cast<unsigned int>(m_connectorSend.size());
+	if (remaining != 0)
+	{
+		const int sent = m_playerSock->sendData(m_connectorSend.data(), &remaining);
+		if (sent > 0) m_connectorSend.erase(0, static_cast<size_t>(sent));
+	}
+	return m_playerSock->getState() != SOCKET_STATE_DISCONNECTED;
+}
+
+bool PlayerLogin::doTimedEvents()
+{
+	// Bound even a partial raw token or a peer that never sends its key.
+	if (m_connectorSelector.route() != connector::Route::Classic
+		&& std::chrono::steady_clock::now() - m_connectorStarted > std::chrono::seconds(30)) return false;
+	return Player::doTimedEvents();
+}
 
 std::string_view PlayerLogin::whoAmI() const noexcept
 {

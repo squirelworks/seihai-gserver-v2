@@ -5,11 +5,23 @@ branch `beta4` at `bc54973` (2026-11-17). It is released under the same licence,
 the GNU General Public License version 3 (see `LICENSE.md`). The original authors
 are credited in `README.md`.
 
-Every change below was checked on a private loopback lab with real Graal
-clients and with the [Seihai](https://github.com/squirelworks/seihai) client.
+Validation is recorded with each change; an offline test does not establish a
+private loopback run with a real Graal client or the
+[Seihai](https://github.com/squirelworks/seihai) client.
 Each file we changed carries a one-line notice at its top.
 
 ## 2026-11-21
+
+The opt-in project connector key exchange (`connector_login = true`) accepts
+raw `SEI00001`, reads the clear EILLLT RSA-wrapped client key frame and returns
+an independently generated RC4 key in the project's clear server key frame.
+It uses configured runtime lab keys, with no committed private key fixture;
+it authenticates no account. The existing framed X25519/Ed25519 secure login keeps its routing and
+defaults. Offline `ConnectorCipher` tests cover RFC 6229 RC4 vectors, reset,
+fragment/coalesced boundaries and rejection; they are added to sanitizer CI.
+No VM end-to-end or stock-client acceptance is claimed. Account/game dispatch
+remains a follow-up. See [connector setup and limits](docs/project-connector.md).
+
 
 | Change | Files | Clients it fixes |
 |---|---|---|
