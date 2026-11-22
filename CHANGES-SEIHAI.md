@@ -1,3 +1,4 @@
+<!-- Modified by the Seihai project, 2026-11-22: see change entries below. -->
 # Seihai changes to GServer-v2
 
 This is the Seihai fork of [GServer-v2](https://github.com/xtjoeytx/GServer-v2),
@@ -5,9 +6,15 @@ branch `beta4` at `bc54973` (2026-11-17). It is released under the same licence,
 the GNU General Public License version 3 (see `LICENSE.md`). The original authors
 are credited in `README.md`.
 
-Every change below was checked on a private loopback lab with real Graal
-clients and with the [Seihai](https://github.com/squirelworks/seihai) client.
+Validation is recorded per change below. Historical lab entries include real Graal
+clients and the [Seihai](https://github.com/squirelworks/seihai) client; a regression test does not imply a client run.
 Each file we changed carries a one-line notice at its top.
+
+## 2026-11-22
+
+| Change | Files | Validation |
+|---|---|---|
+| HEART rollback now sets the HALFHEARTS property instead of BOMBS. The existing health-cap calculation and low-AP healing restriction are retained; normal item pickup and FULLHEART behavior are separate. Production-helper regressions use a shared null-socket player and include an independent BOMBS control. | `server/src/player/PlayerClient.cpp`, `Catch_tests/ServerOptions/HeartItem_tests.cpp` | Before the fix, sanitizer run 44969785355 executed 17 ServerOptions cases: the three HEART cases failed 9 assertions while 14 cases, including the BOMBS control, passed. The same tests cover the correction; final CI evidence is recorded in the PR. No client or author-host build/listener run. |
 
 ## 2026-11-21
 
