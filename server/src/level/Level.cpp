@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-13, 2026-11-22: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <bit>
 #include <cassert>
@@ -1023,6 +1023,11 @@ bool Level::saveLevel(const MapPosition& mapPosition, const std::string_view fil
 	}
 
 	std::ofstream fileStream(path);
+	if (!fileStream.is_open())
+	{
+		log::printLine(log::server, "** Error saving level: {}. Could not open the output file.", actualFilename);
+		return false;
+	}
 
 	fileStream << "GLEVNW01" << std::endl;
 
@@ -1134,6 +1139,13 @@ bool Level::saveLevel(const MapPosition& mapPosition, const std::string_view fil
 		fileStream << std::format("NPC {} {} {}", image, (static_cast<float>(npc->character.localPixelX) / 16.0f), (static_cast<float>(npc->character.localPixelY) / 16.0f)) << std::endl;
 		fileStream << string::trim(npc->getScript().getOriginalSource()) << std::endl;
 		fileStream << "NPCEND" << std::endl;
+	}
+
+	fileStream.close();
+	if (fileStream.fail())
+	{
+		log::printLine(log::server, "** Error saving level: {}. Failed writing or closing the output file.", actualFilename);
+		return false;
 	}
 
 	return true;
