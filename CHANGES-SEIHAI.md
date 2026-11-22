@@ -14,7 +14,7 @@ Each file we changed carries a one-line notice at its top.
 
 | Change | Files | Validation |
 |---|---|---|
-| Regression baseline for the production HEART rollback helper used when item dropping is disabled. Checks the health property/result, cap, existing low-AP restriction and independent BOMBS behavior through a shared null-socket player. Normal item pickup and FULLHEART behavior are separate. No implementation fix is included in this baseline commit. | `Catch_tests/ServerOptions/HeartItem_tests.cpp` | Source/API review and existing sanitizer CI pending; no client, host build or listener was run by the author. |
+| HEART rollback now sets the HALFHEARTS property instead of BOMBS. The existing health-cap calculation and low-AP healing restriction are retained; normal item pickup and FULLHEART behavior are separate. Production-helper regressions use a shared null-socket player and include an independent BOMBS control. | `server/src/player/PlayerClient.cpp`, `Catch_tests/ServerOptions/HeartItem_tests.cpp` | Before the fix, sanitizer run 44969785355 executed 17 ServerOptions cases: the three HEART cases failed 9 assertions while 14 cases, including the BOMBS control, passed. The same tests cover the correction; final CI evidence is recorded in the PR. No client or author-host build/listener run. |
 
 ## 2026-11-21
 

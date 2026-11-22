@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-07, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-18, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-07, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-18, 2026-11-19, 2026-11-22: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -2301,7 +2301,7 @@ props::SetResults PlayerClient::addItem(const LevelItemType itemType, const prop
 		case LevelItemType::HEART:
 		{
 			const uint8_t maxHearts = static_cast<uint8_t>(std::min(account.maxHitpoints, static_cast<uint8_t>(m_server->cached.maxHeartLimit.getValue())) * 2);
-			return setPropWith<PlayerProp::BOMBS>(setBy, std::min(maxHearts, static_cast<uint8_t>(account.character.hitpointsInHalves + 2)));
+			return setPropWith<PlayerProp::HALFHEARTS>(setBy, std::min(maxHearts, static_cast<uint8_t>(account.character.hitpointsInHalves + 2)));
 		}
 
 		case LevelItemType::FULLHEART:
