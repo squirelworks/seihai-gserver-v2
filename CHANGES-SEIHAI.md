@@ -1,3 +1,4 @@
+<!-- Modified by the Seihai project, 2026-11-22: see change entries below. -->
 # Seihai changes to GServer-v2
 
 This is the Seihai fork of [GServer-v2](https://github.com/xtjoeytx/GServer-v2),
@@ -5,9 +6,15 @@ branch `beta4` at `bc54973` (2026-11-17). It is released under the same licence,
 the GNU General Public License version 3 (see `LICENSE.md`). The original authors
 are credited in `README.md`.
 
-Every change below was checked on a private loopback lab with real Graal
-clients and with the [Seihai](https://github.com/squirelworks/seihai) client.
+Validation is recorded per change below. Historical lab entries include real Graal
+clients and the [Seihai](https://github.com/squirelworks/seihai) client.
 Each file we changed carries a one-line notice at its top.
+
+## 2026-11-22
+
+| Change | Files | Validation |
+|---|---|---|
+| Add production Settings/cache/helper regressions for swordlimit, shieldlimit and healswords, separating raw configured values from initial cache binding and later subscription updates. Positive limits and existing helper behavior only; production registrations are unchanged in this baseline. | `Catch_tests/ServerOptions/WeaponLimitSettings_tests.cpp` | Existing CI execution pending. No client healing/rendering, host build or listener claim. |
 
 ## 2026-11-21
 
