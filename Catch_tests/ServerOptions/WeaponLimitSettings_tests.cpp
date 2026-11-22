@@ -2,6 +2,7 @@
 #include "catch2/catch_all.hpp"
 
 #include <cstdint>
+#include <string>
 #include <tuple>
 
 #include <BabyDI.h>
@@ -130,4 +131,73 @@ TEST_CASE_METHOD(WeaponLimitSettingsFixture, "Signed sword limits have ordered e
 	CHECK(server->cached.swordPowerLimit.getValue() == 2);
 	CHECK(props::Limits::applySwordPower(int8_t{127}) == 2);
 	CHECK(props::Limits::applySwordPower(int8_t{-128}) == (healing ? -2 : 0));
+}
+TEST_CASE_METHOD(WeaponLimitSettingsFixture, "Activated sword powers preserve property roundtrip and cursor", "[serveroptions][weaponlimits][propertycodec]")
+{
+	server->prepareSettings();
+	server->getSettings().set("swordlimit", int8_t{127});
+	server->getSettings().set("healswords", true);
+	REQUIRE(server->cached.swordPowerLimit.getValue() == 127);
+	REQUIRE(server->cached.enableHealingSwords.getValue());
+	const auto power = static_cast<int8_t>(GENERATE(-3, -1, 0, 3, 4, 6, 97, 98, 127));
+	CAPTURE(power);
+	const std::string image = power == 0 ? "" : "edge.png";
+	const props::PropertySwordPower original{image, power};
+	auto wire = original.serialize();
+	wire << "!";
+	props::PropertySwordPower decoded;
+	decoded.deserialize(wire);
+	REQUIRE(decoded.power.has_value());
+	CHECK(decoded.power.value() == power);
+	CHECK(decoded.image == image);
+	CHECK(wire.bytesLeft() == 1);
+	CHECK(wire.readChar() == '!');
+}
+
+TEST_CASE_METHOD(WeaponLimitSettingsFixture, "Activated shield powers preserve property roundtrip and cursor", "[serveroptions][weaponlimits][propertycodec]")
+{
+	server->prepareSettings();
+	server->getSettings().set("shieldlimit", uint8_t{255});
+	REQUIRE(server->cached.shieldPowerLimit.getValue() == 255);
+	const auto power = static_cast<uint8_t>(GENERATE(0, 3, 4, 6, 213, 214, 223, 224, 245, 246, 255));
+	CAPTURE(power);
+	const std::string image = power == 0 ? "" : "edge.png";
+	const props::PropertyShieldPower original{image, power};
+	auto wire = original.serialize();
+	wire << "!";
+	props::PropertyShieldPower decoded;
+	decoded.deserialize(wire);
+	REQUIRE(decoded.power.has_value());
+	CHECK(decoded.power.value() == power);
+	CHECK(decoded.image == image);
+	CHECK(wire.bytesLeft() == 1);
+	CHECK(wire.readChar() == '!');
+}
+TEST_CASE_METHOD(WeaponLimitSettingsFixture, "Compact positive weapon powers preserve canonical images and cursor", "[serveroptions][weaponlimits][propertycodec]")
+{
+	server->prepareSettings();
+	SECTION("sword")
+	{
+		auto wire = props::PropertySwordPower{int8_t{3}}.serialize();
+		wire << "!";
+		props::PropertySwordPower decoded;
+		decoded.deserialize(wire);
+		REQUIRE(decoded.power.has_value());
+		CHECK(decoded.power.value() == 3);
+		CHECK(decoded.image == "sword3." + std::string(props::Limits::defaultImageExtension()));
+		CHECK(wire.bytesLeft() == 1);
+		CHECK(wire.readChar() == '!');
+	}
+	SECTION("shield")
+	{
+		auto wire = props::PropertyShieldPower{uint8_t{3}}.serialize();
+		wire << "!";
+		props::PropertyShieldPower decoded;
+		decoded.deserialize(wire);
+		REQUIRE(decoded.power.has_value());
+		CHECK(decoded.power.value() == 3);
+		CHECK(decoded.image == "shield3." + std::string(props::Limits::defaultImageExtension()));
+		CHECK(wire.bytesLeft() == 1);
+		CHECK(wire.readChar() == '!');
+	}
 }
