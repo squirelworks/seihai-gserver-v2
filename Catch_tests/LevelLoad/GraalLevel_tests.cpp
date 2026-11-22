@@ -230,6 +230,12 @@ TEST_CASE("saveLevel reports obstruction and round-trips a valid level", "[level
 	};
 	ScopedTestRoot cleanup{fileSystem, testRoot};
 
+	const std::string testRootText = testRoot.string();
+	CAPTURE(testRootText);
+	REQUIRE(testRoot.is_absolute());
+	REQUIRE(testRoot != testRoot.root_path());
+	const auto bindDirectory = static_cast<void (fs::FileSystem::*)(const std::filesystem::path&)>(&fs::FileSystem::bind);
+
 	const std::string prefix = testRoot.filename().string();
 	const std::string sourceName = prefix + ".nw";
 	const auto sourcePath = testRoot / sourceName;
@@ -243,7 +249,8 @@ TEST_CASE("saveLevel reports obstruction and round-trips a valid level", "[level
 		REQUIRE(source.good());
 	}
 
-	fileSystem.bind(testRoot);
+	INFO("binding the owned level fixture root as one directory");
+	(fileSystem.*bindDirectory)(testRoot);
 	REQUIRE(fileSystem.findi(fs::FileCategory::LEVEL, sourceName) == sourcePath);
 	auto managedDirectories = fileSystem.getManagedDirectories(fs::FileCategory::LEVEL);
 	const auto firstManagedDirectory = managedDirectories.begin();
@@ -271,7 +278,8 @@ TEST_CASE("saveLevel reports obstruction and round-trips a valid level", "[level
 	const std::string blockedName = prefix + "-blocked.nw";
 	const auto blockedPath = testRoot / blockedName;
 	REQUIRE(std::filesystem::create_directory(blockedPath));
-	fileSystem.bind(testRoot);
+	INFO("binding the obstruction fixture root as one directory");
+	(fileSystem.*bindDirectory)(testRoot);
 	REQUIRE(fileSystem.findi(fs::FileCategory::LEVEL, blockedName).empty());
 	auto obstructionDirectories = fileSystem.getManagedDirectories(fs::FileCategory::LEVEL);
 	const auto obstructionParent = obstructionDirectories.begin();
