@@ -49,10 +49,10 @@ namespace
 
 TEST_CASE_METHOD(BindDirectoryFixture, "Directory bind preserves a path instead of binding its components", "[filesystem][bind]")
 {
-	const auto mode = GENERATE(0, 1, 2, 3, 4, 5, 6, 7);
-	constexpr std::array<std::string_view, 8> names{
+	const auto mode = GENERATE(0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
+	constexpr std::array<std::string_view, 10> names{
 		"const path", "mutable path", "temporary path", "path range",
-		"string", "string range", "multiple strings", "wide string"
+		"string", "string range", "multiple strings", "wide string", "string literal", "sharefolder split range"
 	};
 	CAPTURE(names[mode]);
 	// All components are pre-owned under this fixture's CWD. Never pass an
@@ -76,10 +76,18 @@ TEST_CASE_METHOD(BindDirectoryFixture, "Directory bind preserves a path instead 
 		case 5: files.bind(std::vector<std::string>{"tree/leaf", "extra/leaf"}); break;
 		case 6: files.bind(std::string{"tree/leaf"}, std::string{"extra/leaf"}); break;
 		case 7: files.bind(std::wstring{L"tree/leaf"}); break;
+		case 8: files.bind("tree/leaf"); break;
+		case 9:
+		{
+			const std::string list{"tree/leaf,extra/leaf"};
+			auto folders = preagonal::string::split(list, std::string_view{","});
+			files.bind(folders);
+			break;
+		}
 	}
 	files.waitUntilFilesSearched();
 	CHECK(files.has("wanted.txt"));
-	CHECK(files.has("second.txt") == (mode == 3 || mode == 5 || mode == 6));
+	CHECK(files.has("second.txt") == (mode == 3 || mode == 5 || mode == 6 || mode == 9));
 	CHECK_FALSE(files.has("sibling.txt"));
 	CHECK_FALSE(files.has("sibling2.txt"));
 	CHECK_FALSE(files.has("decoy.txt"));
