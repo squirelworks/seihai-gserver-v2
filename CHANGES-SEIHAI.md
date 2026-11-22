@@ -14,7 +14,7 @@ Each file we changed carries a one-line notice at its top.
 
 | Change | Files | Validation |
 |---|---|---|
-| Add production Settings/cache/helper regressions for swordlimit, shieldlimit and healswords, separating raw configured values from initial cache binding and later subscription updates. Positive limits and existing helper behavior only; production registrations are unchanged in this baseline. | `Catch_tests/ServerOptions/WeaponLimitSettings_tests.cpp` | Existing CI execution pending. No client healing/rendering, host build or listener claim. |
+| Register swordlimit, shieldlimit and healswords caches so configured values reach existing limit helpers on initial binding and subsequent Settings updates. Regression tests separate raw settings, caches and helper results, with positive limits and a defaults control. Helper policies are unchanged. | `server/src/Server.cpp`, `Catch_tests/ServerOptions/WeaponLimitSettings_tests.cpp` | Before the fix, sanitizer run 44972936648 executed 16 ServerOptions cases: both configured-value cases failed 18 assertions, while raw settings assertions and the defaults control passed. Fixed-head CI evidence is recorded in the PR. No client healing/rendering, host build or listener claim. |
 
 ## 2026-11-21
 
