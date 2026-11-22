@@ -1,3 +1,4 @@
+<!-- Modified by the Seihai project, 2026-11-22: see change entries below. -->
 # Seihai changes to GServer-v2
 
 This is the Seihai fork of [GServer-v2](https://github.com/xtjoeytx/GServer-v2),
@@ -5,9 +6,15 @@ branch `beta4` at `bc54973` (2026-11-17). It is released under the same licence,
 the GNU General Public License version 3 (see `LICENSE.md`). The original authors
 are credited in `README.md`.
 
-Every change below was checked on a private loopback lab with real Graal
-clients and with the [Seihai](https://github.com/squirelworks/seihai) client.
+Validation is recorded per change below. Historical lab entries include real Graal
+clients and the [Seihai](https://github.com/squirelworks/seihai) client; a regression test does not imply a client run.
 Each file we changed carries a one-line notice at its top.
+
+## 2026-11-22
+
+| Change | Files | Validation |
+|---|---|---|
+| Regression baseline for the production HEART rollback helper used when item dropping is disabled. Checks the health property/result, cap, existing low-AP restriction and independent BOMBS behavior through a shared null-socket player. Normal item pickup and FULLHEART behavior are separate. No implementation fix is included in this baseline commit. | `Catch_tests/ServerOptions/HeartItem_tests.cpp` | Source/API review and existing sanitizer CI pending; no client, host build or listener was run by the author. |
 
 ## 2026-11-21
 
