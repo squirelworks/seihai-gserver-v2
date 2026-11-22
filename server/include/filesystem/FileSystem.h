@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-22: see CHANGES-SEIHAI.md.
 #ifndef FILESYSTEM_H
 #define FILESYSTEM_H
 
@@ -12,6 +13,7 @@
 #include <memory>
 #include <mutex>
 #include <ranges>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -132,7 +134,8 @@ public:
 	/// @brief Binds to multiple directories.
 	/// @param directories A range of directories of type std::filesystem::path.
 	void bind(std::ranges::input_range auto&& directories)
-		requires std::same_as<std::ranges::range_value_t<decltype(directories)>, std::filesystem::path>
+		requires (!std::same_as<std::remove_cvref_t<decltype(directories)>, std::filesystem::path>
+			&& std::same_as<std::ranges::range_value_t<decltype(directories)>, std::filesystem::path>)
 	{
 		for (const auto& path : directories)
 			bind(path);
