@@ -2,6 +2,7 @@
 #include "catch2/catch_all.hpp"
 
 #include <cstdint>
+#include <tuple>
 
 #include <BabyDI.h>
 #include <Server.h>
@@ -98,4 +99,35 @@ TEST_CASE_METHOD(WeaponLimitSettingsFixture, "Weapon limits follow later Setting
 	CHECK(props::Limits::applySwordPower(9) == 2);
 	CHECK(props::Limits::applySwordPower(-9) == 0);
 	CHECK(props::Limits::applyShieldPower(9) == 1);
+}
+TEST_CASE_METHOD(WeaponLimitSettingsFixture, "Signed sword limits have ordered effective bounds", "[serveroptions][weaponlimits]")
+{
+	const auto [configured, maximum, healingMinimum] = GENERATE(Catch::Generators::table<int8_t, int8_t, int8_t>({
+		{-128, 3, -3}, {-1, 3, -3}, {0, 0, 0}, {6, 6, -6}, {127, 127, -127}
+	}));
+	const bool healing = GENERATE(false, true);
+	const bool beforeBinding = GENERATE(false, true);
+	CAPTURE(configured, healing, beforeBinding);
+
+	auto& settings = server->getSettings();
+	if (!beforeBinding)
+		server->prepareSettings();
+	settings.set("swordlimit", configured);
+	settings.set("healswords", healing);
+	if (beforeBinding)
+		server->prepareSettings();
+
+	REQUIRE(settings.get<int8_t>("swordlimit").value() == configured);
+	REQUIRE(settings.get<bool>("healswords").value() == healing);
+	CHECK(server->cached.swordPowerLimit.getValue() == configured);
+	CHECK(server->cached.enableHealingSwords.getValue() == healing);
+	CHECK(props::Limits::applySwordPower(int8_t{-128}) == (healing ? healingMinimum : 0));
+	CHECK(props::Limits::applySwordPower(int8_t{127}) == maximum);
+	CHECK(props::Limits::applySwordPower(int8_t{0}) == 0);
+
+	settings.set("swordlimit", int8_t{2});
+	REQUIRE(settings.get<int8_t>("swordlimit").value() == 2);
+	CHECK(server->cached.swordPowerLimit.getValue() == 2);
+	CHECK(props::Limits::applySwordPower(int8_t{127}) == 2);
+	CHECK(props::Limits::applySwordPower(int8_t{-128}) == (healing ? -2 : 0));
 }

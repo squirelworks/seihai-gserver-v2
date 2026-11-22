@@ -14,7 +14,7 @@ Each file we changed carries a one-line notice at its top.
 
 | Change | Files | Validation |
 |---|---|---|
-| Register swordlimit, shieldlimit and healswords caches so configured values reach existing limit helpers on initial binding and subsequent Settings updates. Regression tests separate raw settings, caches and helper results, with positive limits and a defaults control. Helper policies are unchanged. | `server/src/Server.cpp`, `Catch_tests/ServerOptions/WeaponLimitSettings_tests.cpp` | Before the fix, sanitizer run 44972936648 executed 16 ServerOptions cases: both configured-value cases failed 18 assertions, while raw settings assertions and the defaults control passed. Fixed-head CI evidence is recorded in the PR. No client healing/rendering, host build or listener claim. |
+| Register swordlimit, shieldlimit and healswords caches so configured values reach existing limit helpers on initial binding and subsequent Settings updates. Negative signed sword limits use the existing default of 3 for effective helper bounds, without rewriting raw settings or caches; zero and valid nonnegative limits retain their meaning. Tests separate raw settings, caches and helper results, cover initial binding and subscription updates, and include signed-minimum, negative, zero, positive and later-valid-update controls. | `server/src/Server.cpp`, `server/src/utilities/PropertySerializers.cpp`, `Catch_tests/ServerOptions/WeaponLimitSettings_tests.cpp` | Before the fix, sanitizer run 44972936648 executed 16 ServerOptions cases: both configured-value cases failed 18 assertions, while raw settings assertions and the defaults control passed. Fixed-head CI evidence is recorded in the PR. No client healing/rendering, host build or listener claim. |
 
 ## 2026-11-21
 

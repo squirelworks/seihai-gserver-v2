@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-13, 2026-11-19, 2026-11-22: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -701,8 +701,10 @@ uint8_t Limits::applyMaxHitpoints(const uint8_t maxHitpoints)
 int8_t Limits::applySwordPower(const int8_t swordPower)
 {
 	const auto server = BabyDI::Get<Server>();
-	const int8_t minimum = (server->cached.enableHealingSwords.getValue() ? static_cast<int8_t>(-server->cached.swordPowerLimit.getValue()) : 0_i8);
-	const int8_t maximum = server->cached.swordPowerLimit.getValue();
+	const int8_t configuredMaximum = server->cached.swordPowerLimit.getValue();
+	// A negative limit is invalid: retain the declared default of 3 without rewriting the setting.
+	const int8_t maximum = configuredMaximum < 0 ? 3_i8 : configuredMaximum;
+	const int8_t minimum = server->cached.enableHealingSwords.getValue() ? static_cast<int8_t>(-maximum) : 0_i8;
 	return std::clamp(swordPower, minimum, maximum);
 }
 
