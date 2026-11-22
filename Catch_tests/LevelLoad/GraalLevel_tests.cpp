@@ -1,14 +1,16 @@
-// Added by the Seihai project, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
+// Added by the Seihai project, 2026-11-19, 2026-11-20, 2026-11-22: see CHANGES-SEIHAI.md.
 // GR-V1.05 levels: the one-byte layer count, extra-layer empty tiles, and malformed
 // files that used to end the process.
 #include "catch2/catch_all.hpp"
 
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <initializer_list>
 #include <limits>
 #include <string>
+#include <system_error>
 #include <vector>
 
 #include <BabyDI.h>
@@ -187,4 +189,112 @@ TEST_CASE("a sign keeps a Latin-1 letter as #K(code) with the byte value", "[lev
 	CHECK(sign.encodedText.find(k233) != std::string::npos);
 	CHECK(sign.encodedText.find(k196) != std::string::npos);
 	CHECK(sign.encodedText.find(static_cast<char>(64 + 32)) == std::string::npos);
+}
+
+TEST_CASE("saveLevel reports obstruction and round-trips a valid level", "[level][save]")
+{
+	auto* server = heldServer();
+	auto& fileSystem = server->getFileSystem();
+	fileSystem.reset();
+
+	const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+	std::filesystem::path testRoot;
+	for (unsigned int attempt = 0; attempt < 64 && testRoot.empty(); ++attempt)
+	{
+		const auto candidate = std::filesystem::temp_directory_path() / ("seihai-level-save-" + std::to_string(nonce) + "-" + std::to_string(attempt));
+		std::error_code error;
+		if (std::filesystem::create_directory(candidate, error))
+			testRoot = candidate;
+		else
+			REQUIRE_FALSE((error && error != std::errc::file_exists));
+	}
+	REQUIRE_FALSE(testRoot.empty());
+
+	struct ScopedTestRoot
+	{
+		fs::FileSystem& fileSystem;
+		std::filesystem::path root;
+
+		~ScopedTestRoot() noexcept
+		{
+			try
+			{
+				fileSystem.reset();
+				std::error_code error;
+				std::filesystem::remove_all(root, error);
+			}
+			catch (...)
+			{
+			}
+		}
+	};
+	ScopedTestRoot cleanup{fileSystem, testRoot};
+
+	const std::string prefix = testRoot.filename().string();
+	const std::string sourceName = prefix + ".nw";
+	const auto sourcePath = testRoot / sourceName;
+	std::vector<uint16_t> base(4096, 5);
+	base[4095] = 9;
+	{
+		std::ofstream source(sourcePath, std::ios::binary | std::ios::trunc);
+		REQUIRE(source.is_open());
+		source << "GR-V1.05" << static_cast<char>(1 + 32) << packBoard(base) << tail("");
+		source.close();
+		REQUIRE(source.good());
+	}
+
+	fileSystem.bind(testRoot);
+	REQUIRE(fileSystem.findi(fs::FileCategory::LEVEL, sourceName) == sourcePath);
+	auto managedDirectories = fileSystem.getManagedDirectories(fs::FileCategory::LEVEL);
+	const auto firstManagedDirectory = managedDirectories.begin();
+	REQUIRE(firstManagedDirectory != managedDirectories.end());
+	REQUIRE(*firstManagedDirectory == testRoot);
+
+	const auto level = LevelLoader::loadLevel(sourceName);
+	REQUIRE(level != nullptr);
+
+	// Positive control: write a valid level, bind it, and read its board back.
+	const std::string savedName = prefix + "-roundtrip.nw";
+	REQUIRE(fileSystem.findi(fs::FileCategory::LEVEL, savedName).empty());
+	REQUIRE(level->saveLevel(MapPosition{}, savedName));
+	const auto savedPath = testRoot / savedName;
+	REQUIRE(std::filesystem::is_regular_file(savedPath));
+	fileSystem.bindSingleFile(savedPath);
+	const auto savedData = LevelLoader::loadStaticData(savedName);
+	REQUIRE(savedData != nullptr);
+	const auto savedBoard = savedData->tiles.getLayer(0);
+	REQUIRE(savedBoard.has_value());
+	REQUIRE(savedBoard.value()->at(0) == 5);
+	REQUIRE(savedBoard.value()->at(4095) == 9);
+
+	fileSystem.reset();
+	const std::string blockedName = prefix + "-blocked.nw";
+	const auto blockedPath = testRoot / blockedName;
+	REQUIRE(std::filesystem::create_directory(blockedPath));
+	fileSystem.bind(testRoot);
+	REQUIRE(fileSystem.findi(fs::FileCategory::LEVEL, blockedName).empty());
+	auto obstructionDirectories = fileSystem.getManagedDirectories(fs::FileCategory::LEVEL);
+	const auto obstructionParent = obstructionDirectories.begin();
+	REQUIRE(obstructionParent != obstructionDirectories.end());
+	REQUIRE(*obstructionParent == testRoot);
+	REQUIRE(std::filesystem::is_directory(blockedPath));
+	CHECK_FALSE(level->saveLevel(MapPosition{}, blockedName));
+	REQUIRE(std::filesystem::is_directory(blockedPath));
+
+	// Remove only the empty obstruction this test created, then verify a fresh output path.
+	std::error_code removeError;
+	const bool removed = std::filesystem::remove(blockedPath, removeError);
+	REQUIRE_FALSE(removeError);
+	REQUIRE(removed);
+	const std::string retryName = prefix + "-retry.nw";
+	REQUIRE(level->saveLevel(MapPosition{}, retryName));
+	const auto retryPath = testRoot / retryName;
+	REQUIRE(std::filesystem::is_regular_file(retryPath));
+	fileSystem.bindSingleFile(retryPath);
+	const auto retryData = LevelLoader::loadStaticData(retryName);
+	REQUIRE(retryData != nullptr);
+	const auto retryBoard = retryData->tiles.getLayer(0);
+	REQUIRE(retryBoard.has_value());
+	REQUIRE(retryBoard.value()->at(0) == 5);
+	REQUIRE(retryBoard.value()->at(4095) == 9);
 }

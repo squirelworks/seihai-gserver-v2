@@ -15,6 +15,7 @@ Each file we changed carries a one-line notice at its top.
 | Change | Files | Validation |
 |---|---|---|
 | HEART rollback now sets the HALFHEARTS property instead of BOMBS. The existing health-cap calculation and low-AP healing restriction are retained; normal item pickup and FULLHEART behavior are separate. Production-helper regressions use a shared null-socket player and include an independent BOMBS control. | `server/src/player/PlayerClient.cpp`, `Catch_tests/ServerOptions/HeartItem_tests.cpp` | Before the fix, sanitizer run 44969785355 executed 17 ServerOptions cases: the three HEART cases failed 9 assertions while 14 cases, including the BOMBS control, passed. The same tests cover the correction; final CI evidence is recorded in the PR. No client or author-host build/listener run. |
+| Test-only `Level::saveLevel` status characterization: add a successful write/readback control and a deterministic directory obstruction; the obstruction assertion expects save failure. No production code change is included in this baseline. | `Catch_tests/LevelLoad/GraalLevel_tests.cpp` | Baseline CI pending; expected failure will establish the pre-fix false-success behavior. No host server/listener or client run. |
 
 ## 2026-11-21
 
