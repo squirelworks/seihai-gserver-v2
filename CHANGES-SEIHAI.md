@@ -14,6 +14,7 @@ Each file we changed carries a one-line notice at its top.
 
 | Change | Files | Validation |
 |---|---|---|
+| Add real filesystem directory-binding regressions for const/mutable/temporary paths, path ranges and string adapters. Nested relative fixture directories stay inside an owned temporary working directory; sibling and component-name decoys detect unintended binding. | `Catch_tests/FileSend/FileSystemBind_tests.cpp` | Existing CI baseline pending; production overloads unchanged. No host build/listener or server run. |
 | HEART rollback now sets the HALFHEARTS property instead of BOMBS. The existing health-cap calculation and low-AP healing restriction are retained; normal item pickup and FULLHEART behavior are separate. Production-helper regressions use a shared null-socket player and include an independent BOMBS control. | `server/src/player/PlayerClient.cpp`, `Catch_tests/ServerOptions/HeartItem_tests.cpp` | Before the fix, sanitizer run 44969785355 executed 17 ServerOptions cases: the three HEART cases failed 9 assertions while 14 cases, including the BOMBS control, passed. The same tests cover the correction; final CI evidence is recorded in the PR. No client or author-host build/listener run. |
 
 ## 2026-11-21
