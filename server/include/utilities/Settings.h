@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-22: see CHANGES-SEIHAI.md.
 #ifndef SETTINGS_H
 #define SETTINGS_H
 
@@ -152,11 +153,7 @@ public:
 		if (range.first == std::end(m_settings) || range.first->first != key)
 			return std::nullopt;
 
-		// One element.
-		if (range.second == std::end(m_settings))
-			return range.first->second;
-
-		// Many elements.
+		// Return the last entry of the nonempty matching range.
 		auto& last = range.second;
 		--last;
 		return last->second;
