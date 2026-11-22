@@ -7,14 +7,15 @@ the GNU General Public License version 3 (see `LICENSE.md`). The original author
 are credited in `README.md`.
 
 Validation is recorded per change below. Historical lab entries include real Graal
-clients and the [Seihai](https://github.com/squirelworks/seihai) client.
+clients and the [Seihai](https://github.com/squirelworks/seihai) client; a regression test does not imply a client run.
 Each file we changed carries a one-line notice at its top.
 
 ## 2026-11-22
 
 | Change | Files | Validation |
 |---|---|---|
-| Register swordlimit, shieldlimit and healswords caches so configured values reach existing limit helpers on initial binding and subsequent Settings updates. Negative signed sword limits use the existing default of 3 for effective helper bounds, without rewriting raw settings or caches; zero and valid nonnegative limits retain their meaning. Tests separate raw settings, caches and helper results, cover initial binding and subscription updates, and include signed-minimum, negative, zero, positive and later-valid-update controls. | `server/src/Server.cpp`, `server/src/utilities/PropertySerializers.cpp`, `Catch_tests/ServerOptions/WeaponLimitSettings_tests.cpp` | Before the fix, sanitizer run 44972936648 executed 16 ServerOptions cases: both configured-value cases failed 18 assertions, while raw settings assertions and the defaults control passed. Fixed-head CI evidence is recorded in the PR. No client healing/rendering, host build or listener claim. |
+| HEART rollback now sets the HALFHEARTS property instead of BOMBS. The existing health-cap calculation and low-AP healing restriction are retained; normal item pickup and FULLHEART behavior are separate. Production-helper regressions use a shared null-socket player and include an independent BOMBS control. | `server/src/player/PlayerClient.cpp`, `Catch_tests/ServerOptions/HeartItem_tests.cpp` | Before the fix, sanitizer run 44969785355 executed 17 ServerOptions cases: the three HEART cases failed 9 assertions while 14 cases, including the BOMBS control, passed. The same tests cover the correction; final CI evidence is recorded in the PR. No client or author-host build/listener run. |
+| Register swordlimit, shieldlimit and healswords caches so configured values reach existing limit helpers on initial binding and subsequent Settings updates. Negative signed sword limits use the existing default of 3 for effective helper bounds, without rewriting raw settings or caches; zero and valid nonnegative limits retain their meaning. Tests separate raw settings, caches and helper results, cover initial binding and subscription updates, and include signed-minimum, negative, zero, positive and later-valid-update controls. | `server/src/Server.cpp`, `server/src/utilities/PropertySerializers.cpp`, `Catch_tests/ServerOptions/WeaponLimitSettings_tests.cpp` | Before the fix, sanitizer run 44972936648 executed 16 ServerOptions cases: both configured-value cases failed 18 assertions, while raw settings assertions and the defaults control passed. Helper and signed-boundary validation plus property-codec roundtrip/cursor characterization are pending in the PR; activation is not ready while codec concerns remain open. No client healing/rendering, host build or listener claim. |
 
 ## 2026-11-21
 
