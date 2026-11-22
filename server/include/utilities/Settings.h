@@ -223,7 +223,7 @@ public:
 	/// @param key The key of the setting to get.
 	/// @return The value of the setting, or std::nullopt if the setting does not exist.
 	template<std::floating_point T>
-	std::optional<float> get(const std::string_view key) const
+	std::optional<T> get(const std::string_view key) const
 	{
 		const auto value = get<std::string>(key);
 		if (!value)
