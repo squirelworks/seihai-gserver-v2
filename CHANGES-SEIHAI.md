@@ -1,4 +1,4 @@
-<!-- Modified by the Seihai project, 2026-11-22: see change entries below. -->
+<!-- Modified by the Seihai project, 2026-11-25: see change entries below. -->
 # Seihai changes to GServer-v2
 
 This is the Seihai fork of [GServer-v2](https://github.com/xtjoeytx/GServer-v2),
@@ -9,6 +9,12 @@ are credited in `README.md`.
 Validation is recorded per change below. Historical lab entries include real Graal
 clients and the [Seihai](https://github.com/squirelworks/seihai) client; a regression test does not imply a client run.
 Each file we changed carries a one-line notice at its top.
+
+## 2026-11-25
+
+| Change | Files | Validation |
+|---|---|---|
+| Sword power (prop 8) now switches to the extended form at byte 10, not 30, on receive and in the pre-2.1 rewrite, and reads the byte unsigned. Clients from 2.00 to 2.31 read a byte below 10 as a bare power and anything from 10 up as power + 30 followed by an image, so healing powers -20..-1 travel as 10..29 with an image; the old threshold decoded them as bare powers 10..29 and left the image bytes unread. Powers below -20 are sent as -20 (the client sender limit). Shield powers above 213 are sent as 213, since one wire byte holds at most 223 = power + 10; they previously wrapped. The held weapon-limit codec tests now expect these client-bounded results, and a pre-2.1 rewrite test covers a healing sword. | `server/src/utilities/PropertySerializers.cpp`, `server/include/utilities/PropertySerializers.h`, `server/src/player/LegacyPlayerProps.cpp`, `Catch_tests/ServerOptions/WeaponLimitSettings_tests.cpp`, `Catch_tests/LegacyProps/LegacyProps_tests.cpp` | Receive/send rule from the 2.00 to 2.31 decompiles in Graal_analysis (`client-internals/combat-200-204.md`, `client-internals/decomp-findings-2026-10-24-d/01-sword-damage.md`), not yet a wire capture. Lab confirmation against a real client is pending; CI evidence is recorded in the PR. 2.01 and 2.02 store sword power in 6 bits and are not expected to show negative powers. |
 
 ## 2026-11-22
 

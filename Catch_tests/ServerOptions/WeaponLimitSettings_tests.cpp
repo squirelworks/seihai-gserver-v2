@@ -1,6 +1,7 @@
-// Modified by the Seihai project, 2026-11-22: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-22, 2026-11-25: see CHANGES-SEIHAI.md.
 #include "catch2/catch_all.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <tuple>
@@ -139,16 +140,24 @@ TEST_CASE_METHOD(WeaponLimitSettingsFixture, "Activated sword powers preserve pr
 	server->getSettings().set("healswords", true);
 	REQUIRE(server->cached.swordPowerLimit.getValue() == 127);
 	REQUIRE(server->cached.enableHealingSwords.getValue());
-	const auto power = static_cast<int8_t>(GENERATE(-3, -1, 0, 3, 4, 6, 97, 98, 127));
+	// Client wire range is -20..193 (byte 10..223 = power + 30); lower powers are sent as -20.
+	const auto power = static_cast<int8_t>(GENERATE(-128, -21, -20, -3, -1, 0, 3, 4, 6, 20, 97, 98, 127));
 	CAPTURE(power);
+	const int8_t expected = std::max<int8_t>(power, int8_t{-20});
 	const std::string image = power == 0 ? "" : "edge.png";
 	const props::PropertySwordPower original{image, power};
 	auto wire = original.serialize();
+	if (power != 0)
+	{
+		// Clients from 2.00 to 2.31 read any byte from 10 up as power + 30 followed by an image.
+		auto peek = wire;
+		CHECK(peek.readGUChar() == expected + 30);
+	}
 	wire << "!";
 	props::PropertySwordPower decoded;
 	decoded.deserialize(wire);
 	REQUIRE(decoded.power.has_value());
-	CHECK(decoded.power.value() == power);
+	CHECK(decoded.power.value() == expected);
 	CHECK(decoded.image == image);
 	CHECK(wire.bytesLeft() == 1);
 	CHECK(wire.readChar() == '!');
@@ -159,16 +168,23 @@ TEST_CASE_METHOD(WeaponLimitSettingsFixture, "Activated shield powers preserve p
 	server->prepareSettings();
 	server->getSettings().set("shieldlimit", uint8_t{255});
 	REQUIRE(server->cached.shieldPowerLimit.getValue() == 255);
+	// One wire byte holds at most 223 (= power + 10), so powers above 213 are sent as 213.
 	const auto power = static_cast<uint8_t>(GENERATE(0, 3, 4, 6, 213, 214, 223, 224, 245, 246, 255));
 	CAPTURE(power);
+	const uint8_t expected = std::min<uint8_t>(power, uint8_t{213});
 	const std::string image = power == 0 ? "" : "edge.png";
 	const props::PropertyShieldPower original{image, power};
 	auto wire = original.serialize();
+	if (power != 0)
+	{
+		auto peek = wire;
+		CHECK(peek.readGUChar() == expected + 10);
+	}
 	wire << "!";
 	props::PropertyShieldPower decoded;
 	decoded.deserialize(wire);
 	REQUIRE(decoded.power.has_value());
-	CHECK(decoded.power.value() == power);
+	CHECK(decoded.power.value() == expected);
 	CHECK(decoded.image == image);
 	CHECK(wire.bytesLeft() == 1);
 	CHECK(wire.readChar() == '!');

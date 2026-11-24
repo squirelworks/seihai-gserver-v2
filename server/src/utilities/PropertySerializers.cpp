@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-13, 2026-11-19, 2026-11-22: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-13, 2026-11-19, 2026-11-22, 2026-11-25: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -130,17 +130,21 @@ CString PropertySwordPower::serialize() const
 	if (powerVal > 0 && powerVal <= 4 && image.empty())
 		return CString() >> (char)powerVal;
 
+	// Extended form: one byte of power + 30, then the image. Clients from 2.00 to 2.31 read any
+	// byte from 10 up this way, so a power below -20 cannot be sent (the client limit is -20..20).
+	const auto wirePower = std::max<int>(powerVal, Limits::MinWireSwordPower);
 	const auto len = std::clamp(image.length(), 0ZU, Limits::SwordImageLength);
-	return CString() >> (char)(powerVal + 30) >> (char)len << std::string_view{image}.substr(0, len);
+	return CString() >> (char)(wirePower + 30) >> (char)len << std::string_view{image}.substr(0, len);
 }
 
 void PropertySwordPower::deserialize(CString& data)
 {
-	int8_t powerVal = 0;
-	data.readGInto(powerVal);
-	if (powerVal < 30)
+	// The byte is unsigned on the wire. Clients from 2.00 to 2.31 read a byte below 10 as a bare
+	// power and anything from 10 up as power + 30 followed by an image, so -20..-1 arrive as 10..29.
+	const int wireValue = data.readGUChar();
+	if (wireValue < 10)
 	{
-		powerVal = Limits::applySwordPower(powerVal);
+		int8_t powerVal = Limits::applySwordPower(static_cast<int8_t>(wireValue));
 
 		// For older clients, we use a default image name.
 		if (powerVal > 0 && powerVal <= 4)
@@ -151,9 +155,8 @@ void PropertySwordPower::deserialize(CString& data)
 		return;
 	}
 
-	// If the power is 30 or more, its sword power + custom image.
-	powerVal = Limits::applySwordPower(static_cast<int8_t>(powerVal - 30));
-	power = powerVal;
+	// From 10 up, it's sword power + 30 and a custom image.
+	power = Limits::applySwordPower(static_cast<int8_t>(std::clamp(wireValue - 30, -128, 127)));
 
 	// Read the image name.
 	image = data.readChars(data.readGUChar());
@@ -191,8 +194,11 @@ CString PropertyShieldPower::serialize() const
 	if (powerVal > 0 && powerVal <= 3 && image.empty())
 		return CString() >> (char)powerVal;
 
+	// Extended form: one byte of power + 10, then the image. A byte holds at most 223, so a power
+	// above 213 cannot be sent; send the highest one that fits instead of wrapping to zero.
+	const auto wirePower = std::min<int>(powerVal, Limits::MaxWireShieldPower);
 	const auto len = std::clamp(image.length(), 0ZU, Limits::ShieldImageLength);
-	return CString() >> (char)(powerVal + 10) >> (char)len << std::string_view{image}.substr(0, len);
+	return CString() >> (char)(wirePower + 10) >> (char)len << std::string_view{image}.substr(0, len);
 }
 
 void PropertyShieldPower::deserialize(CString& data)

@@ -1,4 +1,4 @@
-// Seihai project, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
+// Seihai project, 2026-11-13, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
 //
 // This file is part of the Seihai fork of GServer-v2 and is released under the
 // GNU General Public License version 3 (see LICENSE.md).
@@ -77,11 +77,12 @@ namespace
 		return PROPID(PlayerProp::ADDITFLAGS);
 	}
 
-	// Sword (8): c(power) for a stock sword 1 to 4, else c(power + 30) c(len) image.
+	// Sword (8): c(power) for a stock sword 1 to 4, else c(power + 30) c(len) image. Any byte
+	// from 10 up carries an image, including 10..29 for healing (negative) powers -20..-1.
 	void rewriteSword(CString& in, CString& out)
 	{
 		const int first = in.readGUChar();
-		if (first < 30)
+		if (first < 10)
 		{
 			out >> (char)PROPID(PlayerProp::SWORDIMAGE) >> (char)first;
 			return;
