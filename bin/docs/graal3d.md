@@ -177,6 +177,20 @@ too. The server never sends a player's position back to that player.
 | From the client: `TerrainRequestUpdatesEvent` | logged: its length, how many of its 256 stamps are set, the first eight `(x,y)=stamp`, and the payload as hex. Other events the server does not decode are logged with their length and first 64 bytes. |
 | 3.15x and 4.04r2 game packets | done up to a walking `Player` control object and a `Sky`. A real 4.04r2 runs a `Camera` session with the `Sky`, and a `Player` session once `tgeplayershape` names a loadable TGE `.dts` (lab 2026-11-19). See "Protocol 19" below. |
 
+## What each client build is offered
+
+When a 3D connect request is accepted, the server picks the client's capability row by its login token and Torque protocol (`server/include/graal3d/Graal3DCapabilities.h`; an unknown token gets the protocol's default build: 19 4.04r2, 21 4.20r6, 24 5.12). The rows mirror Seihai's version profile (`VersionProfile::three_d` in seihai-core), whose source is Graal_analysis `version-profiles/three-d.toml`. The log line `Graal3D: <account> is a <build> client: ...` names the row, and says when the protocol or every value is assumed rather than read.
+
+| Build | Game layer | Streamed terrain and water lines | TorqueScript | Notes |
+|---|---|---|---|---|
+| 3.153 | TGE | not sent (its TerrainBlock and WaterBlock are stock TGE) | runs | not run against this server |
+| 4.04r2 (Win, Mac) | TGE | not sent | none | never downloads `.dso`, `.cs`, `.ter`; Mac row all assumed |
+| 4.20r6, 4.20r8 | GameObject | sent | none | 4.20r8's protocol (21) is assumed |
+| 5.00r7 | GameObject | sent | none | class set and file rules assumed from 5.12 |
+| 5.12 (Win, Mac) | GameObject | sent | none | strips `.png` from texture names: serve textures under their bare name too; Mac row all assumed |
+
+Only the objects the `terrain` and `water` lines build are gated; lab `rawobject` lines still go to every client. A `TerrainRequestUpdatesEvent` from a build without the 5.x terrain layout is logged and not answered.
+
 ## The Sharp3D route
 
 `graal3droute = sharp3d` in `serveroptions.txt` (default `mission`) gives protocol

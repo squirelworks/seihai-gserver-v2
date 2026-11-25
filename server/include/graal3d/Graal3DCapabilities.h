@@ -1,0 +1,157 @@
+// Modified by the Seihai project, 2026-11-25: see CHANGES-SEIHAI.md.
+// New file: what each Graal 3D client build can take, so the 3D service offers a
+// client only what its build has (streamed terrain, the 5.x TerrainBlock and
+// WaterBlock layouts, TorqueScript files, a Camera or GameObject control object).
+//
+// The table mirrors seihai-core's VersionProfile::three_d, whose source of truth is
+// Graal_analysis version-profiles/three-d.toml. Every field is either read for that
+// build (static read, lab run or capture) or assumed (carried from the nearest read
+// build or from stock TGE 1.x); `assumed` lists the assumed fields so the service
+// can log when it relies on one. Catch_tests/Graal3D/Graal3DCapabilities_tests.cpp
+// compares every row with the mirrored fixture.
+
+#ifndef SEIHAI_GRAAL3D_GRAAL3DCAPABILITIES_H
+#define SEIHAI_GRAAL3D_GRAAL3DCAPABILITIES_H
+
+#include <cstdint>
+#include <initializer_list>
+#include <span>
+#include <string>
+#include <string_view>
+
+namespace graal3d
+{
+	struct GhostObject;
+
+	// One field of Capabilities, in the order of three-d.toml.
+	enum class CapField : uint8_t
+	{
+		Protocol,
+		Game,
+		ClassTable,
+		ClassIds12Bit,
+		LengthPrefixes,
+		GameLayer,
+		MissionPhases,
+		PhasesOptional,
+		ClientMoves,
+		ControlObjects,
+		TerFile,
+		TerMax,
+		TerrainChunks,
+		ChunkCache,
+		TerrainTexture,
+		Water,
+		TorqueScript,
+		Terraformer,
+		TerrainEditor,
+		DtsMax,
+		DifVersion,
+		ThreeDs,
+		Md3Version,
+		TextureNames,
+		DownloadRefused,
+		Bigdata,
+		BigdataChunkMax,
+		TerrainChunkMax,
+		UdpPortOffset,
+		Count,
+	};
+
+	std::string_view capFieldKey(CapField field);
+
+	constexpr uint32_t capMask(std::initializer_list<CapField> fields)
+	{
+		uint32_t m = 0;
+		for (auto f : fields)
+			m |= 1u << static_cast<uint8_t>(f);
+		return m;
+	}
+
+	inline constexpr uint32_t kAllCapFields = (1u << static_cast<uint8_t>(CapField::Count)) - 1;
+
+	enum class GameLayer : uint8_t
+	{
+		Tge,        // datablocks, Player, moves (3.04, 3.153, 4.04r2)
+		GameObject, // Graal's GameObject model (4.20 and 5.x)
+	};
+
+	enum class Terraformer : uint8_t
+	{
+		Full,      // the stock procedural generator
+		Greyscale, // loadGreyscale, saveGreyscale and setTerrain only
+		None,
+	};
+
+	struct Capabilities
+	{
+		std::string_view label; // e.g. "5.12"
+		std::string_view token; // login token, e.g. "G3D14097"
+		uint32_t protocol;
+		std::string_view game;
+		uint8_t classTableTypes; // 0 (stock), 3 (with datablocks), 2
+		bool classIds12Bit;
+		bool lengthPrefixes;
+		GameLayer gameLayer;
+		uint8_t missionPhases;
+		bool phasesOptional; // builds the world with no mission phases
+		bool clientMoves;    // sends Torque Moves; otherwise reports its position
+		bool controlPlayer;
+		bool controlCamera;
+		bool controlGameObject;
+		bool terFile;       // loads a local .ter
+		uint8_t terMax;     // highest .ter version (0: none)
+		bool terrainChunks; // TerrainChunkEvent / TerrainRequestUpdatesEvent
+		bool heightsCache;  // levels3d/heights/<server>/heights<x>-<y>.dat + heights.info
+		uint16_t terrainTextureSize; // terrain textures must be N x N x 24 (0: not read)
+		bool water;
+		bool torqueScript; // compiles and runs .cs / .dso
+		Terraformer terraformer;
+		bool terrainEditor;
+		uint8_t dtsMax;
+		uint8_t difVersion;
+		bool threeDs;
+		uint8_t md3Version;
+		bool stripPngTextures; // asks for and stores a .png texture under its bare name
+		std::span<const std::string_view> downloadRefused;
+		bool bigdata;
+		uint8_t bigdataChunkMax;
+		uint16_t terrainChunkMax;
+		uint8_t udpPortOffset;
+		uint32_t assumed; // capMask of the fields that are assumed, not read
+
+		[[nodiscard]] bool confirmed(CapField f) const { return (assumed & capMask({ f })) == 0; }
+		[[nodiscard]] bool allAssumed() const { return assumed == kAllCapFields; }
+
+		// The server may stream terrain in the 5.x TerrainBlock and chunk layout.
+		// 3.153 and 4.04r2 take chunks too, but their TerrainBlock is stock TGE's.
+		[[nodiscard]] bool takesStreamedTerrain512() const { return terrainChunks && gameLayer == GameLayer::GameObject; }
+		// The 5.x WaterBlock layout (Graal_analysis torque/terrain-512.md section 5).
+		[[nodiscard]] bool takesWater512() const { return water && gameLayer == GameLayer::GameObject; }
+		// The client asks the gserver for a missing resource with this name.
+		[[nodiscard]] bool requestsDownload(std::string_view name) const;
+		// The name the client asks for when a material names `texture`.
+		[[nodiscard]] std::string_view textureRequestName(std::string_view texture) const;
+		// One line per row in the fixture's columns (Graal3DCapabilities_tests).
+		[[nodiscard]] std::string fixtureRow() const;
+	};
+
+	// Every row, in the order of three-d.toml.
+	std::span<const Capabilities> allCapabilities();
+
+	// The row for a login token (e.g. "G3D14097"), or nullptr.
+	const Capabilities* capabilitiesForToken(std::string_view token);
+
+	// The row a client with this token and Torque protocol gets: the token's row
+	// when its protocol matches, else the default build for the protocol (19:
+	// 4.04r2, 21: 4.20r6, 24: 5.12), else nullptr.
+	const Capabilities* capabilitiesFor(std::string_view token, uint32_t protocol);
+
+	// Whether a client of this build (nullptr: unknown) is sent this world object.
+	// The `terrain` and `water` world lines write the 5.x TerrainBlock and
+	// WaterBlock layouts, which 3.153's and 4.04r2's stock TGE classes do not
+	// read; every other object goes to every client.
+	bool offersWorldObject(const Capabilities* caps, const GhostObject& object);
+} // namespace graal3d
+
+#endif
