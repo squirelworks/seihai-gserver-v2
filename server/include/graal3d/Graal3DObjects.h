@@ -305,11 +305,16 @@ namespace graal3d
 		uint32_t maxPerCell = 3;
 		std::string shapeFiles;
 		uint32_t seed = 1;
+		// The world-space x/y region cells may grow in: a cell grows only if its
+		// corner is inside [min, max) (5.12, static read; z is not used there).
+		// The default covers the whole world.
+		std::array<int, 2> boxMin{-32767, -32767};
+		std::array<int, 2> boxMax{32767, 32767};
 	};
 
 	// The update: an empty GameObject update (13 cleared section flags), then the
 	// replicator's part: position with no rotation, seed, shapes, radius, grid
-	// counts, a box of -1..1 x -1..1 x 0..2, scale 1 to 1, rotation 0 to 360
+	// counts, the box (z -32767..32767), scale 1 to 1, rotation 0 to 360
 	// about z, no height offset, terrain only, slopes up to 90 degrees, no
 	// alignment, no surface exclusion, shown.
 	std::vector<RawField> replicatorFields(const ReplicatorSettings& replicator);
@@ -424,10 +429,12 @@ namespace graal3d
 	//   water <x> <y> <z> <sx> <sy> <sz> [<surface texture> [<liquid type>]]
 	//                             a WaterBlock (see WaterSettings), for 4.20r6
 	//                             and 5.x
-	//   replicator <class> <x> <y> <z> <radius> <min> <max> <shapes> [<seed>]
+	//   replicator <class> <x> <y> <z> <radius> <min> <max> <shapes>
+	//              [<seed> [<x0> <y0> <x1> <y1>]]
 	//                             lab: ground cover (see ReplicatorSettings) for
 	//                             5.x; <class> is DynamicShapeReplicator,
-	//                             DynamicGrass or DynamicGrassReplicator
+	//                             DynamicGrass or DynamicGrassReplicator; the
+	//                             box limits where it grows (default: anywhere)
 	//   terrain <folder> [<square size>] [repeat]
 	//                             streamed terrain for 4.20r6 and 5.x (see
 	//                             Terrain): a TerrainBlock ghost, then the

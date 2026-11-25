@@ -805,7 +805,7 @@ namespace graal3d
 					world.objects.push_back(std::move(block));
 				}
 			}
-			else if (w[0] == "replicator" && (w.size() == 9 || w.size() == 10) &&
+			else if (w[0] == "replicator" && (w.size() == 9 || w.size() == 10 || w.size() == 14) &&
 					 (w[1] == "DynamicShapeReplicator" || w[1] == "DynamicGrass" || w[1] == "DynamicGrassReplicator"))
 			{
 				ReplicatorSettings rep;
@@ -825,8 +825,21 @@ namespace graal3d
 				ok = ok && whole(5, 64, rep.radius) && rep.radius >= 1 && whole(6, 20, rep.minPerCell) && whole(7, 20, rep.maxPerCell) &&
 					 rep.minPerCell <= rep.maxPerCell;
 				rep.shapeFiles = w[8];
-				if (ok && w.size() == 10)
+				if (ok && w.size() >= 10)
 					ok = whole(9, 0xFFFFFFFFu, rep.seed);
+				if (ok && w.size() == 14)
+				{
+					const std::array<int*, 4> out{&rep.boxMin[0], &rep.boxMin[1], &rep.boxMax[0], &rep.boxMax[1]};
+					for (size_t i = 0; i < 4 && ok; ++i)
+					{
+						char* end = nullptr;
+						const std::string word(w[10 + i]);
+						const long v = std::strtol(word.c_str(), &end, 10);
+						ok = !word.empty() && end && *end == '\0' && v >= -32767 && v <= 32767;
+						*out[i] = static_cast<int>(v);
+					}
+					ok = ok && rep.boxMin[0] < rep.boxMax[0] && rep.boxMin[1] < rep.boxMax[1];
+				}
 				if (ok)
 				{
 					GhostObject object;
@@ -1216,9 +1229,9 @@ namespace graal3d
 		num(rep.radius, 8);
 		num(rep.minPerCell, 8);
 		num(rep.maxPerCell, 8);
-		for (const int v : {-1, -1, 0})
+		for (const int v : {rep.boxMin[0], rep.boxMin[1], -32767})
 			signedNum(v, 16); // box min
-		for (const int v : {1, 1, 2})
+		for (const int v : {rep.boxMax[0], rep.boxMax[1], 32767})
 			signedNum(v, 16); // box max
 		vec(1.0f, 1.0f, 1.0f), vec(1.0f, 1.0f, 1.0f); // scale min, max
 		vec(0.0f, 0.0f, 0.0f), vec(0.0f, 0.0f, 360.0f); // rotation min, max
