@@ -245,53 +245,9 @@ int Server::init(const std::string_view serverip, const std::string_view serverp
 		log::printLine(log::server, "Listening on: {}:{}.", m_playerSock.getRemoteIp(), m_playerSock.getRemotePort());
 	}
 
-	// The Graal 3D side: a Torque UDP server on the listed port + 1, for the 3.153 to
-	// 5.x clients. Off unless `graal3d = true`.
-	if (m_settings.get<bool>("graal3d").value_or(false) && m_graal3d == nullptr)
-	{
-		const int tcpPort = std::atoi(m_settings.get<std::string>("serverport").value_or("14802"s).c_str());
-		int udpPort = m_settings.get<int>("graal3dport").value_or(0);
-		if (udpPort <= 0)
-			udpPort = tcpPort + 1;
-
-		m_graal3d = std::make_unique<graal3d::Service>(*this);
-
-		// The 3D world: config/graal3dworld.txt (see bin/docs/graal3d.md).
-		std::string worldText;
-		for (const auto& line : CString::loadToken(CString() << "config/graal3dworld.txt", "\n", false))
-			worldText.append(line.text(), static_cast<size_t>(line.length())).push_back('\n');
-		auto world = graal3d::parseWorld(worldText);
-		for (const auto& error : world.errors)
-			log::printLine(log::server, "** [Error] Graal3D: graal3dworld.txt {}", error);
-		// graal3dshapecheck = skip (default), warn or off: what to do with a world
-		// object whose .3ds would crash a client (see bin/docs/graal3d.md).
-		const auto shapeCheck = m_settings.get<std::string>("graal3dshapecheck").value_or("skip"s);
-		m_graal3d->setShapeCheck(shapeCheck == "warn" ? graal3d::Service::ShapeCheck::Warn
-								 : shapeCheck == "off" ? graal3d::Service::ShapeCheck::Off
-													   : graal3d::Service::ShapeCheck::Skip);
-		if (shapeCheck != "skip" && shapeCheck != "warn" && shapeCheck != "off")
-			log::printLine(log::server, "** [Error] Graal3D: graal3dshapecheck {} is not skip, warn or off; using skip.", shapeCheck);
-		// graal3dtrace = <file>: a line for everything each 3D client sends (see bin/docs/graal3d.md).
-		m_graal3d->setTrace(m_settings.get<std::string>("graal3dtrace").value_or(""s));
-		m_graal3d->setWorld(std::move(world), m_settings.get<bool>("graal3dstringprefix").value_or(true));
-		// graal3droute = sharp3d: the route of a server real 5.12 joined (see bin/docs/graal3d.md).
-		const auto route = m_settings.get<std::string>("graal3droute").value_or("mission"s);
-		m_graal3d->setSharp3DRoute(route == "sharp3d");
-		if (route != "mission" && route != "sharp3d")
-			log::printLine(log::server, "** [Error] Graal3D: graal3droute {} is not mission or sharp3d; using mission.", route);
-		else if (route == "sharp3d")
-			log::printLine(log::server, "Graal3D: Sharp3D route for protocol 24 clients.");
-		if (udpPort < 65536 && m_graal3d->start(oInter, static_cast<uint16_t>(udpPort)))
-		{
-			auto indent = log::server.indent();
-			log::printLine(log::server, "Graal3D: listening on UDP port {}.", udpPort);
-		}
-		else
-		{
-			log::printLine(log::server, "** [Error] Graal3D: could not open UDP port {}.", udpPort);
-			m_graal3d.reset();
-		}
-	}
+	// Add-ons compiled in and switched on (addons/ServerAddons.h; the Graal 3D
+	// side is one). None by default.
+	m_addons.start(*this, oInter);
 
 	// Start a UPNP thread.  It will try to set a UPNP port forward in the background.
 #ifdef ENABLE_UPNP
@@ -361,7 +317,7 @@ void Server::cleanup()
 	saveServerFlags();
 
 	// Close the Graal 3D links before the players go.
-	m_graal3d.reset();
+	m_addons.clear();
 
 	// Save NPC-Server NPCs.
 	if (hasNPCServer())
@@ -411,9 +367,8 @@ bool Server::doMain()
 	// Update our socket manager.
 	m_sockManager.update(0, 5000); // 5ms
 
-	// Graal 3D UDP links.
-	if (m_graal3d)
-		m_graal3d->update();
+	// Add-ons (addons/ServerAddons.h).
+	m_addons.update();
 
 	// Current time
 	const auto oldTime = m_frameStartTimeHighPrecision;
@@ -1786,9 +1741,8 @@ bool Server::deletePlayer(const PlayerPtr& player)
 	if (player == nullptr)
 		return true;
 
-	// A Graal 3D link lives only as long as the TCP session.
-	if (m_graal3d)
-		m_graal3d->onPlayerLeft(player->getId());
+	// Add-ons drop what they hold for this player (a Graal 3D link, for one).
+	m_addons.onPlayerLeft(player->getId());
 
 	if (player->isLoaded())
 	{

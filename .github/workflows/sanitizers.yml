@@ -1,4 +1,4 @@
-# Seihai project, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
+# Seihai project, 2026-11-19, 2026-11-20, 2026-11-25: see CHANGES-SEIHAI.md.
 # Crash hunting (#87): build gs2emu and the Seihai regression tests with AddressSanitizer
 # and UndefinedBehaviorSanitizer (-DSANITIZE=ON) and run them, including ShortPackets,
 # which sends every client id with an empty body through the real handlers. Then a
@@ -121,4 +121,52 @@ jobs:
           kill $p1 2>/dev/null || true; wait $p1 2>/dev/null || true
           tail -n 40 npcdemo.out
           if grep -E "ERROR: AddressSanitizer|runtime error:" npcdemo.out; then ok=0; fi
+          [ $ok = 1 ]
+
+  # The core with no add-on compiled in (-DGRAAL3D=OFF, docs/addons.md): it builds,
+  # the add-on hook tests pass, and the default world starts and listens.
+  addons-off:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      ASAN_OPTIONS: detect_leaks=0:abort_on_error=1
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools and libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-18 ninja-build openjdk-21-jre-headless \
+            libantlr4-runtime-dev catch2 libsodium-dev libtomcrypt-dev libtommath-dev \
+            libbz2-dev zlib1g-dev uuid-dev pkgconf libclang-rt-18-dev
+      - name: ANTLR 4.10.1 tool
+        run: curl -sSfL -o "$RUNNER_TEMP/antlr.jar" https://repo1.maven.org/maven2/org/antlr/antlr4/4.10.1/antlr4-4.10.1-complete.jar
+      - name: Configure without add-ons
+        run: |
+          CC=clang-18 CXX=clang++-18 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+            -DTESTS=ON -DUPNP=OFF -DSANITIZE=ON -DGRAAL3D=OFF \
+            -DANTLR4_JAR_LOCATION="$RUNNER_TEMP/antlr.jar"
+      - name: Build
+        run: |
+          cmake --build build --target gs2emu
+          cmake --build build --target ServerOptions
+      - name: No Graal 3D code in the build
+        run: |
+          if nm -C build/lib/liblibgs2emu*.a 2>/dev/null | grep -q "graal3d::"; then
+            echo "graal3d symbols found with GRAAL3D=OFF"; exit 1
+          fi
+      - name: Add-on hook tests
+        run: timeout 300 bin/ServerOptions
+      - name: Default world starts and listens
+        shell: bash
+        run: |
+          cd bin
+          exe=$(ls gs2emu* | head -1)
+          ./$exe --server default > default.out 2>&1 & p1=$!
+          ok=1; up=0
+          for i in $(seq 1 60); do (echo > /dev/tcp/127.0.0.1/14802) 2>/dev/null && { up=1; break; }; sleep 1; done
+          [ $up = 1 ] || { echo "nothing listens on 127.0.0.1:14802"; ok=0; }
+          kill $p1 2>/dev/null || true; wait $p1 2>/dev/null || true
+          tail -n 40 default.out
+          if grep -E "ERROR: AddressSanitizer|runtime error:" default.out; then ok=0; fi
           [ $ok = 1 ]

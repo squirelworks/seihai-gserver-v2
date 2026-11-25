@@ -421,7 +421,7 @@ namespace graal3d
 		connection.setPacketStrings(m_packetStrings);
 		m_sessions.emplace(from, std::move(session));
 		m_byPlayer[playerId] = from;
-		player->setGraal3DLinked(true);
+		player->setAddonLinked(true);
 
 		// The player's own object, on every screen; the world and the other
 		// players on theirs. Ghosts go out once the connection is up.
@@ -490,7 +490,7 @@ namespace graal3d
 		{
 			m_byPlayer.erase(p);
 			if (auto player = m_server.getPlayer(playerId))
-				player->setGraal3DLinked(false);
+				player->setAddonLinked(false);
 			m_avatars.erase(playerId);
 			m_movedUntil.erase(playerId);
 			forEachOtherConnection(playerId, [&](Connection& other) { other.removeGhost(avatarKey(playerId)); });

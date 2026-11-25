@@ -27,6 +27,8 @@ set(
 	"include/BabyDI.h"
 	"include/IConfig.h.in"
 	"include/Server.h"
+	"include/addons/ServerAddon.h"
+	"include/addons/ServerAddons.h"
 	"include/ServerList.h"
 	"include/UpdatePackage.h"
 	"include/windresrc.h.in"
@@ -35,13 +37,6 @@ set(
 	"include/filesystem/FileSystem.h"
 	"include/filesystem/FileSystemTypes.h"
 	"include/filesystem/watch/FileWatch.h"
-	"include/graal3d/Graal3DCapabilities.h"
-	"include/graal3d/Graal3DConnection.h"
-	"include/graal3d/Graal3DObjects.h"
-	"include/graal3d/Graal3DProtocol.h"
-	"include/graal3d/Graal3DService.h"
-	"include/graal3d/Graal3DTge.h"
-	"include/graal3d/TorqueBitStream.h"
 	"include/level/Level.h"
 	"include/level/LevelArrow.h"
 	"include/level/LevelBaddy.h"
@@ -124,6 +119,7 @@ set(
 	"include/utilities/std/inplace_vector.h"
 	"include/utilities/std/views_concat.h"
 	"src/Server.cpp"
+	"src/addons/ServerAddons.cpp"
 	"src/Server.Init.cpp"
 	"src/ServerList.cpp"
 	"src/TriggerCommandHandlers.cpp"
@@ -136,13 +132,6 @@ set(
 	"src/filesystem/watch/FileWatchOS_OSX.cpp"
 	"src/filesystem/watch/FileWatchOS_Poll.cpp"
 	"src/filesystem/watch/FileWatchOS_Windows.cpp"
-	"src/graal3d/Graal3DCapabilities.cpp"
-	"src/graal3d/Graal3DConnection.cpp"
-	"src/graal3d/Graal3DObjects.cpp"
-	"src/graal3d/Graal3DProtocol.cpp"
-	"src/graal3d/Graal3DService.cpp"
-	"src/graal3d/Graal3DTge.cpp"
-	"src/graal3d/TorqueBitStream.cpp"
 	"src/loader/LevelLoader.cpp"
 	"src/loader/flatfile/FlatFileAccountLoader.cpp"
 	"src/loader/flatfile/FlatFileNPCLoader.cpp"
@@ -202,6 +191,31 @@ set(
 )
 
 # ----------------------------
+# Seihai add-ons (server/include/addons/ServerAddon.h, docs/addons.md). Each is
+# compiled in with its own option and run only when its server option is on.
+option(GRAAL3D "Build the Graal 3D add-on (the Torque UDP side for 3.151 to 5.x clients)." ON)
+if(GRAAL3D)
+	list(APPEND SOURCES
+		"include/graal3d/Graal3DAddon.h"
+		"include/graal3d/Graal3DCapabilities.h"
+		"include/graal3d/Graal3DConnection.h"
+		"include/graal3d/Graal3DObjects.h"
+		"include/graal3d/Graal3DProtocol.h"
+		"include/graal3d/Graal3DService.h"
+		"include/graal3d/Graal3DTge.h"
+		"include/graal3d/TorqueBitStream.h"
+		"src/graal3d/Graal3DAddon.cpp"
+		"src/graal3d/Graal3DCapabilities.cpp"
+		"src/graal3d/Graal3DConnection.cpp"
+		"src/graal3d/Graal3DObjects.cpp"
+		"src/graal3d/Graal3DProtocol.cpp"
+		"src/graal3d/Graal3DService.cpp"
+		"src/graal3d/Graal3DTge.cpp"
+		"src/graal3d/TorqueBitStream.cpp"
+	)
+endif()
+
+# ----------------------------
 # Create the gserver target.
 set(EXE_NAME "${PROJECT_NAME_LOWER}")
 set(TARGET_NAME "lib${PROJECT_NAME_LOWER}")
@@ -212,6 +226,10 @@ target_link_directories(${TARGET_NAME} PUBLIC ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
 # Add the sources.
 target_sources(${TARGET_NAME} PRIVATE ${SOURCES})
 target_sources(${TARGET_NAME} PUBLIC FILE_SET HEADERS BASE_DIRS "include" "${PROJECT_BINARY_DIR}/server/include")
+
+if(GRAAL3D)
+	target_compile_definitions(${TARGET_NAME} PUBLIC SEIHAI_ADDON_GRAAL3D)
+endif()
 
 # ----------------------------
 # Configure our compiler options.
