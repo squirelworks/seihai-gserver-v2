@@ -41,6 +41,21 @@ namespace graal3d
 {
 	namespace
 	{
+		std::string hexString(std::string_view bytes)
+		{
+			static constexpr char digits[] = "0123456789abcdef";
+			std::string out;
+			for (const auto c : bytes)
+			{
+				out.push_back(digits[static_cast<uint8_t>(c) >> 4]);
+				out.push_back(digits[static_cast<uint8_t>(c) & 15]);
+			}
+			return out;
+		}
+	} // namespace
+
+	namespace
+	{
 		void closeSocket(SOCKET s)
 		{
 #if defined(_WIN32) || defined(_WIN64)
@@ -194,6 +209,100 @@ namespace graal3d
 		for (const auto& endpoint : dead)
 			closeSession(endpoint, "The 3D connection timed out.", false);
 		relayTgeMoves();
+		relayTcpPlayers(now);
+	}
+
+	std::array<float, 3> Service::spawnPosition() const
+	{
+		// Two players on one point draw as one (two 5.12 clients, lab
+		// 2026-11-25): each new player takes the first free point of 8 around the
+		// spawn, 2 units out, then 16 at 4 units, and so on.
+		const auto& spawn = m_world.spawn.position;
+		const auto taken = [&](const std::array<float, 3>& p) {
+			for (const auto& [id, avatar] : m_avatars)
+			{
+				const auto& q = avatar.object.transform.position;
+				if (std::hypot(q[0] - p[0], q[1] - p[1]) < 1.0f)
+					return true;
+			}
+			return false;
+		};
+		if (!taken(spawn))
+			return spawn;
+		constexpr float pi = 3.14159265f;
+		for (int ring = 1; ring <= 8; ++ring)
+		{
+			const int points = 8 * ring;
+			for (int i = 0; i < points; ++i)
+			{
+				const float a = 2.0f * pi * static_cast<float>(i) / static_cast<float>(points);
+				const std::array<float, 3> p{spawn[0] + 2.0f * ring * std::cos(a), spawn[1] + 2.0f * ring * std::sin(a), spawn[2]};
+				if (!taken(p))
+					return p;
+			}
+		}
+		return spawn;
+	}
+
+	void Service::relayTcpPlayers(uint64_t now)
+	{
+		// A 3D client draws only the GameObjects it is ghosted: a 2D player in its
+		// level never showed (5.24r3 2D with 5.12 3D, lab 2026-11-25). Each 2D
+		// player gets an object at its tile position, Torque (x, -y), at the
+		// spawn's height, with its nickname and chat. Checked 5 times a second.
+		if (now < m_nextTcpRelay)
+			return;
+		m_nextTcpRelay = now + 200;
+		for (auto& [endpoint, session] : m_sessions)
+		{
+			const auto me = m_server.getPlayer(session.player);
+			const auto level = me != nullptr ? me->getLevel() : nullptr;
+			std::map<PlayerID, GhostObject> want;
+			if (level != nullptr)
+			{
+				for (const auto& [id, p] : m_server.getPlayerList())
+				{
+					if (p == nullptr || id == session.player || m_byPlayer.contains(id) || !p->isClient() || !p->isLoaded() || p->getLevel() != level)
+						continue;
+					GhostObject avatar;
+					avatar.object.name = "G2DPlayer_" + p->account.name;
+					avatar.object.shape = m_world.playerShape;
+					avatar.object.transform = m_world.spawn;
+					const auto tile = p->getTilePosition();
+					avatar.object.transform.position = {static_cast<float>(tile.x()), -static_cast<float>(tile.y()), m_world.spawn.position[2]};
+					avatar.object.nickname = p->account.character.nickName;
+					avatar.object.chat = p->account.character.chatMessage;
+					avatar.object.flags = GameObjectFlags::Shadow;
+					want.emplace(id, std::move(avatar));
+				}
+			}
+			auto& shown = session.tcpShown;
+			const auto account = me != nullptr ? me->account.name : std::to_string(session.player);
+			const int protocol = static_cast<int>(session.connection->profile().protocol);
+			for (auto it = shown.begin(); it != shown.end();)
+			{
+				if (want.contains(it->first))
+				{
+					++it;
+					continue;
+				}
+				session.connection->removeGhost(tcpKey(it->first));
+				trace(account, protocol, "2D player gone: " + it->second.object.name);
+				it = shown.erase(it);
+			}
+			for (auto& [id, avatar] : want)
+			{
+				const auto s = shown.find(id);
+				if (s != shown.end() && s->second.object == avatar.object)
+					continue;
+				ghostAvatar(*session.connection, tcpKey(id), avatar);
+				const auto& p = avatar.object.transform.position;
+				trace(account, protocol,
+					  std::format("2D player {} {}: at={:.3f},{:.3f},{:.3f}{}", s == shown.end() ? "shown" : "update", avatar.object.name, p[0], p[1], p[2],
+								  avatar.object.chat.empty() ? std::string() : " chat=" + avatar.object.chat));
+				shown[id] = std::move(avatar);
+			}
+		}
 	}
 
 	bool Service::tgeOthers() const
@@ -201,11 +310,11 @@ namespace graal3d
 		return m_world.tgeControl == World::TgeControl::Player && !m_world.tgePlayerShape.empty();
 	}
 
-	void Service::ghostAvatar(Connection& connection, PlayerID who, const GhostObject& avatar) const
+	void Service::ghostAvatar(Connection& connection, ObjectKey key, const GhostObject& avatar) const
 	{
 		if (!connection.profile().tgePackets)
 		{
-			connection.setGhost(avatarKey(who), avatar);
+			connection.setGhost(key, avatar);
 			return;
 		}
 		// Protocol 19 has no GameObject: the other player is a stock Player on the
@@ -221,7 +330,7 @@ namespace graal3d
 		const auto& t = avatar.object.transform;
 		player.tgePlayer.position = t.position;
 		player.tgePlayer.rotZ = t.axis[2] < 0.0f ? -t.angle : t.angle;
-		connection.setGhost(avatarKey(who), player);
+		connection.setGhost(key, player);
 	}
 
 	void Service::relayAvatar(PlayerID playerId, const GhostObject& before)
@@ -229,9 +338,11 @@ namespace graal3d
 		const auto it = m_avatars.find(playerId);
 		if (it == m_avatars.end())
 			return;
+		if (it->second.object.transform.position != before.object.transform.position)
+			syncTcpPosition(playerId, it->second.object.transform.position);
 		size_t relayed = 0;
 		forEachOtherConnection(playerId, [&](Connection& other) {
-			ghostAvatar(other, playerId, it->second);
+			ghostAvatar(other, avatarKey(playerId), it->second);
 			++relayed;
 		});
 		if (m_trace)
@@ -241,6 +352,34 @@ namespace graal3d
 				  std::format("relay to {} other 3D clients: at={:.3f},{:.3f},{:.3f} angle={:.3f}{}", relayed, object.transform.position[0],
 							  object.transform.position[1], object.transform.position[2], object.transform.angle,
 							  object.chat != before.object.chat ? " chat=" + object.chat : std::string()));
+		}
+	}
+
+	void Service::syncTcpPosition(PlayerID playerId, const std::array<float, 3>& position)
+	{
+		// The player's TCP side follows the 3D object, so serverside scripts see
+		// where the player is: Torque (x, y) is map tile (x, -y). Without this the
+		// script `player` stayed at the spawn point while the 3D Player walked
+		// (4.04r2, lab 2026-11-25). Positions off the map (x or -y below 0) are left.
+		// PlayerClient::setPosition sends the new x2/y2 to the level, so 2D
+		// clients there see the 3D player walk.
+		const auto player = m_server.getPlayer(playerId);
+		if (player == nullptr)
+			return;
+		if (!std::isfinite(position[0]) || !std::isfinite(position[1]) || position[0] < 0.0f || position[1] > 0.0f)
+		{
+			trace(player->account.name, 0, std::format("tcp position not set: {:.3f},{:.3f} is off the map (needs x >= 0, y <= 0)", position[0], position[1]));
+			return;
+		}
+		auto tile = player->getTilePosition();
+		tile.x() = position[0];
+		tile.y() = -position[1];
+		player->setPosition(toPixelPosition(tile));
+		if (m_trace)
+		{
+			const auto level = player->getLevel();
+			trace(player->account.name, 0,
+				  std::format("tcp position {:.2f},{:.2f} in {}", position[0], -position[1], level != nullptr ? std::string(level->levelName) : std::string("no level")));
 		}
 	}
 
@@ -315,7 +454,8 @@ namespace graal3d
 		{
 			if (it->second.connection->connectSequence() == req->sequence)
 			{
-				sendTo(from, buildConnectAccept(req->sequence, it->second.connection->profile()));
+				sendTo(from, buildConnectAccept(req->sequence, it->second.connection->profile(),
+												 acceptTweak(m_mutation, m_mutationSeed, it->second.connection->profile())));
 				return;
 			}
 			closeSession(from, "reconnected", false);
@@ -429,15 +569,34 @@ namespace graal3d
 		avatar.object.name = "G3DPlayer_" + account;
 		avatar.object.shape = m_world.playerShape;
 		avatar.object.transform = m_world.spawn;
+		avatar.object.transform.position = spawnPosition();
 		avatar.object.nickname = player->account.character.nickName;
 		avatar.object.flags = GameObjectFlags::Shadow;
 		m_avatars[playerId] = avatar;
+		// The TCP side starts where the 3D object does: a 3D spawn at (20, -20)
+		// left the account at the server's start position (lab, 2026-11-25).
+		syncTcpPosition(playerId, avatar.object.transform.position);
 		ghostWorld(playerId, account, connection);
-		forEachOtherConnection(playerId, [&](Connection& other) { ghostAvatar(other, playerId, avatar); });
+		forEachOtherConnection(playerId, [&](Connection& other) { ghostAvatar(other, avatarKey(playerId), avatar); });
 
-		sendTo(from, buildConnectAccept(req->sequence, *profile));
+		connection.setMutation(m_mutation, m_mutationSeed);
+		std::string tweaked;
+		const auto acceptPacket = buildConnectAccept(req->sequence, *profile, acceptTweak(m_mutation, m_mutationSeed, *profile, &tweaked));
+		if (!tweaked.empty())
+		{
+			const auto line = std::format("mutation {}:{} in the connect accept: {}; packet {}", mutationName(m_mutation), m_mutationSeed, tweaked,
+										  hexString(acceptPacket));
+			log::printLine(log::server, "Graal3D {}: {}", account, line);
+			trace(account, profile->protocol, line);
+		}
+		sendTo(from, acceptPacket);
 		log::printLine(log::server, "Graal3D: {} linked from {} (protocol {}, {}).", account, ipString(from), profile->protocol, profile->clients);
-		trace(account, profile->protocol, std::format("linked from {} ({}); {} other 3D players", ipString(from), profile->clients, m_sessions.size() - 1));
+		{
+			const auto& at = m_avatars[playerId].object.transform.position;
+			trace(account, profile->protocol,
+				  std::format("linked from {} ({}); {} other 3D players; spawn {:.2f},{:.2f},{:.2f}", ipString(from), profile->clients, m_sessions.size() - 1, at[0],
+							  at[1], at[2]));
+		}
 	}
 
 	std::shared_ptr<Player> Service::findTcpPlayer(const std::string& requested, const std::string& ip)
@@ -491,9 +650,18 @@ namespace graal3d
 			m_byPlayer.erase(p);
 			if (auto player = m_server.getPlayer(playerId))
 				player->setAddonLinked(false);
+			const auto a = m_avatars.find(playerId);
+			const std::string name = a != m_avatars.end() ? a->second.object.name : std::to_string(playerId);
 			m_avatars.erase(playerId);
-			m_movedUntil.erase(playerId);
-			forEachOtherConnection(playerId, [&](Connection& other) { other.removeGhost(avatarKey(playerId)); });
+			m_lastReport.erase(playerId);
+			m_staleReport.erase(playerId);
+			size_t removed = 0;
+			forEachOtherConnection(playerId, [&](Connection& other) {
+				if (other.ghostIndex(avatarKey(playerId)).has_value())
+					++removed;
+				other.removeGhost(avatarKey(playerId));
+			});
+			trace(name, it->second.connection->profile().protocol, std::format("left: its object goes from {} other 3D clients", removed));
 		}
 		log::printLine(log::server, "Graal3D: link from {} closed ({}).", ipString(endpoint), reason);
 		m_sessions.erase(it);
@@ -575,6 +743,45 @@ namespace graal3d
 			log::printLine(log::server, "** [Error] Graal3D: {} would crash a client ({}); {} is left out (graal3dshapecheck = warn sends it).", shape, *why, object.object.name);
 			return true;
 		});
+		// Streamed terrain: the client asks for heights.info over TCP, then for
+		// each texture it names. If the file folders do not cover the terrain
+		// folder, 5.12 draws the terrain white and fetches nothing (lab,
+		// 2026-11-25); a foldersconfig line such as `file 3d/<name>_terrain/*`
+		// is needed, since a folder line covers only its own files.
+		if (m_world.terrain)
+		{
+			const auto info = find("heights.info");
+			if (info == nullptr)
+			{
+				++missing;
+				log::printLine(log::server, "** [Warning] Graal3D: heights.info is not in the file folders, so clients draw the terrain white; add a foldersconfig line for {}.",
+							   m_world.terrain->folder);
+			}
+			else
+			{
+				++found;
+				const auto expected = std::filesystem::path(m_world.terrain->folder) / "heights.info";
+				std::error_code ec;
+				if (!std::filesystem::equivalent(info->file, expected, ec))
+					log::printLine(log::server, "** [Warning] Graal3D: clients get {} as heights.info, not the one in {}.", info->file.string(),
+								   m_world.terrain->folder);
+				std::istringstream lines(readAll(info->file));
+				for (std::string line; std::getline(lines, line);)
+				{
+					while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
+						line.pop_back();
+					if (line.empty())
+						continue;
+					if (find(line) == nullptr)
+					{
+						++missing;
+						log::printLine(log::server, "** [Warning] Graal3D: terrain texture {} (heights.info) is not in the file folders.", line);
+					}
+					else
+						++found;
+				}
+			}
+		}
 		log::printLine(log::server, "Graal3D: the world names {} files the folders have, {} they do not{}.", found, missing,
 					   dropped ? std::format(", and {} unsafe .3ds objects were left out", dropped) : std::string{});
 	}
@@ -773,18 +980,21 @@ namespace graal3d
 			const bool player = m_world.tgeControl == World::TgeControl::Player && !m_world.tgePlayerShape.empty();
 			if (m_world.tgeControl == World::TgeControl::Player && !player)
 				log::printLine(log::server, "Graal3D: no tgeplayershape in graal3dworld.txt, so {} (protocol 19) gets a Camera.", account);
+			// Its own spawn point (see spawnPosition), set before ghostWorld.
+			const auto own = m_avatars.find(playerId);
+			const auto spawnAt = own != m_avatars.end() ? own->second.object.transform.position : m_world.spawn.position;
 			GhostObject control;
 			if (!player)
 			{
 				control.kind = GhostObject::Kind::TgeCamera;
 				control.datablockId = tge::CameraDatablockId;
-				control.tgeCamera.position = m_world.spawn.position;
+				control.tgeCamera.position = spawnAt;
 			}
 			else
 			{
 				control.kind = GhostObject::Kind::TgePlayer;
 				control.datablockId = tge::PlayerDatablockId;
-				control.tgePlayer.position = m_world.spawn.position;
+				control.tgePlayer.position = spawnAt;
 				control.tgeShape = m_world.tgePlayerShape;
 			}
 			connection.setGhost(cameraKey(playerId), control);
@@ -792,13 +1002,13 @@ namespace graal3d
 			for (const auto& [other, avatar] : m_avatars)
 			{
 				if (other != playerId)
-					ghostAvatar(connection, other, avatar);
+					ghostAvatar(connection, avatarKey(other), avatar);
 			}
 			if (player)
 			{
 				// Its own object, for the others: where its Player starts.
 				if (auto a = m_avatars.find(playerId); a != m_avatars.end())
-					a->second.object.transform.position = m_world.spawn.position;
+					a->second.object.transform.position = spawnAt;
 			}
 			ghostRawObjects(account, connection, capabilitiesOf(playerId), 1);
 			sendRawEvents(account, connection, false);
@@ -841,6 +1051,21 @@ namespace graal3d
 			connection.setControlObject(cameraKey(playerId));
 		log::printLine(log::server, "Graal3D: {} gets {} world objects and {} players.", account, m_world.objects.size(), m_avatars.size());
 		sendRawEvents(account, connection, false);
+	}
+
+	void Service::setMutation(const std::string& text)
+	{
+		m_mutation = Mutation::None;
+		if (text.empty() || text == "off")
+			return;
+		if (const auto parsed = parseMutation(text))
+		{
+			std::tie(m_mutation, m_mutationSeed) = *parsed;
+			log::printLine(log::server, "Graal3D: LAB MUTATION {}:{} on every 3D link (graal3dmutate). Never on a public server.", mutationName(m_mutation),
+						   m_mutationSeed);
+		}
+		else
+			log::printLine(log::server, "** [Error] Graal3D: graal3dmutate {} is not a known mutation; off.", text);
 	}
 
 	void Service::setTrace(const std::string& path)
@@ -895,16 +1120,32 @@ namespace graal3d
 		// everyone else. Its own screen is never sent its position back.
 		auto& object = it->second.object;
 		const auto before = object;
-		const auto moved = m_movedUntil.find(playerId);
-		const bool serverMoved = moved != m_movedUntil.end() && nowMs() < moved->second;
+		// After a g3dpos move the client goes on reporting where it was before
+		// (it does not take the server's word for its own object), and that
+		// undid the move (two 5.12 clients, lab 2026-11-25). Such reports are
+		// set aside until the client reports somewhere else.
+		bool serverMoved = false;
+		if (const auto stale = m_staleReport.find(playerId); stale != m_staleReport.end())
+		{
+			if (std::hypot(state.position[0] - stale->second[0], state.position[1] - stale->second[1], state.position[2] - stale->second[2]) < 0.01f)
+				serverMoved = true;
+			else
+				m_staleReport.erase(stale);
+		}
+		m_lastReport[playerId] = state.position;
 		if (!serverMoved)
 			object.transform.position = state.position;
 		if (state.controlling)
 		{
 			if ((state.changed & GameObjectBits::Transform) && !serverMoved)
 				object.transform = state.object.transform;
-			if (state.changed & GameObjectBits::Chat)
+			if ((state.changed & GameObjectBits::Chat) && object.chat != state.object.chat)
+			{
 				object.chat = state.object.chat;
+				// And to the 2D clients in its level, as its chat prop.
+				if (auto player = m_server.getPlayer(playerId))
+					player->setChat(CString(object.chat));
+			}
 			if (state.changed & GameObjectBits::Scale)
 				object.scale = state.object.scale;
 			// Its looks too, so another client sees a change of shape, skin,
@@ -947,16 +1188,17 @@ namespace graal3d
 		auto& object = it->second.object;
 		if (object.transform.position == to)
 			return true;
+		const GhostObject before = it->second;
 		object.transform.position = to;
-		m_movedUntil[playerId] = nowMs() + 2000;
+		const auto last = m_lastReport.find(playerId);
+		m_staleReport[playerId] = last != m_lastReport.end() ? last->second : before.object.transform.position;
 
-		const auto key = avatarKey(playerId);
-		for (auto& [endpoint, session] : m_sessions)
+		// To the others (traced, and the TCP side follows), then to its own screen.
+		relayAvatar(playerId, before);
+		if (const auto e = m_byPlayer.find(playerId); e != m_byPlayer.end())
 		{
-			if (session.player != playerId)
-				ghostAvatar(*session.connection, playerId, it->second);
-			else if (!session.connection->profile().tgePackets)
-				session.connection->setGhost(key, it->second);
+			if (auto s = m_sessions.find(e->second); s != m_sessions.end() && !s->second.connection->profile().tgePackets)
+				s->second.connection->setGhost(avatarKey(playerId), it->second);
 		}
 		return true;
 	}

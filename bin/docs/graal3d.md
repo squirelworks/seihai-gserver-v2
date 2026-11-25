@@ -164,7 +164,14 @@ What the server does when more than one 3D client is on at once:
 | Joining | Each client gets its own 3D link, matched to its own TCP login by account and address, so several clients on one machine are fine. | the same |
 | Seeing the others | Every other linked player appears as a `GameObject` named `G3DPlayer_<account>`, with the world's player shape and the player's nickname. Every other linked player appears as a stock TGE `Player` on the world's `tgeplayershape`, at that player's position and facing. This needs `tgecontrol player` and a `tgeplayershape`; with a Camera as the control object, these clients get no other players. |
 | What is passed on | What each client reports for its own object: position, rotation, scale, `chat`, shape, skin, attributes, and nickname with its colour. Move type, velocity and attachment are not sent yet. On the Sharp3D route, a player moves only through `g3dpos`. | The position and facing of the client's Player, as the server runs its moves. The other builds see this as that player's `GameObject`. |
-| TCP side | Every 3D client is also an ordinary TCP player, so the gserver sends the usual other-player props, chat and PMs, as it would to 2D clients in the same level. | the same |
+| Starting point | The first player starts on the world's `spawn`. Each later one takes the first free point of 8 around it, 2 units out, then 16 at 4 units, and so on, so two players never stand on one point. | the same |
+| Moving with `g3dpos` | The server moves the object, passes it on and traces it. The client goes on reporting where it was before; those reports are set aside until it reports somewhere else. | the same |
+| Leaving | The player's object is deleted on the other clients, and the trace says on how many. | the same |
+| 2D players | A TCP-only player in a 3D player's level appears on its screen as a `GameObject` named `G2DPlayer_<account>`, at its tile position as Torque (x, -y), at the spawn's height, with its nickname and chat. It goes when the player leaves the level. Checked 5 times a second. | as a stock TGE `Player`, under the same conditions as other 3D players |
+| TCP side | Every 3D client is also an ordinary TCP player, so the gserver sends the usual other-player props, chat and PMs, as it would to 2D clients in the same level. A 3D player's own `chat` becomes its chat prop, so 2D clients see it. | the same |
+| Position on the TCP side | The player's TCP position follows its 3D object: Torque (x, y) is map tile (x, -y). Serverside scripts see where the player is; without this, the script `player` stayed at the spawn while a 4.04r2 Player walked (lab, 2026-11-25). Positions off the map are left alone. | the same, from the Player the server runs |
+
+**Texture names:** a 3D client's request for an image with the wrong image extension also finds the same name with another one. 3.153 asks for Sky textures as `.gif`, never `.png` (lab, 2026-11-25), so a `.png` texture answers it. Whether 3.153 draws a PNG sent under a `.gif` name is not tested yet; ship `.gif` copies to be sure.
 
 **Accounts:** with `localhost = true` (the lab default) the gserver accepts any account
 name and password and creates the account from `(defaultaccount)` on its first login.
@@ -179,7 +186,10 @@ of these:
   it cannot;
 - each change in a client's control-object report;
 - each ghost the server writes to that client;
-- each time a player's object is passed on to the others.
+- each time a player's object is passed on to the others;
+- each TCP position set from a 3D object, or skipped as off the map;
+- each 2D player shown, updated or gone on a 3D client;
+- each leave, with the number of clients the object was deleted on.
 
 Each line holds: milliseconds, account (or object name), protocol (0 for the server's
 own relay lines), then what happened. Leave the setting empty to turn the trace off.
@@ -279,8 +289,10 @@ world/3d/                        any folder the file folders cover
 - **Bare-name requests.** The 3D clients ask for every texture by a bare, lower-cased name and store it under that name in their own cache. The server answers a bare request with `<name>.png`, `.jpg`, `.jpeg`, `.gif`, `.bmp`, `.tga` or `.dds`, tried in that order and matched case-insensitively. It answers the clients' "is my copy current?" checks the same way, so nothing needs an extension-less copy on disk. Shapes keep their extension in requests.
 - **Texture formats.** Only 8-bit PNG, JPEG and GIF draw on 5.12. BMP, TGA, DDS and 16-bit PNG draw white.
 - **Lower-case names** are safest, because the clients lower-case what they ask for. The server's lookup ignores case, so mixed case still works.
-- **Start-up check.** At start-up the server looks up every shape and Sky texture the world file names. It logs any that are missing, and any found only without an extension.
+- **Start-up check.** At start-up the server looks up every shape and Sky texture the world file names, and with a `terrain` line, `heights.info` and every texture it lists (a client that cannot fetch them draws the terrain white). It logs any that are missing, and any found only without an extension.
 - **Unsafe `.3ds` files.** Every `.3ds` is checked for the faults that crashed a real client: no materials, a cut file, or a chunk longer than its parent. With `graal3dshapecheck = skip` (the default), an object with such a shape is left out of the world and logged. Labs that send broken shapes on purpose set `warn`, which logs and sends them anyway; `off` skips the check.
+
+- **Folders config.** A file folder covers only its own files, not its subfolders. `config/foldersconfig.txt` needs `file 3d/*` and a line for each streamed terrain folder, such as `file 3d/island_terrain/*`; without them the world's files are not found (lab, 2026-11-25). The default and modern servers have `file 3d/*`.
 
 `seihai-servertools gen terrain DIR --world NAME --stream --playerworld` writes a whole
 world in this layout from a generated height field.
@@ -295,7 +307,7 @@ terrain world/terrain
 The 5.12 client gets its terrain in two parts. A `TerrainBlock` ghost carries only
 settings, and the heights, materials and holes follow as up to 256
 `TerrainChunkEvent`s of 16 x 16 squares. The terrain is 256 x 256 squares, centred
-on the origin, 8 m a square by default. The layouts come from a static read of the
+on the origin, 8 m a square by default. The square size may be 1 to 64; a huge one killed a live 5.12 right after "Terrain lit" (lab, 2026-11-25). The layouts come from a static read of the
 real 5.12 client (Graal_analysis `torque/terrain-512.md`). The 2026-11-25 terrain
 lab confirmed them live on a real 5.12, by sending them as raw lines from this
 server. The native `terrain` line has not yet run against a real client.
@@ -306,7 +318,10 @@ client keeps in its own cache (`levels3d/heights/<server>/`). A missing file lea
 that chunk out, and a file over 1023 bytes or one that does not inflate is logged
 at start-up. Put `heights.info` (one texture name a line, in material order, each
 256 x 256 24-bit) and its textures in the file folders: the client asks for
-`heights.info` over TCP when it has none, then fetches each texture. Write the
+`heights.info` over TCP when it has none, then fetches each texture. On a first visit (empty cache) 5.12 asks only for a bare `heights.info`, saves it in
+`levels3d/images/`, and draws the terrain white; on the next visit it logs "Missing
+terrain texture" for each line, asks for each texture by its listed name, and draws
+them (live, 2026-11-25). So test textures on a return visit. Write the
 names with their extension (`g3d_grass.png`): the Linux 4.206 client given bare
 names drew the terrain white, then saved the textures without an extension, could
 not load them and drew no terrain at all; with `.png` names it drew them textured
@@ -333,14 +348,17 @@ because their stock TGE terrain is a different layout.
 
 ```
 # water <x> <y> <z> <sx> <sy> <sz> [<surface texture> [<liquid type>]]
-water -1024 -1024 0.5 2048 2048 20 water_surface 0
+water -1024 -1024 -19.5 2048 2048 20 water_surface 0
 ```
 
 A `WaterBlock` at that corner, unrotated, of that size (the client takes the size
-only when x and y are both at least 1024). Liquid types follow stock TGE (0 water,
+only when x and y are both at least 1024). The surface is at z plus the z size, not
+at z (live 5.12, 2026-11-25): for water at height h and depth d, write z = h - d and
+a z size of d. The example's surface is at 0.5, and `liquidheight` reads that with a
+little wave motion. Liquid types follow stock TGE (0 water,
 1 ocean, 2 river, 3 stagnant, 4 lava, ...), and the rest of its look takes stock TGE
 1.x's defaults. The layout is from a static read of the 5.12 client (Graal_analysis
-`torque/terrain-512.md` section 5). It has not been run against a real client yet.
+`torque/terrain-512.md` section 5); live 5.12 reads its `liquidheight` as above.
 
 ## Lab: raw objects and events
 
@@ -379,6 +397,32 @@ client whose class table has its class: 4.20r6 and 5.x list `TerrainBlock` and
 `Player` and `Sky` so those keep their ids. Raw objects on protocol 19 go out with
 the other ghosts, after the datablocks. Nothing here has been run with a real
 client yet; the 2026-11-25 terrain lab is the first user.
+
+## Lab: mutations (`graal3dmutate`)
+
+**Lab only. Never set this on a server real players use.** `graal3dmutate =
+<kind>[:<seed>]` changes one thing in what the server sends each 3D client, so a lab
+can watch how a real client in a VM copes. The seed (default 1) picks the details, so
+a run can be repeated. Each link gets the mutation once, and the server log and
+`graal3dtrace` both get a `mutation <kind>:<seed>` line with what changed and the
+packet's exact bytes in hex.
+
+| Kind | What is sent |
+|---|---|
+| `accept-protocol` | the connect accept carries a wrong protocol number (one off, 0, `0xFFFFFFFF` or 100 more) |
+| `accept-classtable` | the accept's class table leaves out the last 1 to 3 event classes, adds an event class `SeihaiLabEvent`, or renames one object class `SeihaiLabObject` |
+| `event-unknown-class` | an unguaranteed event whose 12-bit class id is past the table, with 0 to 63 random bits |
+| `event-bad-length` | an unguaranteed event of a real class whose int14 length is 1 or 8 more, 1 less, or 16383, against its 0 to 63 bits |
+| `ghost-uncreated` | an update for a ghost index that holds no ghost, with an existing ghost's class id and random bits |
+| `ghost-double-delete` | two deletes of an index that holds no ghost, in one ghost section |
+| `ghost-index-width` | a full update of an existing ghost, in a ghost section whose 4-bit index width is wrong |
+| `control-wrong-class` | the control object names a ghost of another class (a Sky, Sun, ...) |
+| `control-deleted` | the control object names an index that holds no ghost |
+
+The accept mutations go out with the accept. The others go out 2 s after the mission
+start is done, in one packet. A mutation that finds nothing to change (no ghost of
+another class, say) logs that instead. The server's own state is not changed by a
+mutation: its ghosts and control object stay as they were.
 
 ## Protocol 19 (3.151 Linux, 3.153, 4.04r2)
 

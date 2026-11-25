@@ -10,7 +10,9 @@
 #include <graal3d/Graal3DTge.h>
 
 #include <algorithm>
+#include <cassert>
 #include <format>
+#include <random>
 #include <string>
 
 namespace graal3d
@@ -130,9 +132,12 @@ namespace graal3d
 		const auto sinceSend = nowMs - m_lastSend;
 		if (m_profile.tgePackets && m_established)
 			advanceTge();
+		if (m_mutation != Mutation::None && !isAcceptMutation(m_mutation) && !m_mutationDone && m_mutationAt == 0 && m_mission == MissionState::Done)
+			m_mutationAt = nowMs + 2000;
 		if (sendsEvents() && m_established)
 		{
-			const bool work = !m_sendQueue.empty() || m_ackOwed || ghostWorkPending() || controlPending() || (m_controlDelivered && m_controlMoved);
+			const bool work = !m_sendQueue.empty() || m_ackOwed || ghostWorkPending() || controlPending() || (m_controlDelivered && m_controlMoved) ||
+							  mutationDue(nowMs);
 			const bool due = work && sinceSend >= SendIntervalMs;
 			if (due || sinceSend >= KeepAliveMs)
 				sendPacket(PacketType::Data, nowMs);
@@ -144,14 +149,42 @@ namespace graal3d
 		return true;
 	}
 
-	void Connection::postEvent(std::string_view className, BitWriter payload)
+	bool Connection::mutationDue(uint64_t nowMs) const
+	{
+		return m_mutation != Mutation::None && !isAcceptMutation(m_mutation) && !m_mutationDone && m_mutationAt != 0 && nowMs >= m_mutationAt;
+	}
+
+	void Connection::writeSized(BitWriter& w, uint32_t classId, const BitWriter& body)
+	{
+		// Class id, int14 length, body: the length must be the body's exact bit
+		// count, never less (see postEvent). Callers keep bodies under 16384 bits.
+		const size_t bits = body.bitPosition();
+		assert(bits <= MaxEventBits);
+		[[maybe_unused]] const size_t start = w.bitPosition();
+		w.writeInt(classId, 12);
+		w.writeInt(static_cast<uint32_t>(bits), 14);
+		w.writeBits(body);
+		assert(w.bitPosition() - start == 12 + 14 + bits);
+	}
+
+	bool Connection::postEvent(std::string_view className, BitWriter payload)
 	{
 		const auto id = eventClassId(m_profile, className);
 		if (!id)
-			return;
+			return false;
+		// An event's length goes out as int14, so a payload of 16384 bits or more
+		// would be under-counted, and 5.12 runs what an under-counted event leaves
+		// and then crashes (fuzz tier 1, Graal_analysis
+		// torque/3d-fuzz-net-tier1-2026-11-25.md). Such an event is not sent.
+		if (payload.bitPosition() > MaxEventBits)
+		{
+			log(std::format("{} of {} bits is longer than an event can say (at most {}), not sent", className, payload.bitPosition(), MaxEventBits));
+			return false;
+		}
 		const int32_t seq = m_nextSendEventSeq++;
 		m_events.emplace(seq, OutEvent{*id, std::move(payload)});
 		m_sendQueue.push_back(seq);
+		return true;
 	}
 
 	namespace
@@ -180,8 +213,7 @@ namespace graal3d
 		BitWriter payload;
 		payload.setPacketStrings(m_packetStrings);
 		writeRawFields(payload, fields);
-		postEvent(className, std::move(payload));
-		return true;
+		return postEvent(className, std::move(payload));
 	}
 
 	bool Connection::postTerrainChunk(uint32_t x, uint32_t y, uint32_t stamp, std::string_view packed)
@@ -318,7 +350,63 @@ namespace graal3d
 		w.writeFlag(false);
 
 		Notify note{m_lastSendSeq, {}, {}, false};
-		if (m_profile.tgePackets)
+		const bool mutate = mutationDue(nowMs);
+		std::mt19937 rng(m_mutationSeed);
+		m_mutationNote.clear();
+		const auto bitsFor = [](uint32_t index) {
+			uint32_t bits = 1;
+			while ((index >> bits) != 0)
+				++bits;
+			return bits;
+		};
+		const auto freeIndex = [this]() {
+			uint32_t index = 0;
+			while (m_usedIndices.contains(index))
+				++index;
+			return index;
+		};
+		// The ghost a control mutation names: one of another class, or none at all.
+		std::optional<uint32_t> badControl;
+		if (mutate && (m_mutation == Mutation::ControlWrongClass || m_mutation == Mutation::ControlDeleted))
+		{
+			if (m_mutation == Mutation::ControlDeleted)
+			{
+				badControl = freeIndex() + rng() % 8;
+				m_mutationNote = "control object: ghost index " + std::to_string(*badControl) + ", which holds no ghost";
+			}
+			else
+			{
+				const std::string_view controlClass =
+					m_controlKey && m_ghosts.contains(*m_controlKey) ? m_ghosts.at(*m_controlKey).object.className() : std::string_view{};
+				std::vector<const Ghost*> others;
+				for (const auto& [key, g] : m_ghosts)
+				{
+					if (g.created && !g.kill && g.object.className() != controlClass)
+						others.push_back(&g);
+				}
+				if (!others.empty())
+				{
+					const auto* g = others[rng() % others.size()];
+					badControl = g->index;
+					m_mutationNote = "control object: ghost " + std::to_string(g->index) + ", a " + std::string(g->object.className());
+				}
+			}
+		}
+		if (m_profile.tgePackets && badControl)
+		{
+			tge::writeServerGame(w, m_lastMoveAck, tge::ServerControl{static_cast<uint32_t>(nowMs), *badControl, {}, std::nullopt});
+		}
+		else if (!m_profile.tgePackets && badControl)
+		{
+			w.writeFlag(true);
+			w.writeFlag(true);
+			w.writeU32(static_cast<uint32_t>(nowMs));
+			w.writeInt(*badControl, 12);
+			writeGameObjectUpdate(w, GameObjectState{}, 0);
+			writeCameraSection(w);
+			w.writeFlag(false);
+		}
+		else if (m_profile.tgePackets)
 		{
 			// GameConnection::writePacket, protocol 19: move ack, then the control
 			// object with its packet data, no camera, no field of view.
@@ -354,7 +442,34 @@ namespace graal3d
 			w.writeFlag(false);
 		}
 
-		// Events: no unguaranteed ones, then the guaranteed-ordered queue.
+		// Events: no unguaranteed ones (but a mutation's), then the guaranteed-ordered queue.
+		if (mutate && (m_mutation == Mutation::EventUnknownClass || m_mutation == Mutation::EventBadLength))
+		{
+			const auto classes = static_cast<uint32_t>(m_profile.eventClasses.size());
+			const uint32_t bits = rng() % 64;
+			uint32_t classId = 0;
+			uint32_t length = bits;
+			if (m_mutation == Mutation::EventUnknownClass)
+			{
+				classId = classes + rng() % (4096 - classes);
+				m_mutationNote = "an unguaranteed event of class id " + std::to_string(classId) + " (the table has " + std::to_string(classes) +
+								 "), " + std::to_string(bits) + " bits";
+			}
+			else
+			{
+				classId = classes ? rng() % classes : 0;
+				const std::array<int64_t, 4> deltas{1, 8, -1, 16383};
+				const auto delta = deltas[rng() % deltas.size()];
+				length = static_cast<uint32_t>(std::clamp<int64_t>(static_cast<int64_t>(bits) + delta, 0, 16383));
+				m_mutationNote = "an unguaranteed " + std::string(eventClassName(m_profile, classId)) + " claiming " + std::to_string(length) +
+								 " bits with " + std::to_string(bits);
+			}
+			w.writeFlag(true);
+			w.writeInt(classId, 12);
+			w.writeInt(length, 14);
+			for (uint32_t i = 0; i < bits; ++i)
+				w.writeFlag((rng() & 1u) != 0);
+		}
 		w.writeFlag(false);
 		int32_t prevSeq = -2;
 		const int32_t lastAcked = m_events.empty() ? m_nextSendEventSeq - 1 : m_events.begin()->first - 1;
@@ -372,19 +487,95 @@ namespace graal3d
 			if (!w.writeFlag(seq == prevSeq + 1))
 				w.writeInt(static_cast<uint32_t>(seq) & 0x7Fu, 7);
 			prevSeq = seq;
-			w.writeInt(ev.classId, 12);
-			w.writeInt(static_cast<uint32_t>(ev.payload.bitPosition()), 14);
-			w.writeBits(ev.payload);
+			writeSized(w, ev.classId, ev.payload);
 			note.events.push_back(seq);
 			m_sendQueue.pop_front();
 		}
 		w.writeFlag(false);
 
-		writeGhostSection(w, note);
+		const bool ghostMutation =
+			mutate && (m_mutation == Mutation::GhostUncreated || m_mutation == Mutation::GhostDoubleDelete || m_mutation == Mutation::GhostIndexWidth);
+		if (ghostMutation)
+		{
+			uint32_t maxIndex = 0;
+			const Ghost* existing = nullptr;
+			for (const auto& [key, g] : m_ghosts)
+			{
+				maxIndex = std::max(maxIndex, g.index);
+				if (g.created && !g.kill && (!m_controlKey || key != *m_controlKey) && existing == nullptr)
+					existing = &g;
+			}
+			const uint32_t spare = freeIndex() + rng() % 8;
+			if (m_mutation == Mutation::GhostIndexWidth && existing != nullptr)
+			{
+				const uint32_t real = bitsFor(maxIndex);
+				uint32_t wrong = (real + 1 + rng() % 14) % 16;
+				if (wrong == real)
+					wrong = (wrong + 1) % 16;
+				BitWriter payload;
+				payload.setPacketStrings(m_packetStrings);
+				existing->object.writeUpdate(payload, existing->object.fullMask(), false);
+				w.writeFlag(true);
+				w.writeInt(wrong, 4);
+				w.writeFlag(true);
+				w.writeInt(existing->index, static_cast<int>(wrong));
+				w.writeFlag(false);
+				w.writeInt(existing->classId, 12);
+				w.writeInt(static_cast<uint32_t>(payload.bitPosition()), 14);
+				w.writeBits(payload);
+				w.writeFlag(false);
+				m_mutationNote = "ghost section with index width " + std::to_string(wrong) + " (needs " + std::to_string(real) + "): a full update of ghost " +
+								 std::to_string(existing->index) + ", a " + std::string(existing->object.className());
+			}
+			else
+			{
+				const uint32_t idBits = bitsFor(std::max(maxIndex, spare));
+				w.writeFlag(true);
+				w.writeInt(idBits, 4);
+				if (m_mutation == Mutation::GhostDoubleDelete)
+				{
+					for (int i = 0; i < 2; ++i)
+					{
+						w.writeFlag(true);
+						w.writeInt(spare, static_cast<int>(idBits));
+						w.writeFlag(true);
+					}
+					m_mutationNote = "two deletes of ghost index " + std::to_string(spare) + ", which holds no ghost";
+				}
+				else
+				{
+					const uint32_t classId = existing != nullptr ? existing->classId : 0;
+					const uint32_t bits = rng() % 64;
+					w.writeFlag(true);
+					w.writeInt(spare, static_cast<int>(idBits));
+					w.writeFlag(false);
+					w.writeInt(classId, 12);
+					w.writeInt(bits, 14);
+					for (uint32_t i = 0; i < bits; ++i)
+						w.writeFlag((rng() & 1u) != 0);
+					m_mutationNote = "an update of ghost index " + std::to_string(spare) + ", never created, class id " + std::to_string(classId) + ", " +
+									 std::to_string(bits) + " random bits";
+				}
+				w.writeFlag(false);
+			}
+		}
+		else
+			writeGhostSection(w, note);
 
 		m_notifies.push_back(std::move(note));
+		const auto packet = w.toString();
+		if (mutate)
+		{
+			m_mutationDone = true;
+			const auto line = "mutation " + std::string(mutationName(m_mutation)) + ":" + std::to_string(m_mutationSeed) + " in seq " +
+							  std::to_string(m_lastSendSeq) + ": " + (m_mutationNote.empty() ? "nothing to mutate (no fitting ghost)" : m_mutationNote) +
+							  "; packet " + hexPreview(packet, packet.size());
+			log(line);
+			if (m_cb.trace)
+				m_cb.trace(line);
+		}
 		if (m_cb.send)
-			m_cb.send(w.toString());
+			m_cb.send(packet);
 	}
 
 	void Connection::handleNotify(bool delivered)
@@ -535,7 +726,7 @@ namespace graal3d
 		// The client looks the index up as a Camera and, if that fails, drops the
 		// rest of the packet. So name it only once its create has been acked.
 		m_cameraNamed = false;
-		if (m_cameraKey)
+		if (m_cameraKey && ghostsMayGo())
 		{
 			const auto it = m_ghosts.find(*m_cameraKey);
 			m_cameraNamed = it != m_ghosts.end() && it->second.created && !it->second.kill &&
@@ -577,8 +768,22 @@ namespace graal3d
 		return it != m_ghosts.end() && it->second.created && !it->second.kill;
 	}
 
+	bool Connection::ghostsMayGo() const
+	{
+		// Protocol 19: not before the client has loaded the datablocks they name
+		// (an unknown datablock id drops the connection). Protocols 21 and 24: not
+		// before MissionStartPhase1Ack. A 5.12 on a return visit dropped the ghosts
+		// it got before that ack, then stalled in phase 1 on "Received unknown
+		// camera object" when the server named its Camera (a world of 0 or 1
+		// objects, lab 2026-11-25; with 6 objects the ghosts went after the ack and
+		// it worked). The Sharp3D route ghosts through events from the start.
+		return m_ghostingAllowed || m_profile.ghostAlwaysWorld;
+	}
+
 	bool Connection::ghostWorkPending() const
 	{
+		if (!ghostsMayGo())
+			return false;
 		for (const auto& [key, g] : m_ghosts)
 		{
 			if (g.createInFlight || g.killInFlight)
@@ -631,9 +836,7 @@ namespace graal3d
 			int order; // 0 delete, 1 create, 2 update
 		};
 
-		// Protocol 19: no ghost before the client has loaded the datablocks they
-		// name (an unknown datablock id drops the connection).
-		if (m_profile.tgePackets && !m_ghostingAllowed)
+		if (!ghostsMayGo())
 		{
 			w.writeFlag(false);
 			return;
@@ -694,9 +897,7 @@ namespace graal3d
 			w.writeInt(g.index, static_cast<int>(idBits));
 			if (!w.writeFlag(g.kill))
 			{
-				w.writeInt(g.classId, 12);
-				w.writeInt(static_cast<uint32_t>(payload.bitPosition()), 14);
-				w.writeBits(payload);
+				writeSized(w, g.classId, payload);
 			}
 
 			note.ghosts.push_back({c.key, mask, create, g.kill});
@@ -728,9 +929,7 @@ namespace graal3d
 		payload.setPacketStrings(m_packetStrings);
 		payload.writeInt(g.index, 12);
 		payload.writeFlag(true);
-		payload.writeInt(g.classId, 12);
-		payload.writeInt(static_cast<uint32_t>(update.bitPosition()), 14);
-		payload.writeBits(update);
+		writeSized(payload, g.classId, update);
 		const int32_t seq = m_nextSendEventSeq;
 		postEvent("GhostAlwaysObjectEvent", std::move(payload));
 		if (m_nextSendEventSeq == seq)
@@ -830,11 +1029,15 @@ namespace graal3d
 			state.controlling = true;
 			state.changed = readGameObjectUpdate(r, m_clientObject, m_clientMoveType);
 			state.object = m_clientObject;
-			if (m_profile.ghostAlwaysWorld)
+			const auto control = m_controlKey ? m_ghosts.find(*m_controlKey) : m_ghosts.end();
+			const bool cameraControl = control != m_ghosts.end() && control->second.object.kind == GhostObject::Kind::Camera;
+			if (m_profile.ghostAlwaysWorld || cameraControl)
 			{
-				// Sharp3D route: the control object is a Camera, whose update has two
-				// more sections (mode, followed object). Assumed: the client writes
-				// them as it reads them. Not yet checked against a real client.
+				// A Camera as the control object (always on the Sharp3D route): its
+				// update has two more sections, mode and followed object. A live 5.12
+				// writes both flags (2 bits, nothing else parses with events in the
+				// packet; T3D-023, lab 2026-11-25). Without them this route lost every
+				// client event while a Camera was in control.
 				if (r.readFlag())
 					r.readInt(1);
 				if (r.readFlag() && r.readFlag())
@@ -1107,6 +1310,7 @@ namespace graal3d
 
 			if (command == "MissionStartPhase1Ack" && m_mission == MissionState::Phase1Sent)
 			{
+				m_ghostingAllowed = true; // see ghostsMayGo
 				sendCommand("MissionStartPhase2");
 				m_mission = MissionState::Phase2Sent;
 			}

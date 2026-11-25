@@ -241,6 +241,16 @@ namespace
 			now += ms;
 			REQUIRE(conn.update(now));
 		}
+
+		// The client's MissionStartPhase1Ack (its event 0) in its data packet 2,
+		// acking the server's packet 1: ghosts go out only after it.
+		void phase1Ack()
+		{
+			std::vector<OutEvent> evs;
+			evs.push_back({"RemoteCommandEvent", remoteCommandEvent({CommandArg{false, 0, "MissionStartPhase1Ack"}})});
+			conn.receive(clientDataPacket(profile, 2, 1, 1, evs, 0), now);
+			tick(60);
+		}
 	};
 } // namespace
 
@@ -723,8 +733,16 @@ SCENARIO("Ghosting a world and handing the client its control object")
 	h.conn.receive(kFirstData, h.now);
 	h.tick(60);
 
+	// No ghost before the client's MissionStartPhase1Ack: a 5.12 on a return
+	// visit dropped them and stalled on "Received unknown camera object" (lab
+	// 2026-11-25).
 	REQUIRE(h.sent.size() == 1);
-	const auto first = readServerPacket(h.sent[0]);
+	REQUIRE(readServerPacket(h.sent[0]).ghosts.empty());
+	h.phase1Ack();
+	REQUIRE(h.sent.size() == 2);
+	REQUIRE(h.mission.back() == MissionState::Phase2Sent);
+	const auto first = readServerPacket(h.sent[1]);
+	REQUIRE(first.header.sequence == 2);
 
 	THEN("the first packet creates every ghost, with its class id and a full update")
 	{
@@ -749,7 +767,7 @@ SCENARIO("Ghosting a world and handing the client its control object")
 	WHEN("the client acks that packet but has not finished the mission start")
 	{
 		h.sent.clear();
-		h.conn.receive(clientDataPacket(profile, 2, 1, 1, {}, 0), h.now);
+		h.conn.receive(clientDataPacket(profile, 3, 2, 3, {}, 0), h.now);
 		h.tick(60);
 		h.tick(1000);
 
@@ -762,18 +780,9 @@ SCENARIO("Ghosting a world and handing the client its control object")
 		}
 	}
 
-	WHEN("the client acks that packet and answers both mission phases")
+	WHEN("the client acks that packet and answers the second mission phase")
 	{
-		std::vector<OutEvent> phase1;
-		phase1.push_back({"RemoteCommandEvent", remoteCommandEvent({CommandArg{false, 0, "MissionStartPhase1Ack"}})});
-		h.sent.clear();
-		h.conn.receive(clientDataPacket(profile, 2, 1, 1, phase1, 0), h.now);
-		h.tick(60);
-
-		REQUIRE(h.sent.size() == 1);
-		const auto phase2 = readServerPacket(h.sent.back());
-		REQUIRE(h.mission.back() == MissionState::Phase2Sent);
-		REQUIRE_FALSE(phase2.control); // MissionStartPhase2 would undo login step 5
+		REQUIRE_FALSE(first.control); // MissionStartPhase2 would undo login step 5
 
 		std::vector<OutEvent> phase2Ack;
 		phase2Ack.push_back({"RemoteCommandEvent", remoteCommandEvent({CommandArg{false, 0, "MissionStartPhase2Ack"}})});
@@ -852,7 +861,7 @@ SCENARIO("Ghosting a world and handing the client its control object")
 	WHEN("the packet with the creates is lost")
 	{
 		h.sent.clear();
-		h.conn.receive(clientDataPacket(profile, 2, 1, 0, {}, 0), h.now);
+		h.conn.receive(clientDataPacket(profile, 3, 2, 2, {}, 0), h.now); // 1 in, 2 lost
 		h.tick(60);
 
 		THEN("the creates go out again")
@@ -905,6 +914,8 @@ SCENARIO("A Camera ghost becomes the client's camera once it is in")
 	h.conn.setCameraObject(7);
 	h.conn.receive(kFirstData, h.now);
 	h.tick(60);
+	REQUIRE_FALSE(readServerPacket(h.sent.back()).camera);
+	h.phase1Ack();
 
 	const auto first = readServerPacket(h.sent.back());
 	THEN("it is created as a Camera, and not named before the client has it")
@@ -924,7 +935,7 @@ SCENARIO("A Camera ghost becomes the client's camera once it is in")
 
 	WHEN("the create is acked")
 	{
-		h.conn.receive(clientDataPacket(profile, 2, 1, 1, {}, 0), h.now);
+		h.conn.receive(clientDataPacket(profile, 3, 2, 3, {}, 0), h.now);
 		h.tick(60);
 		h.tick(1000);
 		THEN("every packet names it as the camera")
@@ -1065,10 +1076,11 @@ SCENARIO("A ghost can be sent whole again")
 	h.conn.resendGhost(1); // not created yet: nothing extra
 	h.conn.receive(kFirstData, h.now);
 	h.tick(60);
+	h.phase1Ack();
 	REQUIRE(readServerPacket(h.sent.back()).ghosts.size() == 1);
 
 	h.sent.clear();
-	h.conn.receive(clientDataPacket(h.profile, 2, 1, 1, {}, 0), h.now);
+	h.conn.receive(clientDataPacket(h.profile, 3, 2, 3, {}, 0), h.now);
 	h.tick(60);
 	h.tick(1000);
 	for (const auto& data : h.sent)
@@ -1225,6 +1237,10 @@ SCENARIO("The world file takes rawobject and rawevent lines")
 	REQUIRE(world.objects.size() == 1);
 	REQUIRE(world.objects[0].kind == GhostObject::Kind::Raw);
 	REQUIRE(world.objects[0].className() == "TerrainBlock");
+	// A square size past 64 is refused: a huge one killed a live 5.12.
+	REQUIRE(parseWorld("terrain world/terrain 64\n").terrain);
+	REQUIRE_FALSE(parseWorld("terrain world/terrain 65\n").terrain);
+	REQUIRE_FALSE(parseWorld("terrain world/terrain 2147483647\n").terrain);
 	REQUIRE(world.objects[0].raw.size() == 3);
 	REQUIRE(world.rawEvents.size() == 2);
 	REQUIRE_FALSE(world.rawEvents[0].late);
@@ -1252,10 +1268,13 @@ SCENARIO("A raw object is ghosted with its fields, and a raw event is posted")
 
 	h.conn.receive(kFirstData, h.now);
 	h.tick(60);
-	const auto pkt = readServerPacket(h.sent.back());
+	const auto pkt = readServerPacket(h.sent.back()); // the event; the ghost waits for MissionStartPhase1Ack
+	h.phase1Ack();
+	const auto ghostPkt = readServerPacket(h.sent.back());
 
 	THEN("the ghost carries exactly the fields")
 	{
+		const auto& pkt = ghostPkt;
 		REQUIRE(pkt.ghosts.size() == 1);
 		REQUIRE(pkt.ghosts[0].classId == *objectClassId(h.profile, "TerrainBlock"));
 		PayloadReader p(pkt.ghosts[0].payload);
@@ -1278,6 +1297,87 @@ SCENARIO("A raw object is ghosted with its fields, and a raw event is posted")
 		REQUIRE(r.readInt(4) == 5);
 		REQUIRE(r.readInt(4) == 6);
 		REQUIRE(r.readU32() == 99);
+	}
+}
+
+SCENARIO("A Camera as the control object: its two extra sections are read")
+{
+	// A live 5.12 writes the Camera's mode and followed-object flags after its
+	// GameObject update (T3D-023, lab 2026-11-25); the events after them must read.
+	Harness h;
+	GhostObject camera;
+	camera.kind = GhostObject::Kind::Camera;
+	camera.object.name = "G3DCamera_guest";
+	h.conn.setGhost(7, camera);
+	h.conn.setControlObject(7);
+	h.conn.receive(kFirstData, h.now);
+	h.tick(60);
+	h.phase1Ack();
+
+	BitWriter echo;
+	echo.setPacketStrings(true);
+	writeGameObjectUpdate(echo, camera.object, GameObjectBits::Transform);
+	echo.writeFlag(false); // mode
+	echo.writeFlag(false); // followed object
+	ClientControl control{{0.0f, 0.0f, 0.0f}, 0, &echo};
+	std::vector<OutEvent> evs;
+	evs.push_back({"RemoteCommandEvent", remoteCommandEvent({CommandArg{false, 0, "Hello"}})});
+	h.conn.receive(clientDataPacket(h.profile, 3, 2, 3, evs, 1, &control), h.now);
+
+	REQUIRE_FALSE(h.logs.empty());
+	REQUIRE(h.logs.back() == "remote command ignored: Hello");
+}
+
+SCENARIO("Every event says its exact length")
+{
+	// 5.12 trusts an event's int14 length: one that claimed a bit more than it
+	// carried ran garbled and crashed the client (fuzz tier 1, 2026-11-25).
+	Harness h;
+	std::string error;
+
+	THEN("an event too long for its int14 length is not sent")
+	{
+		std::vector<std::string_view> words(520, "u32:7"); // 16640 bits
+		REQUIRE_FALSE(h.conn.postRawEvent("TerrainChunkEvent", *parseRawFields(words, error)));
+		REQUIRE(h.logs.back().find("longer than an event can say") != std::string::npos);
+	}
+
+	WHEN("the mission start command and a raw event go out")
+	{
+		REQUIRE(h.conn.postRawEvent("TerrainChunkEvent", *parseRawFields({"i4:5", "i4:6", "u32:99"}, error)));
+		h.conn.receive(kFirstData, h.now);
+		h.tick(60);
+		const auto pkt = readServerPacket(h.sent.back());
+
+		THEN("each one's length is what its reader takes")
+		{
+			REQUIRE(pkt.events.size() >= 2);
+			const auto command = *eventClassId(h.profile, "RemoteCommandEvent");
+			const auto chunk = *eventClassId(h.profile, "TerrainChunkEvent");
+			bool sawCommand = false, sawChunk = false;
+			for (const auto& ev : pkt.events)
+			{
+				PayloadReader p(ev.payload);
+				if (ev.classId == command)
+				{
+					const auto args = p.r.readInt(CommandArgsBits);
+					for (uint32_t i = 0; i < args; ++i)
+						unpackCommandArg(p.r);
+					REQUIRE(p.r.bitPosition() == ev.bits);
+					sawCommand = true;
+				}
+				else if (ev.classId == chunk)
+				{
+					p.r.readInt(4);
+					p.r.readInt(4);
+					p.r.readU32();
+					REQUIRE(p.r.bitPosition() == ev.bits);
+					sawChunk = true;
+				}
+			}
+			REQUIRE(sawCommand);
+			REQUIRE(sawChunk);
+		}
 	}
 }
 
@@ -1581,6 +1681,88 @@ SCENARIO("The Sharp3D route sends the world as ghost-always events and controls 
 			const auto pkt = readServerPacket(sent.back(), true);
 			REQUIRE(pkt.ghosts.size() == 1);
 			REQUIRE(pkt.ghosts[0].index == 1);
+		}
+	}
+}
+
+SCENARIO("Lab mutations (graal3dmutate) are parsed, seeded and sent once")
+{
+	GIVEN("the setting's text")
+	{
+		THEN("each kind parses, with a seed or 1")
+		{
+			REQUIRE(parseMutation("ghost-uncreated") == std::pair{Mutation::GhostUncreated, 1u});
+			REQUIRE(parseMutation("accept-protocol:42") == std::pair{Mutation::AcceptProtocol, 42u});
+			REQUIRE(mutationName(Mutation::ControlDeleted) == "control-deleted");
+			REQUIRE_FALSE(parseMutation("nonsense"));
+			REQUIRE_FALSE(parseMutation("ghost-uncreated:x"));
+		}
+	}
+
+	GIVEN("an accept mutation")
+	{
+		const auto& profile = *profileForProtocol(24);
+		THEN("the same seed gives the same accept, and it differs from the real one")
+		{
+			for (const auto m : {Mutation::AcceptProtocol, Mutation::AcceptClassTable})
+			{
+				for (uint32_t seed = 1; seed < 8; ++seed)
+				{
+					std::string what;
+					const auto a = buildConnectAccept(0x400, profile, acceptTweak(m, seed, profile, &what));
+					REQUIRE_FALSE(what.empty());
+					REQUIRE(a == buildConnectAccept(0x400, profile, acceptTweak(m, seed, profile)));
+					REQUIRE(a != buildConnectAccept(0x400, profile));
+				}
+			}
+			REQUIRE(buildConnectAccept(0x400, profile, acceptTweak(Mutation::GhostUncreated, 1, profile)) == buildConnectAccept(0x400, profile));
+		}
+	}
+
+	GIVEN("a packet mutation on a connection whose mission start is done")
+	{
+		for (const auto m : {Mutation::EventUnknownClass, Mutation::EventBadLength, Mutation::GhostUncreated, Mutation::GhostDoubleDelete,
+							 Mutation::GhostIndexWidth, Mutation::ControlWrongClass, Mutation::ControlDeleted})
+		{
+			Harness h;
+			h.conn.setMutation(m, 7);
+			const auto& profile = h.profile;
+			h.conn.receive(kFirstData, h.now);
+			h.tick(60);
+			std::vector<OutEvent> evs;
+			evs.push_back({"RemoteCommandEvent", remoteCommandEvent({CommandArg{false, 0, "MissionStartPhase1Ack"}})});
+			h.conn.receive(clientDataPacket(profile, 2, 1, 1, evs, 0), h.now);
+			h.tick(60);
+			std::vector<OutEvent> evs2;
+			evs2.push_back({"RemoteCommandEvent", remoteCommandEvent({CommandArg{false, 0, "MissionStartPhase2Ack"}})});
+			h.conn.receive(clientDataPacket(profile, 3, 2, 1, evs2, 1), h.now);
+			REQUIRE(h.mission.back() == MissionState::Done);
+
+			h.tick(60);
+			REQUIRE_FALSE(h.conn.mutationSent());
+			const auto line = [&] {
+				for (const auto& l : h.logs)
+				{
+					if (l.starts_with("mutation "))
+						return l;
+				}
+				return std::string();
+			};
+			REQUIRE(line().empty());
+			h.tick(2100);
+			REQUIRE(h.conn.mutationSent());
+			const auto said = line();
+			INFO(said);
+			REQUIRE(said.starts_with("mutation " + std::string(mutationName(m)) + ":7 in seq "));
+			REQUIRE(said.find("; packet ") != std::string::npos);
+			// The control mutations need a ghost of another class, which this world
+			// does not have; the rest always find something to change.
+			if (m != Mutation::ControlWrongClass && m != Mutation::GhostIndexWidth)
+				REQUIRE(said.find("nothing to mutate") == std::string::npos);
+			// Once only.
+			const auto count = std::ranges::count_if(h.logs, [](const std::string& l) { return l.starts_with("mutation "); });
+			h.tick(3000);
+			REQUIRE(std::ranges::count_if(h.logs, [](const std::string& l) { return l.starts_with("mutation "); }) == count);
 		}
 	}
 }

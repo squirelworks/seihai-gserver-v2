@@ -175,7 +175,7 @@ namespace graal3d
 		return w.toString();
 	}
 
-	std::string buildConnectAccept(uint32_t sequence, const Profile& profile)
+	std::string buildConnectAccept(uint32_t sequence, const Profile& profile, const AcceptTweak& tweak)
 	{
 		BitWriter w;
 		w.writeU8(static_cast<uint8_t>(InfoPacket::ConnectAccept));
@@ -187,7 +187,10 @@ namespace graal3d
 			w.writeFlag(true);
 			w.writeInt(0, 12);
 			w.writeInt(i, 12);
-			w.writeString(profile.objectClasses[i]);
+			if (tweak.renameObject && tweak.renameObject->first == i)
+				w.writeString(tweak.renameObject->second);
+			else
+				w.writeString(profile.objectClasses[i]);
 		}
 		for (uint32_t i = 0; i < profile.datablockClasses.size(); ++i)
 		{
@@ -196,17 +199,25 @@ namespace graal3d
 			w.writeInt(i, 12);
 			w.writeString(profile.datablockClasses[i]);
 		}
-		for (uint32_t i = 0; i < profile.eventClasses.size(); ++i)
+		const size_t events = profile.eventClasses.size() - std::min(tweak.dropEventClasses, profile.eventClasses.size());
+		for (uint32_t i = 0; i < events; ++i)
 		{
 			w.writeFlag(true);
 			w.writeInt(profile.eventType(), 12);
 			w.writeInt(i, 12);
 			w.writeString(profile.eventClasses[i]);
 		}
+		for (size_t i = 0; i < tweak.extraEventClasses.size(); ++i)
+		{
+			w.writeFlag(true);
+			w.writeInt(profile.eventType(), 12);
+			w.writeInt(static_cast<uint32_t>(events + i), 12);
+			w.writeString(tweak.extraEventClasses[i]);
+		}
 		w.writeFlag(false);
 
 		// GameConnection::writeConnectAccept: the server's protocol version.
-		w.writeU32(profile.protocol);
+		w.writeU32(tweak.protocol.value_or(profile.protocol));
 		return w.toString();
 	}
 

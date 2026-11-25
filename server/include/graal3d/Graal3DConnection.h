@@ -39,6 +39,7 @@
 #include <string_view>
 #include <vector>
 
+#include <graal3d/Graal3DMutation.h>
 #include <graal3d/Graal3DObjects.h>
 #include <graal3d/Graal3DProtocol.h>
 
@@ -88,6 +89,7 @@ namespace graal3d
 		static constexpr uint64_t KeepAliveMs = 1000;
 		static constexpr uint64_t SendIntervalMs = 50;
 		static constexpr size_t MaxPacketBytes = 400; // the clients accept up to 450
+		static constexpr size_t MaxEventBits = (1u << 14) - 1; // an event's or ghost update's int14 length
 		static constexpr uint32_t MaxGhosts = 4096;   // the client's ghost table
 
 		Connection(const Profile& profile, uint32_t connectSequence, uint64_t nowMs, Callbacks callbacks);
@@ -114,6 +116,16 @@ namespace graal3d
 		// Strings inside game packets carry the packet string flag (default on;
 		// see TorqueBitStream.h). Set before anything is sent.
 		void setPacketStrings(bool on) { m_packetStrings = on; }
+
+		// Lab (graal3dmutate): one packet, 2 s after the mission start is done,
+		// carries this mutation (seeded), and the log gets its bytes. Accept
+		// mutations are the service's; they are ignored here.
+		void setMutation(Mutation mutation, uint32_t seed)
+		{
+			m_mutation = mutation;
+			m_mutationSeed = seed;
+		}
+		[[nodiscard]] bool mutationSent() const { return m_mutationDone; }
 
 		// Ghosting. setGhost adds an object or updates it (only what changed is
 		// sent); removeGhost deletes it on the client. Ignored for profiles whose
@@ -204,7 +216,7 @@ namespace graal3d
 			bool controlUpdate = false; // protocol 19: a moved Player's packet data again
 		};
 
-		void postEvent(std::string_view className, BitWriter payload);
+		bool postEvent(std::string_view className, BitWriter payload); // false: no such class, or too long
 		void sendCommand(std::string_view command, const std::vector<std::string>& args = {});
 		void startTgeDatablocks();
 		void advanceTge();
@@ -219,6 +231,9 @@ namespace graal3d
 		void writeCameraSection(BitWriter& writer);
 		void writeGhostSection(BitWriter& writer, Notify& note);
 		void ghostNotify(const Notify& note, bool delivered);
+		// Class id (12 bits), the body's exact length (int14), the body.
+		static void writeSized(BitWriter& w, uint32_t classId, const BitWriter& body);
+		[[nodiscard]] bool ghostsMayGo() const;
 		[[nodiscard]] bool ghostWorkPending() const;
 		[[nodiscard]] bool controlPending() const;
 		std::optional<uint32_t> allocateGhostIndex();
@@ -231,6 +246,12 @@ namespace graal3d
 		uint32_t m_connectSequence;
 		Callbacks m_cb;
 		mutable std::string m_lastStateTrace; // a state line is traced only when it changes
+		Mutation m_mutation = Mutation::None;
+		uint32_t m_mutationSeed = 0;
+		uint64_t m_mutationAt = 0;
+		bool m_mutationDone = false;
+		[[nodiscard]] bool mutationDue(uint64_t nowMs) const;
+		std::string m_mutationNote; // what the mutation packet changed, for the log
 
 		// ConnectionProtocol state, as in Torque.
 		uint32_t m_lastSeqRecvd = 0;
@@ -282,7 +303,7 @@ namespace graal3d
 		// Protocol 19 mission start and moves.
 		uint32_t m_missionSeq = 1;
 		bool m_datablocksSent = false;
-		bool m_ghostingAllowed = false;
+		bool m_ghostingAllowed = false; // see ghostsMayGo
 		bool m_phase2Acked = false;
 		// Sharp3D route: the GhostAlwaysObjectEvent that creates each ghost, by
 		// event sequence; its ack marks the ghost created.

@@ -1,5 +1,6 @@
 // Modified by the Seihai project, 2026-11-01, 2026-11-04, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-18, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
 #include <algorithm>
+#include <cctype>
 #include <array>
 #include <chrono>
 #include <cstdint>
@@ -658,13 +659,28 @@ fs::FileData* Player::findClientFile(const std::filesystem::path& file) const
 
 	// An add-on's client may ask for a file by its bare name (the 5.x 3D client
 	// asks so for every texture, material or Sky, lower-cased, lab 2026-11-25)
-	// and store what it gets under that name.
-	if (info == nullptr && !file.has_extension())
+	// and store what it gets under that name. 3.153 asks for Sky textures as
+	// .gif, never .png (lab 2026-11-25), so a name with one of those extensions
+	// also finds the same stem with another.
+	if (info == nullptr)
 	{
-		for (const auto* ext : addonNeeds().bareNameExtensions)
+		const auto extensions = addonNeeds().bareNameExtensions;
+		auto stem = file.filename();
+		bool tryStem = !file.has_extension();
+		if (!tryStem)
 		{
-			if ((info = filesystem.infoi(fs::FileCategory::ALL, file.filename().string() + ext)) != nullptr)
-				break;
+			auto ext = stem.extension().string();
+			std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+			tryStem = std::any_of(extensions.begin(), extensions.end(), [&](const char* e) { return ext == e; });
+			stem.replace_extension();
+		}
+		if (tryStem)
+		{
+			for (const auto* ext : extensions)
+			{
+				if ((info = filesystem.infoi(fs::FileCategory::ALL, stem.string() + ext)) != nullptr)
+					break;
+			}
 		}
 	}
 	return info;
