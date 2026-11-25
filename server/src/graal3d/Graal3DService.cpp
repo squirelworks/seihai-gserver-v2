@@ -783,6 +783,39 @@ namespace graal3d
 			log::printLine(log::server, "** [Error] Graal3D: {} would crash a client ({}); {} is left out (graal3dshapecheck = warn sends it).", shape, *why, object.object.name);
 			return true;
 		});
+		// The player shapes go out at login; a bad one crashed 4.04r2 in "Phase 1:
+		// Download Datablocks" in 16 of 20 fuzzed cases (lab, 2026-11-25). With
+		// graal3dshapecheck = skip it is dropped: protocol 19 then controls a
+		// Camera, and the GameObject route draws players without a shape.
+		for (auto* shape : {&m_world.playerShape, &m_world.tgePlayerShape})
+		{
+			if (shape->empty())
+				continue;
+			const auto info = find(*shape);
+			if (info == nullptr)
+			{
+				++missing;
+				log::printLine(log::server, "** [Warning] Graal3D: the player shape {} is not in the file folders.", *shape);
+				continue;
+			}
+			++found;
+			auto ext = info->file.extension().string();
+			for (auto& ch : ext)
+				ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+			if ((ext != ".3ds" && ext != ".dts") || m_shapeCheck == ShapeCheck::Off)
+				continue;
+			const auto why = unsafeAsset(ext, readAll(info->file));
+			if (!why)
+				continue;
+			if (m_shapeCheck == ShapeCheck::Warn)
+			{
+				log::printLine(log::server, "** [Warning] Graal3D: the player shape {} would crash a client at login ({}); sent anyway (graal3dshapecheck = warn).", *shape, *why);
+				continue;
+			}
+			log::printLine(log::server, "** [Error] Graal3D: the player shape {} would crash a client at login ({}); it is not used.", *shape, *why);
+			shape->clear();
+		}
+
 		// Streamed terrain: the client asks for heights.info over TCP, then for
 		// each texture it names. If the file folders do not cover the terrain
 		// folder, 5.12 draws the terrain white and fetches nothing (lab,
