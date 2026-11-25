@@ -215,21 +215,27 @@ The 5.12 client gets its terrain in two parts. A `TerrainBlock` ghost carries on
 settings, and the heights, materials and holes follow as up to 256
 `TerrainChunkEvent`s of 16 x 16 squares. The terrain is 256 x 256 squares, centred
 on the origin, 8 m a square by default. The layouts come from a static read of the
-real 5.12 client (Graal_analysis `torque/terrain-512.md`). They have not been run
-against a real client yet: the 2026-11-25 terrain lab is checking them.
+real 5.12 client (Graal_analysis `torque/terrain-512.md`). The 2026-11-25 terrain
+lab confirmed them live on a real 5.12, by sending them as raw lines from this
+server. The native `terrain` line has not yet run against a real client.
 
 `<folder>` (from the server folder) holds `heights<x>-<y>.dat`, x and y 0 to 15, with
 no zero padding. Each file is one chunk's zlib-compressed data, the same file the
 client keeps in its own cache (`levels3d/heights/<server>/`). A missing file leaves
 that chunk out, and a file over 1023 bytes or one that does not inflate is logged
-at start-up. Put `heights.info` (comma-separated texture names in material order,
-each 256 x 256 24-bit) and its textures in the file folders: the client asks for
-`heights.info` over TCP when it has none.
+at start-up. Put `heights.info` (one texture name a line, in material order, each
+256 x 256 24-bit) and its textures in the file folders: the client asks for
+`heights.info` over TCP when it has none, then fetches each texture by its bare
+name.
 
 When the block arrives, the client sends a `TerrainRequestUpdatesEvent` with the
 stamp of every chunk it already holds. The server answers with every chunk whose
 stamp differs, so a returning client downloads only what changed. The stamp is
-Torque's CRC of the inflated bytes. Protocol 19 clients do not get the block,
+Torque's CRC of the inflated bytes. The client stamps its own re-encoding of each
+chunk (mode 2, the material ids it uses in ascending order, its own deltas), so
+write chunks in that form, or every chunk is sent again on every visit.
+`seihai-servertools gen terrain --stream` writes them that way. A damaged zlib
+stream is saved by the client as a flat chunk. Protocol 19 clients do not get the block,
 because their stock TGE terrain is a different layout.
 
 ## Lab: raw objects and events

@@ -215,7 +215,9 @@ namespace graal3d
 	// Chunk (x, y) is the file heights<x>-<y>.dat in `folder`: zlib-compressed
 	// chunk data, the same files the client keeps in its cache. The client
 	// sends the stamp of every chunk it holds once the block arrives; the
-	// server sends the chunks whose stamp differs.
+	// server sends the chunks whose stamp differs. The client stamps its own
+	// re-encoding of a chunk, so files written in that form (mode 2, ids
+	// ascending) are not sent again (terrain lab, 2026-11-25).
 	struct TerrainChunk
 	{
 		std::string packed;  // zlib bytes, at most 1023
