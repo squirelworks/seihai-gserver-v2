@@ -84,19 +84,21 @@ class G3DLabWorlds(unittest.TestCase):
 
     def test_every_variant_changes_one_thing(self):
         made = dict(g.build(self.out, self.pack, self.mbg))
-        for vid in ("C0", "T1", "T2", "S1", "S2", "S3", "S4", "O1", "O2", "G1", "G2", "G3",
+        for vid in ("C0", "T1", "T2", "T3", "S1", "S2", "S3", "S4", "O1", "O2", "G1", "G2", "G3",
                     "Z-nomat", "Z-half", "Z-mainlen", "Z-ptcount", "Z-faceidx", "F-dts00", "F-dif00",
                     "V-dts16", "V-dts25", "V-dif43", "V-dif45"):
             self.assertIn(vid, made)
         control = (self.out / "C0/config/graal3dworld.txt").read_text().splitlines()[1:]
         self.assertIn("object Ground ground.3ds 0 0 0", control)
-        self.assertIn("sky sky0,sky0 0 0.78 0.79 0.63", control)
+        self.assertIn("sky sky0.png,sky0.png 0 0.78 0.79 0.63", control)
+        self.assertFalse((self.out / "C0/world/g3dlab/sky0").exists())
+        self.assertTrue((self.out / "C0/world/g3dlab/sky0.png").exists())
 
         def diff(vid):
             lines = (self.out / vid / "config/graal3dworld.txt").read_text().splitlines()[1:]
             return [l for l in lines if l not in control], [l for l in control if l not in lines]
 
-        self.assertEqual(diff("S1"), ([], ["sky sky0,sky0 0 0.78 0.79 0.63"]))
+        self.assertEqual(diff("S1"), ([], ["sky sky0.png,sky0.png 0 0.78 0.79 0.63"]))
         added, removed = diff("Z-nomat")
         self.assertEqual(removed, ["object Lamp lamp.3ds 1 -1 0"])
         self.assertEqual(added, ["object Lamp lamp_nomat.3ds 1 -1 0"])

@@ -27,6 +27,9 @@ To run one: copy OUT/<id>/config and OUT/<id>/world into a lab server folder
 with graal3d = true, start it, connect a real client in a lab VM, and note
 what it does. Clear the client's levels3d download cache between variants;
 changed files also get new names, so a stale cached copy cannot stand in.
+Files keep their real names and extensions, as a shipped world should (the
+server answers the clients' bare-name requests); only T1 and T3 test
+extension-less copies.
 
 Round 1 (the default) varies textures, sky, object count, GameObject section
 2, .3ds damage and .dts/.dif versions. Round 2 varies placement (far, below,
@@ -216,7 +219,8 @@ class World:
     def __init__(self, scene):
         self.ground = scene["Model"]
         self.objects = [(o["Name"], o["Model"], o["X"], o["Y"], o["Z"]) for o in scene.get("Objects", [])]
-        sky = [s.rsplit(".", 1)[0] for s in scene.get("SkyMaterials", "").split(",") if s]
+        # Real file names: the server drops the extension for the client.
+        sky = [s for s in scene.get("SkyMaterials", "").split(",") if s]
         self.sky = sky
         self.sky_distance = 0.0
         self.fog = (0.78, 0.79, 0.63)
@@ -304,6 +308,8 @@ def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None, roun
                 keep.append(p)
             elif kind == "both":
                 keep.append(p)
+            elif kind == "named" and p.suffix:
+                keep.append(p)
             elif kind == "bare" and p.suffix == "":
                 keep.append(p)
             elif kind == "png" and p.suffix.lower() == ".png":
@@ -311,7 +317,7 @@ def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None, roun
         return keep
 
     control = World(scene)
-    variant("C0", "nothing: the control world (scene ground, its objects, its sky)", control, textures("both"))
+    variant("C0", "nothing: the control world (scene ground, its objects, its sky)", control, textures("named"))
     probe = next((o for o in control.objects if o[1] != control.ground), None)
     if round_ == 2:
         round2(scene, control, probe, base_files, textures, variant)
@@ -363,17 +369,18 @@ def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None, roun
         return finish(out, variants, only, round_)
 
     w = World(scene)
-    variant("T1", "textures only as extension-less copies", w, textures("bare"))
+    variant("T1", "textures only as extension-less copies (the control ships real names)", w, textures("bare"))
     variant("T2", "textures only as .png files", w, textures("png"))
+    variant("T3", "textures both as real names and as extension-less copies", w, textures("both"))
 
     w = World(scene); w.sky = []
-    variant("S1", "no Sky", w, textures("both"))
+    variant("S1", "no Sky", w, textures("named"))
     w = World(scene); w.sky_distance = 2000
-    variant("S2", "Sky visible distance 2000 (control 0)", w, textures("both"))
+    variant("S2", "Sky visible distance 2000 (control 0)", w, textures("named"))
     w = World(scene); w.fog = (1.0, 0.2, 0.2)
-    variant("S3", "fog colour red (1 0.2 0.2)", w, textures("both"))
+    variant("S3", "fog colour red (1 0.2 0.2)", w, textures("named"))
     w = World(scene); w.sky = control.sky + control.sky[:1] if len(control.sky) < 6 else control.sky[:5]
-    variant("S4", f"Sky with {len(w.sky)} texture names (control {len(control.sky)})", w, textures("both"))
+    variant("S4", f"Sky with {len(w.sky)} texture names (control {len(control.sky)})", w, textures("named"))
 
     if probe:
         _, model, x, y, z = probe
@@ -383,11 +390,11 @@ def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None, roun
             w.objects = control.objects + [
                 (f"Probe{i}", model, x + (i % side) * 0.8, y - (i // side) * 0.8, z) for i in range(count)
             ]
-            variant(vid, f"{count} more copies of {model} in a grid", w, textures("both"))
+            variant(vid, f"{count} more copies of {model} in a grid", w, textures("named"))
         for vid, s2 in (("G1", (1, 1, 1)), ("G2", (2, 2, 2)), ("G3", (0.5, 0.5, 0.5))):
             w = World(scene)
             w.extra = [raw_gameobject("ProbeScale", model, (x + 1.5, y, z), s2)]
-            variant(vid, f"one more {model}, sent field by field with GameObject section 2 = {s2}", w, textures("both"))
+            variant(vid, f"one more {model}, sent field by field with GameObject section 2 = {s2}", w, textures("named"))
 
         source = next((p for p in base_files if p.name == model), None)
         data = source.read_bytes() if source else b""
@@ -396,7 +403,7 @@ def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None, roun
             w = World(scene)
             name = f"{stem}_{suffix}.3ds"
             w.objects = [(n, name if m == model else m, ox, oy, oz) for n, m, ox, oy, oz in control.objects]
-            variant(f"Z-{suffix}", f"{model} served as {name}: {what}", w, textures("both") + [(name, bytes_)])
+            variant(f"Z-{suffix}", f"{model} served as {name}: {what}", w, textures("named") + [(name, bytes_)])
 
     if mbg:
         mbg = Path(mbg)
@@ -405,7 +412,7 @@ def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None, roun
             for i, f in enumerate(found):
                 w = World(scene)
                 w.extra = [f"object Probe{kind.upper()} {f.name} {control.spawn[0] + 3:g} {control.spawn[1]:g} 0"]
-                variant(f"F-{kind}{i:02d}", f"one {kind} shape added: {f.name}", w, textures("both") + [f])
+                variant(f"F-{kind}{i:02d}", f"one {kind} shape added: {f.name}", w, textures("named") + [f])
             if found:
                 data = found[0].read_bytes()
                 tests = (16, 17, 24, 25) if kind == "dts" else (43, 44, 45)
@@ -420,7 +427,7 @@ def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None, roun
                     w = World(scene)
                     w.extra = [f"object Probe{kind.upper()} {name} {control.spawn[0] + 3:g} {control.spawn[1]:g} 0"]
                     variant(f"V-{kind}{v}", f"{found[0].name} with its version field set to {v}, as {name}", w,
-                            textures("both") + [(name, bytes(patched))])
+                            textures("named") + [(name, bytes(patched))])
 
     return finish(out, variants, only, round_)
 
@@ -509,7 +516,7 @@ def round3(scene, control, probe, textures, variant, seed, count):
             vals = [e() for _ in range(7)]
             w.extra = [f"object FuzzObj {model} " + " ".join(vals)]
             what = "fuzzed object line: " + w.extra[0]
-        variant(f"FZ-{kind}{i:03d}", what, w, textures("both"))
+        variant(f"FZ-{kind}{i:03d}", what, w, textures("named"))
 
 
 def round2(scene, control, probe, base_files, textures, variant):
@@ -520,13 +527,13 @@ def round2(scene, control, probe, base_files, textures, variant):
                                ("P3", (x, y, z + 1e7), "at height 10 000 000")):
             w = World(scene)
             w.objects = [(n, m, *(pos if (n, m) == probe[:2] else (ox, oy, oz))) for n, m, ox, oy, oz in control.objects]
-            variant(vid, f"{probe[0]} ({model}) placed {what}", w, textures("both"))
+            variant(vid, f"{probe[0]} ({model}) placed {what}", w, textures("named"))
         for vid, rot, what in (("P4", "0 0 1 1.5708", "turned 90 degrees about z"),
                                ("P5", "1 0 0 3.1416", "turned upside down (180 degrees about x)"),
                                ("P6", "0 0 0 1", "a zero rotation axis")):
             w = World(scene)
             w.extra = [f"object ProbeRot {model} {x + 1.5:g} {y:g} {z:g} {rot}"]
-            variant(vid, f"one more {model} {what}", w, textures("both"))
+            variant(vid, f"one more {model} {what}", w, textures("named"))
         source = next((p for p in base_files if p.name == model), None)
         for vid, served, files_name, what in (
                 ("N1", model.upper(), model, f"the world names {model.upper()}, the file is {model}"),
@@ -534,7 +541,7 @@ def round2(scene, control, probe, base_files, textures, variant):
                 ("N3", "sub/" + model, None, f"the world names sub/{model}, the file is in a subfolder")):
             w = World(scene)
             w.objects = [(n, served if m == model else m, ox, oy, oz) for n, m, ox, oy, oz in control.objects]
-            files = [p for p in textures("both") if p.name != model]
+            files = [p for p in textures("named") if p.name != model]
             if files_name:
                 files.append((files_name, source.read_bytes()))
             else:
@@ -546,20 +553,20 @@ def round2(scene, control, probe, base_files, textures, variant):
             w = World(scene)
             name = f"{stem}_{suffix}.3ds"
             w.objects = [(n, name if m == model else m, ox, oy, oz) for n, m, ox, oy, oz in control.objects]
-            variant(f"X-{suffix}", f"{model} served as {name}: {what}", w, textures("both") + [(name, bytes_)])
+            variant(f"X-{suffix}", f"{model} served as {name}: {what}", w, textures("named") + [(name, bytes_)])
         w = World(scene)
         w.objects = control.objects + [(f"Probe{i}", model, x + (i % 45) * 0.8, y - (i // 45) * 0.8, z) for i in range(2048)]
-        variant("O3", f"2048 more copies of {model} in a grid", w, textures("both"))
+        variant("O3", f"2048 more copies of {model} in a grid", w, textures("named"))
     w = World(scene)
     w.objects = []
-    variant("O4", "the ground alone: no other objects", w, textures("both"))
+    variant("O4", "the ground alone: no other objects", w, textures("named"))
     for cls in BARE_CLASSES:
         w = World(scene)
         w.extra = [f"rawobject {cls} f0"]
-        variant(f"R-{cls}", f"one {cls} ghost whose update is a single 0 bit", w, textures("both"))
+        variant(f"R-{cls}", f"one {cls} ghost whose update is a single 0 bit", w, textures("named"))
         w = World(scene)
         w.extra = [f"rawobject {cls} f1 hex:{'00' * 32}"]
-        variant(f"R-{cls}-z", f"one {cls} ghost whose update is a 1 bit, then 256 zero bits", w, textures("both"))
+        variant(f"R-{cls}-z", f"one {cls} ghost whose update is a 1 bit, then 256 zero bits", w, textures("named"))
 
 
 def finish(out, variants, only, round_):

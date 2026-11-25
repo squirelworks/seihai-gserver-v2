@@ -5,6 +5,7 @@
 #include <graal3d/Graal3DObjects.h>
 
 #include <cmath>
+#include <format>
 #include <cstdlib>
 #include <cctype>
 #include <cstring>
@@ -717,7 +718,7 @@ namespace graal3d
 				GhostObject sky;
 				sky.kind = GhostObject::Kind::Sky;
 				if (w[1] != "-")
-					sky.sky.materialList = w[1];
+					sky.sky.materialList = skyTextureNames(w[1]);
 				ok = true;
 				if (w.size() >= 3)
 					ok = toFloats(w, 2, &sky.sky.visibleDistance, 1);
@@ -900,6 +901,89 @@ namespace graal3d
 			u32(terrain.squareSize),
 			RawField{RawField::Type::Int, 8, terrain.repeat ? 1u : 0u},
 		};
+	}
+
+	std::string skyTextureNames(std::string_view list)
+	{
+		// The client drops an image extension and asks for the bare name (lab,
+		// 2026-11-25), so the world file may name the real files.
+		std::string out;
+		size_t start = 0;
+		while (start <= list.size())
+		{
+			auto end = list.find(',', start);
+			if (end == std::string_view::npos)
+				end = list.size();
+			std::string name(list.substr(start, end - start));
+			if (const auto dot = name.rfind('.'); dot != std::string::npos)
+			{
+				std::string ext = name.substr(dot);
+				for (auto& ch : ext)
+					ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+				for (const auto* image : kImageExtensions)
+					if (ext == image)
+						name.resize(dot);
+			}
+			if (!out.empty() || start > 0)
+				out += ',';
+			out += name;
+			start = end + 1;
+		}
+		return out;
+	}
+
+	std::optional<std::string> unsafe3ds(std::string_view data)
+	{
+		const auto u16 = [&](size_t at) { return static_cast<uint32_t>(static_cast<uint8_t>(data[at]) | static_cast<uint8_t>(data[at + 1]) << 8); };
+		const auto u32 = [&](size_t at) { return u16(at) | u16(at + 2) << 16; };
+		if (data.size() < 6 || u16(0) != 0x4D4D)
+			return "not a 3D Studio file";
+		if (u32(2) != data.size())
+			return "its main chunk is " + std::to_string(u32(2)) + " bytes, the file " + std::to_string(data.size());
+		bool meshes = false, materials = false;
+		std::optional<std::string> problem;
+		// Walks the chunks inside [start, end); containers are walked too.
+		std::function<void(size_t, size_t)> walk = [&](size_t start, size_t end) {
+			size_t at = start;
+			while (at < end && !problem)
+			{
+				if (end - at < 6)
+				{
+					problem = "a chunk header is cut at byte " + std::to_string(at);
+					return;
+				}
+				const uint32_t id = u16(at), length = u32(at + 2);
+				if (length < 6 || length > end - at)
+				{
+					problem = "chunk 0x" + std::format("{:04X}", id) + " at byte " + std::to_string(at) + " runs past its parent";
+					return;
+				}
+				size_t body = at + 6;
+				if (id == 0x4000)
+				{
+					const auto nul = data.find('\0', body);
+					if (nul == std::string_view::npos || nul >= at + length)
+					{
+						problem = "an object name is not terminated";
+						return;
+					}
+					body = nul + 1;
+				}
+				if (id == 0x4100)
+					meshes = true;
+				if (id == 0xAFFF)
+					materials = true;
+				if (id == 0x4D4D || id == 0x3D3D || id == 0x4000 || id == 0x4100 || id == 0xAFFF)
+					walk(body, at + length);
+				at += length;
+			}
+		};
+		walk(6, data.size());
+		if (problem)
+			return problem;
+		if (meshes && !materials)
+			return "it has meshes but no materials";
+		return std::nullopt;
 	}
 
 	std::vector<RawField> waterBlockFields(const WaterSettings& water)

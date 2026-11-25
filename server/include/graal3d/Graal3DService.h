@@ -66,6 +66,16 @@ namespace graal3d
 
 		// The objects every client is sent. `packetStrings`: see TorqueBitStream.h
 		// (the option graal3dstringprefix). Call before start().
+		// What to do with a world object whose .3ds fails unsafe3ds: drop it
+		// (the default), only warn, or not check. Call before setWorld().
+		enum class ShapeCheck
+		{
+			Skip,
+			Warn,
+			Off,
+		};
+		void setShapeCheck(ShapeCheck check) { m_shapeCheck = check; }
+
 		void setWorld(World world, bool packetStrings);
 		// graal3droute = sharp3d: protocol 24 clients get the Sharp3D route (the
 		// world as GhostAlwaysObjectEvents, no mission phases, a Camera as the
@@ -141,6 +151,8 @@ namespace graal3d
 		std::map<PlayerID, Endpoint> m_byPlayer;
 
 		World m_world;
+		ShapeCheck m_shapeCheck = ShapeCheck::Skip;
+		void checkWorldFiles();
 		bool m_packetStrings = true;
 		bool m_sharp3d = false;
 		std::map<PlayerID, GhostObject> m_avatars;

@@ -409,10 +409,91 @@ namespace graal3d
 		m_sessions.erase(it);
 	}
 
+	void Service::checkWorldFiles()
+	{
+		// Every file the world names is looked up the way a client's request is:
+		// case-insensitively, and a bare texture name as <name>.<image extension>.
+		// Files are meant to keep their real extensions on disk; the clients
+		// drop them when they ask (bin/docs/graal3d.md, "Shipping a 3D world").
+		const auto& files = m_server.getFileSystem();
+		const auto find = [&](const std::string& name) -> preagonal::fs::FileData* {
+			const std::filesystem::path path{name};
+			auto info = files.infoi(preagonal::fs::FileCategory::ALL, path.filename());
+			if (info == nullptr && !path.has_extension())
+				for (const auto* ext : kImageExtensions)
+					if ((info = files.infoi(preagonal::fs::FileCategory::ALL, path.filename().string() + ext)) != nullptr)
+						break;
+			return info;
+		};
+		const auto readAll = [](const std::filesystem::path& path) {
+			std::ifstream in(path, std::ios::binary);
+			return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+		};
+
+		size_t found = 0, missing = 0, dropped = 0;
+		std::erase_if(m_world.objects, [&](const GhostObject& object) {
+			if (object.kind == GhostObject::Kind::Sky)
+			{
+				size_t start = 0;
+				const auto& list = object.sky.materialList;
+				while (start < list.size())
+				{
+					auto end = list.find(',', start);
+					if (end == std::string::npos)
+						end = list.size();
+					const auto name = list.substr(start, end - start);
+					start = end + 1;
+					if (name.empty())
+						continue;
+					if (const auto info = find(name); info == nullptr)
+					{
+						++missing;
+						log::printLine(log::server, "** [Warning] Graal3D: the Sky's texture {} is not in the file folders.", name);
+					}
+					else
+						++found;
+				}
+				return false;
+			}
+			if (object.kind != GhostObject::Kind::GameObject || object.object.shape.empty())
+				return false;
+			const auto& shape = object.object.shape;
+			const auto info = find(shape);
+			if (info == nullptr)
+			{
+				++missing;
+				log::printLine(log::server, "** [Warning] Graal3D: {}'s shape {} is not in the file folders.", object.object.name, shape);
+				return false;
+			}
+			++found;
+			if (!info->file.has_extension())
+				log::printLine(log::server, "** [Warning] Graal3D: {} has no extension on disk; ship it under its real name.", info->file.filename().string());
+			auto ext = info->file.extension().string();
+			for (auto& ch : ext)
+				ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+			if (ext != ".3ds" || m_shapeCheck == ShapeCheck::Off)
+				return false;
+			const auto why = unsafe3ds(readAll(info->file));
+			if (!why)
+				return false;
+			if (m_shapeCheck == ShapeCheck::Warn)
+			{
+				log::printLine(log::server, "** [Warning] Graal3D: {} would crash a client ({}); sent anyway (graal3dshapecheck = warn).", shape, *why);
+				return false;
+			}
+			++dropped;
+			log::printLine(log::server, "** [Error] Graal3D: {} would crash a client ({}); {} is left out (graal3dshapecheck = warn sends it).", shape, *why, object.object.name);
+			return true;
+		});
+		log::printLine(log::server, "Graal3D: the world names {} files the folders have, {} they do not{}.", found, missing,
+					   dropped ? std::format(", and {} unsafe .3ds objects were left out", dropped) : std::string{});
+	}
+
 	void Service::setWorld(World world, bool packetStrings)
 	{
 		m_world = std::move(world);
 		m_packetStrings = packetStrings;
+		checkWorldFiles();
 
 		// The lab's raw fields may name files (file:, zfile:), relative to the
 		// server folder like the weapon3d files.

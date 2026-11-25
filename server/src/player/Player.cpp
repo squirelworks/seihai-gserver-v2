@@ -655,7 +655,7 @@ fs::FileData* Player::findClientFile(const std::filesystem::path& file) const
 	// lower-cased name and stores what it gets under that name (lab 2026-11-25).
 	if (info == nullptr && isGraal3DClient() && !file.has_extension())
 	{
-		for (const auto* ext : {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".dds"})
+		for (const auto* ext : graal3d::kImageExtensions)
 		{
 			if ((info = filesystem.infoi(fs::FileCategory::ALL, file.filename().string() + ext)) != nullptr)
 				break;

@@ -31,6 +31,7 @@ graal3d = true
 # graal3dport = 0      (0 or unset: serverport + 1, the port the clients use)
 # graal3dstringprefix = true
 # graal3droute = mission   (or sharp3d: see "The Sharp3D route")
+# graal3dshapecheck = skip  (or warn, or off: see "Shipping a 3D world")
 ```
 
 `graal3dstringprefix` says whether strings inside game packets start with Torque's
@@ -210,6 +211,32 @@ server) is the authority, and the default route stays the one built from that.
 
 Catch tests check the table, the event layout and the control object. No real
 client has run this route on our server yet.
+
+## Shipping a 3D world
+
+A 3D playerworld is an ordinary gserver folder, with every file under its real name
+and extension:
+
+```
+config/graal3dworld.txt          the world file: names files as they are on disk
+world/3d/                        any folder the file folders cover
+  ground.3ds  tree.dts  hall.dif   shapes
+  grass.png   sky_fr.png ...       textures: 8-bit PNG, JPEG or GIF
+  island_terrain/                  streamed terrain (see Terrain)
+    heights0-0.dat ... heights15-15.dat
+    heights.info                   one texture name a line, no extensions
+    g3d_grass.png ...
+```
+
+- **Name files as they are on disk.** The world file names shapes and Sky textures by their real file names: `object Hall hall.dif ...`, `sky sky_fr.png,sky_rt.png,...`. Before it sends a Sky, the server drops any image extension from the texture names.
+- **Bare-name requests.** The 3D clients ask for every texture by a bare, lower-cased name and store it under that name in their own cache. The server answers a bare request with `<name>.png`, `.jpg`, `.jpeg`, `.gif`, `.bmp`, `.tga` or `.dds`, tried in that order and matched case-insensitively. It answers the clients' "is my copy current?" checks the same way, so nothing needs an extension-less copy on disk. Shapes keep their extension in requests.
+- **Texture formats.** Only 8-bit PNG, JPEG and GIF draw on 5.12. BMP, TGA, DDS and 16-bit PNG draw white.
+- **Lower-case names** are safest, because the clients lower-case what they ask for. The server's lookup ignores case, so mixed case still works.
+- **Start-up check.** At start-up the server looks up every shape and Sky texture the world file names. It logs any that are missing, and any found only without an extension.
+- **Unsafe `.3ds` files.** Every `.3ds` is checked for the faults that crashed a real client: no materials, a cut file, or a chunk longer than its parent. With `graal3dshapecheck = skip` (the default), an object with such a shape is left out of the world and logged. Labs that send broken shapes on purpose set `warn`, which logs and sends them anyway; `off` skips the check.
+
+`seihai-servertools gen terrain DIR --world NAME --stream --playerworld` writes a whole
+world in this layout from a generated height field.
 
 ## Terrain (4.20r6 and 5.x)
 

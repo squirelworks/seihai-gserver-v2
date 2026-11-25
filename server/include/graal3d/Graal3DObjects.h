@@ -246,6 +246,19 @@ namespace graal3d
 	std::vector<std::string> loadTerrain(Terrain& terrain,
 										 const std::function<std::optional<std::string>(const std::string&)>& read);
 
+	// The image extensions a 3D client drops from a texture name before it asks
+	// for the file, and that the server tries, in this order, for a bare name.
+	inline constexpr const char* kImageExtensions[] = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tga", ".dds"};
+
+	// A Sky's comma-separated texture list with any image extension dropped, so a
+	// world file can name the real files ("sky_fr.png,..." becomes "sky_fr,...").
+	std::string skyTextureNames(std::string_view list);
+
+	// Checks a .3ds file's structure. Each of these crashed the real Linux 4.206
+	// client (lab, 2026-11-25): no materials, a cut file, a chunk length past its
+	// parent. Returns why the file is unsafe, or nothing.
+	std::optional<std::string> unsafe3ds(std::string_view data);
+
 	// A WaterBlock for 4.20r6 and 5.x (Graal_analysis torque/terrain-512.md
 	// section 5, a static read of the real 5.12 client; not yet run live). The
 	// client takes the scale only when x and y are both at least 1024.
