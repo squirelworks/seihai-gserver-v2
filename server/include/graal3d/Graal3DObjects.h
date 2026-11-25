@@ -246,6 +246,21 @@ namespace graal3d
 	std::vector<std::string> loadTerrain(Terrain& terrain,
 										 const std::function<std::optional<std::string>(const std::string&)>& read);
 
+	// A WaterBlock for 4.20r6 and 5.x (Graal_analysis torque/terrain-512.md
+	// section 5, a static read of the real 5.12 client; not yet run live). The
+	// client takes the scale only when x and y are both at least 1024.
+	struct WaterSettings
+	{
+		std::array<float, 3> position{};
+		std::array<float, 3> scale{1024.0f, 1024.0f, 10.0f};
+		std::string surfaceTexture; // the others are left empty
+		uint32_t liquidType = 0;    // stock TGE: 0 water, 1 ocean, 2 river, 3 stagnant, 4 lava ...
+	};
+
+	// The update: the name, the position with no rotation, the scale, the
+	// textures, the liquid type, then stock TGE 1.x's default look.
+	std::vector<RawField> waterBlockFields(const WaterSettings& water);
+
 	// One object the server ghosts: its class and state.
 	struct GhostObject
 	{
@@ -348,6 +363,9 @@ namespace graal3d
 	//                             (TerrainChunkEvent, ...) with the raw fields as
 	//                             its payload, when the world is ghosted, or with
 	//                             `late` once the client has its control object
+	//   water <x> <y> <z> <sx> <sy> <sz> [<surface texture> [<liquid type>]]
+	//                             a WaterBlock (see WaterSettings), for 4.20r6
+	//                             and 5.x
 	//   terrain <folder> [<square size>] [repeat]
 	//                             streamed terrain for 4.20r6 and 5.x (see
 	//                             Terrain): a TerrainBlock ghost, then the

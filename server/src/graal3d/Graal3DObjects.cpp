@@ -779,6 +779,28 @@ namespace graal3d
 				world.objects.push_back(std::move(raw));
 				ok = true;
 			}
+			else if (w[0] == "water" && w.size() >= 7 && w.size() <= 9)
+			{
+				WaterSettings water;
+				ok = toFloats(w, 1, water.position.data(), 3) && toFloats(w, 4, water.scale.data(), 3);
+				if (ok && w.size() >= 8)
+					water.surfaceTexture = w[7];
+				if (ok && w.size() == 9)
+				{
+					char* end = nullptr;
+					const std::string word(w[8]);
+					water.liquidType = static_cast<uint32_t>(std::strtoul(word.c_str(), &end, 10));
+					ok = end && *end == '\0';
+				}
+				if (ok)
+				{
+					GhostObject block;
+					block.kind = GhostObject::Kind::Raw;
+					block.rawClass = "WaterBlock";
+					block.raw = waterBlockFields(water);
+					world.objects.push_back(std::move(block));
+				}
+			}
 			else if (w[0] == "terrain" && w.size() >= 2 && w.size() <= 4 && !world.terrain)
 			{
 				Terrain terrain;
@@ -876,6 +898,50 @@ namespace graal3d
 			u32(terrain.squareSize),
 			RawField{RawField::Type::Int, 8, terrain.repeat ? 1u : 0u},
 		};
+	}
+
+	std::vector<RawField> waterBlockFields(const WaterSettings& water)
+	{
+		std::vector<RawField> f;
+		const auto flag = [&](bool v) { f.push_back(RawField{RawField::Type::Flag, 1, v ? 1u : 0u}); };
+		const auto num = [&](uint32_t v, int bits) { f.push_back(RawField{RawField::Type::Int, bits, v}); };
+		const auto f32 = [&](float v) {
+			RawField r{RawField::Type::F32};
+			r.f32 = v;
+			f.push_back(r);
+		};
+		const auto str = [&](std::string text) {
+			RawField r{RawField::Type::String};
+			r.data = std::move(text);
+			f.push_back(r);
+		};
+		flag(true);
+		str("Water");
+		for (const float v : water.position)
+			f32(v);
+		f32(0.0f), f32(0.0f), f32(0.0f); // quaternion x, y, z: no rotation
+		flag(false);                      // w is not negative
+		for (const float v : water.scale)
+			f32(v);
+		str(water.surfaceTexture);
+		for (int i = 0; i < 4; ++i)
+			str(""); // specular mask, environment maps over and under, shore
+		str(""), str(""); // submerge textures
+		num(water.liquidType, 32);
+		// Density, viscosity, wave magnitude, surface opacity, environment map intensity.
+		for (const float v : {1.0f, 1.0f, 0.3f, 0.75f, 0.4f})
+			f32(v);
+		num(0, 8), num(0, 8); // remove wet edges, use depth mask
+		// Surface and shore tessellation, parallax, flow angle and rate, distortion
+		// grid scale, magnitude and time, shore depth, minimum and maximum alpha,
+		// depth gradient.
+		for (const float v : {50.0f, 60.0f, 0.5f, 0.0f, 0.0f, 0.1f, 0.05f, 0.5f, 20.0f, 0.03f, 1.0f, 1.0f})
+			f32(v);
+		for (int i = 0; i < 4; ++i)
+			num(255, 8); // specular colour
+		f32(6.0f);       // specular power
+		num(0, 8);       // ignore terrain
+		return f;
 	}
 
 	std::vector<std::string> loadTerrain(Terrain& terrain,

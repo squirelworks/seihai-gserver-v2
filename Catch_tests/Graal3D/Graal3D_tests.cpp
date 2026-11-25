@@ -1360,6 +1360,35 @@ SCENARIO("A terrain line ghosts a TerrainBlock and loads the chunk files")
 	}
 }
 
+SCENARIO("A water line ghosts a WaterBlock in the 5.12 layout")
+{
+	const auto world = parseWorld("water -1024 -1024 0.5 2048 2048 20 lake 1\nwater 1 2 3\n");
+	REQUIRE(world.objects.size() == 1);
+	REQUIRE(world.errors.size() == 1);
+	REQUIRE(world.objects[0].className() == "WaterBlock");
+	BitWriter w;
+	writeRawFields(w, world.objects[0].raw);
+	const auto bytes = w.toString();
+	BitReader r(bytes);
+	REQUIRE(r.readFlag());
+	REQUIRE(r.readString() == "Water");
+	REQUIRE(r.readF32() == -1024.0f);
+	REQUIRE(r.readF32() == -1024.0f);
+	REQUIRE(r.readF32() == 0.5f);
+	for (int i = 0; i < 3; ++i)
+		REQUIRE(r.readF32() == 0.0f);
+	REQUIRE_FALSE(r.readFlag());
+	REQUIRE(r.readF32() == 2048.0f);
+	REQUIRE(r.readF32() == 2048.0f);
+	REQUIRE(r.readF32() == 20.0f);
+	REQUIRE(r.readString() == "lake");
+	for (int i = 0; i < 6; ++i)
+		REQUIRE(r.readString().empty());
+	REQUIRE(r.readU32() == 1);
+	// 5 floats, 2 bytes, 12 floats, 4 colour bytes, a float, a byte.
+	REQUIRE(rawFieldBits(world.objects[0].raw) == r.bitPosition() + 5 * 32 + 16 + 12 * 32 + 32 + 32 + 8);
+}
+
 SCENARIO("A TerrainChunkEvent carries x, y, the stamp and the zlib bytes")
 {
 	Harness h;
