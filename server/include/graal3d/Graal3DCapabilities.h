@@ -43,6 +43,7 @@ namespace graal3d
 		TerrainTexture,
 		Water,
 		TorqueScript,
+		ServerScripts,
 		Terraformer,
 		TerrainEditor,
 		DtsMax,
@@ -105,7 +106,8 @@ namespace graal3d
 		bool heightsCache;  // levels3d/heights/<server>/heights<x>-<y>.dat + heights.info
 		uint16_t terrainTextureSize; // terrain textures must be N x N x 24 (0: not read)
 		bool water;
-		bool torqueScript; // compiles and runs .cs / .dso
+		bool torqueScript; // compiles and runs .cs / .dso (its own shipped scripts)
+		bool serverScripts; // a server can make it run new TorqueScript: no read build can
 		Terraformer terraformer;
 		bool terrainEditor;
 		uint8_t dtsMax;
