@@ -341,14 +341,17 @@ because their stock TGE terrain is a different layout.
 
 ```
 # water <x> <y> <z> <sx> <sy> <sz> [<surface texture> [<liquid type>]]
-water -1024 -1024 0.5 2048 2048 20 water_surface 0
+water -1024 -1024 -19.5 2048 2048 20 water_surface 0
 ```
 
 A `WaterBlock` at that corner, unrotated, of that size (the client takes the size
-only when x and y are both at least 1024). Liquid types follow stock TGE (0 water,
+only when x and y are both at least 1024). The surface is at z plus the z size, not
+at z (live 5.12, 2026-11-25): for water at height h and depth d, write z = h - d and
+a z size of d. The example's surface is at 0.5, and `liquidheight` reads that with a
+little wave motion. Liquid types follow stock TGE (0 water,
 1 ocean, 2 river, 3 stagnant, 4 lava, ...), and the rest of its look takes stock TGE
 1.x's defaults. The layout is from a static read of the 5.12 client (Graal_analysis
-`torque/terrain-512.md` section 5). It has not been run against a real client yet.
+`torque/terrain-512.md` section 5); 5.12 has drawn it live.
 
 ## Lab: raw objects and events
 
