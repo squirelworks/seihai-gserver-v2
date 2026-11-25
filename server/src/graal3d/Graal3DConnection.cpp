@@ -10,6 +10,7 @@
 #include <graal3d/Graal3DTge.h>
 
 #include <algorithm>
+#include <format>
 #include <string>
 
 namespace graal3d
@@ -699,6 +700,9 @@ namespace graal3d
 			}
 
 			note.ghosts.push_back({c.key, mask, create, g.kill});
+			if (m_cb.trace)
+				m_cb.trace(std::format("ghost-out {} index={} {} {} mask=0x{:x} bits={}", g.kill ? "kill" : create ? "create" : "update", g.index,
+									   g.object.className(), g.object.object.name, mask, payload.bitPosition()));
 			if (g.kill)
 				g.killInFlight = true;
 			else if (create)
@@ -842,6 +846,7 @@ namespace graal3d
 		if (r.overrun())
 			return false;
 
+		traceState(state);
 		if (m_controlDelivered && m_cb.onClientState)
 			m_cb.onClientState(state);
 		return true;
@@ -954,6 +959,10 @@ namespace graal3d
 			r.setBitPosition(start + bits);
 
 			auto event = decodeEvent(classId, copy.toString(), bits, stringBuffer);
+			if (event)
+				traceEvent(*event, !unguaranteed);
+			else if (m_cb.trace)
+				m_cb.trace("event " + std::string(eventClassName(m_profile, classId)) + " (class " + std::to_string(classId) + ") not decoded, bits=" + std::to_string(bits));
 			if (unguaranteed)
 			{
 				if (event)
@@ -1193,4 +1202,44 @@ namespace graal3d
 		log(what);
 	}
 
-} // namespace graal3d
+	void Connection::traceEvent(const InEvent& ev, bool guaranteed) const
+	{
+		if (!m_cb.trace)
+			return;
+		std::string line = std::string(guaranteed ? "event " : "event-unguaranteed ") + std::string(ev.name.empty() ? "?" : ev.name);
+		if (ev.name == "NetStringEvent")
+			line += " id=" + std::to_string(ev.id) + " text=" + ev.text;
+		else if (ev.name == "RemoteCommandEvent")
+		{
+			for (const auto& a : ev.args)
+				line += a.isTag ? " tag:" + std::to_string(a.tag) : " \"" + a.text + "\"";
+		}
+		else if (!ev.header.type.empty() || !ev.header.data.empty())
+			line += " weapon=" + ev.header.weapon + " type=" + ev.header.type + " option=" + ev.header.option + " data=" + ev.header.data.substr(0, 200);
+		if (ev.total)
+			line += " id=" + std::to_string(ev.id) + " total=" + std::to_string(ev.total) + " seq=" + std::to_string(ev.sequence);
+		if (ev.payloadBits)
+			line += " bits=" + std::to_string(ev.payloadBits) + " hex=" + hexPreview(ev.payload, 48);
+		m_cb.trace(line);
+	}
+
+	void Connection::traceState(const ClientState& state) const
+	{
+		if (!m_cb.trace)
+			return;
+		std::string line = std::format("state pos={:.3f},{:.3f},{:.3f}", state.position[0], state.position[1], state.position[2]);
+		if (state.controlling)
+		{
+			const auto& t = state.object.transform;
+			line += std::format(" changed=0x{:x} at={:.3f},{:.3f},{:.3f} axis={:.3f},{:.3f},{:.3f} angle={:.3f} scale={:.3f},{:.3f},{:.3f}", state.changed,
+								t.position[0], t.position[1], t.position[2], t.axis[0], t.axis[1], t.axis[2], t.angle, state.object.scale[0],
+								state.object.scale[1], state.object.scale[2]);
+			if (state.changed & GameObjectBits::Chat)
+				line += " chat=" + state.object.chat;
+		}
+		if (line == m_lastStateTrace)
+			return;
+		m_lastStateTrace = line;
+		m_cb.trace(line);
+	}
+}

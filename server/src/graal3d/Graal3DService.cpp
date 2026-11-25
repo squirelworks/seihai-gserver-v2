@@ -327,6 +327,8 @@ namespace graal3d
 		};
 
 		cb.onClientState = [this, playerId](const ClientState& state) { handleClientState(playerId, state); };
+		if (m_trace)
+			cb.trace = [this, account, protocol = profile->protocol](std::string_view line) { trace(account, protocol, line); };
 		cb.onTerrainRequest = [this, playerId, account](const std::array<uint32_t, 256>& stamps) {
 			if (auto it = m_byPlayer.find(playerId); it != m_byPlayer.end())
 				if (auto s = m_sessions.find(it->second); s != m_sessions.end())
@@ -354,6 +356,7 @@ namespace graal3d
 
 		sendTo(from, buildConnectAccept(req->sequence, *profile));
 		log::printLine(log::server, "Graal3D: {} linked from {} (protocol {}, {}).", account, ipString(from), profile->protocol, profile->clients);
+		trace(account, profile->protocol, std::format("linked from {} ({}); {} other 3D players", ipString(from), profile->clients, m_sessions.size() - 1));
 	}
 
 	std::shared_ptr<Player> Service::findTcpPlayer(const std::string& requested, const std::string& ip)
@@ -396,6 +399,12 @@ namespace graal3d
 			sendTo(endpoint, it->second.connection->disconnectPacket(reason));
 
 		const PlayerID playerId = it->second.player;
+		if (m_trace)
+		{
+			const auto a = m_avatars.find(playerId);
+			trace(a != m_avatars.end() ? a->second.object.name : std::to_string(playerId), it->second.connection->profile().protocol,
+				  "closed: " + std::string(reason));
+		}
 		if (auto p = m_byPlayer.find(playerId); p != m_byPlayer.end() && p->second == endpoint)
 		{
 			m_byPlayer.erase(p);
@@ -693,6 +702,31 @@ namespace graal3d
 		sendRawEvents(account, connection, false);
 	}
 
+	void Service::setTrace(const std::string& path)
+	{
+		m_trace.reset();
+		if (path.empty())
+			return;
+		auto file = std::make_unique<std::ofstream>(path, std::ios::app);
+		if (!*file)
+		{
+			log::printLine(log::server, "** [Error] Graal3D: cannot open graal3dtrace file {}.", path);
+			return;
+		}
+		m_trace = std::move(file);
+		log::printLine(log::server, "Graal3D: tracing every 3D client to {}.", path);
+	}
+
+	void Service::trace(std::string_view account, int protocol, std::string_view what)
+	{
+		if (!m_trace)
+			return;
+		// Milliseconds, the account (or a player object's name), the protocol (0:
+		// the server's own relay), what happened.
+		*m_trace << nowMs() << '\t' << account << '\t' << protocol << '\t' << what << '\n';
+		m_trace->flush();
+	}
+
 	void Service::forEachOtherConnection(PlayerID playerId, const std::function<void(Connection&)>& fn)
 	{
 		for (auto& [endpoint, session] : m_sessions)
@@ -735,7 +769,15 @@ namespace graal3d
 		}
 		if (object == before)
 			return;
-		forEachOtherConnection(playerId, [&](Connection& other) { other.setGhost(avatarKey(playerId), it->second); });
+		size_t relayed = 0;
+		forEachOtherConnection(playerId, [&](Connection& other) {
+			other.setGhost(avatarKey(playerId), it->second);
+			++relayed;
+		});
+		if (m_trace)
+			trace(object.name, 0,
+				  std::format("relay to {} other 3D clients: at={:.3f},{:.3f},{:.3f}{}", relayed, object.transform.position[0], object.transform.position[1],
+							  object.transform.position[2], object.chat != before.chat ? " chat=" + object.chat : std::string()));
 	}
 
 	bool Service::moveAvatar(PlayerID playerId, std::string_view position)

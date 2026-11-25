@@ -155,6 +155,35 @@ object. Each client reports its position in every packet, and the server moves t
 player's object on the other clients. Chat said on the object (`chat`) is passed on
 too. The server never sends a player's position back to that player.
 
+## Several clients in one world
+
+What the server does when more than one 3D client is on at once:
+
+| | 4.20r6 and 5.x (protocols 21 and 24) | 3.153 and 4.04r2 (protocol 19) |
+|---|---|---|
+| Joining | Each client gets its own 3D link, matched to its own TCP login by account and address, so several clients on one machine are fine. | the same |
+| Seeing the others | Every other linked player appears as a `GameObject` named `G3DPlayer_<account>`, with the world's player shape and the player's nickname. | Not yet: these clients get no other players, and their moves are not passed on. |
+| What is passed on | The position, rotation, scale and `chat` that each client reports for its own object. Nick colour, move type, velocity and attachment are not sent yet. On the Sharp3D route, a player moves only through `g3dpos`. | nothing |
+| TCP side | Every 3D client is also an ordinary TCP player, so the gserver sends the usual other-player props, chat and PMs, as it would to 2D clients in the same level. | the same |
+
+**Accounts:** with `localhost = true` (the lab default) the gserver accepts any account
+name and password and creates the account from `(defaultaccount)` on its first login.
+Each test client can use its own made-up name, such as `lab1` or `lab2`, and each keeps
+its own saved state. Use only made-up names on a lab server.
+
+**Trace:** `graal3dtrace = <file>` appends one tab-separated line to the file for each
+of these:
+
+- each 3D link and each close;
+- each event a client sends, decoded where the server can decode it and as hex where
+  it cannot;
+- each change in a client's control-object report;
+- each ghost the server writes to that client;
+- each time a player's object is passed on to the others.
+
+Each line holds: milliseconds, account (or object name), protocol (0 for the server's
+own relay lines), then what happened. Leave the setting empty to turn the trace off.
+
 ## What the server does
 
 | Step | State |

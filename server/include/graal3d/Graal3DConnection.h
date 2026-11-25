@@ -77,6 +77,10 @@ namespace graal3d
 			// A TerrainRequestUpdatesEvent: the stamp of every chunk the client
 			// holds (0: none), index y * 16 + x.
 			std::function<void(const std::array<uint32_t, 256>&)> onTerrainRequest;
+			// Optional: one line for each event and each control-object update the
+			// client sends, for a lab's multi-client trace. Left empty, nothing is
+			// formatted.
+			std::function<void(std::string_view)> trace;
 		};
 
 		// Time-outs in milliseconds.
@@ -220,10 +224,13 @@ namespace graal3d
 		std::optional<uint32_t> allocateGhostIndex();
 		void onEstablished();
 		void log(std::string_view text) const;
+		void traceEvent(const InEvent& ev, bool guaranteed) const;
+		void traceState(const ClientState& state) const;
 
 		const Profile& m_profile;
 		uint32_t m_connectSequence;
 		Callbacks m_cb;
+		mutable std::string m_lastStateTrace; // a state line is traced only when it changes
 
 		// ConnectionProtocol state, as in Torque.
 		uint32_t m_lastSeqRecvd = 0;

@@ -26,6 +26,7 @@
 
 #include <array>
 #include <cstdint>
+#include <fstream>
 #include <functional>
 #include <map>
 #include <memory>
@@ -81,6 +82,11 @@ namespace graal3d
 		// world as GhostAlwaysObjectEvents, no mission phases, a Camera as the
 		// control object). Call before start().
 		void setSharp3DRoute(bool on) { m_sharp3d = on; }
+		// graal3dtrace = <file>: append one tab-separated line for each 3D link,
+		// each event and each control-object change every 3D client sends, and each
+		// time a player's object is passed on to the others, for multi-client labs
+		// (see bin/docs/graal3d.md). Empty: off.
+		void setTrace(const std::string& path);
 		[[nodiscard]] uint16_t port() const { return m_port; }
 
 		// Reads waiting datagrams and runs every connection. Called each server frame.
@@ -159,6 +165,8 @@ namespace graal3d
 		// Until when the client's own reports of its position are ignored, after
 		// moveAvatar: an older report would put the object back.
 		std::map<PlayerID, uint64_t> m_movedUntil;
+		std::unique_ptr<std::ofstream> m_trace;
+		void trace(std::string_view account, int protocol, std::string_view what);
 		std::set<std::string> m_unmatched; // "ip,account" already logged as unmatched
 	};
 
