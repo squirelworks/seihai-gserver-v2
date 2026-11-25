@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
 // New file: wire format of the Graal 3D (Torque) UDP connection. See Graal3DProtocol.h.
 
 #include <graal3d/Graal3DProtocol.h>
@@ -33,8 +33,9 @@ namespace graal3d
 		};
 		// 3.153 and 4.04r2: the server ghosts a Sky and one Player or Camera per
 		// client (its control object) with a PlayerData or CameraData datablock;
-		// see Graal3DTge.h.
-		const std::vector<std::string_view> kObjects404{"Camera", "Player", "Sky"};
+		// see Graal3DTge.h. TerrainBlock and WaterBlock (stock TGE in 4.04r2) are
+		// listed after them, keeping the earlier ids, for the lab's rawobject lines.
+		const std::vector<std::string_view> kObjects404{"Camera", "Player", "Sky", "TerrainBlock", "WaterBlock"};
 		const std::vector<std::string_view> kDatablocks404{"CameraData", "PlayerData"};
 		const std::vector<std::string_view> kEvents404{
 			"BigDataChunkEvent", "BigDataStartEvent", "ConnectionMessageEvent", "GhostAlwaysObjectEvent",
@@ -42,6 +43,16 @@ namespace graal3d
 			"RequestReloadEvent", "Sim2DAudioEvent", "Sim3DAudioEvent", "SimDataBlockEvent",
 			"SimpleMessageEvent", "TerrainChunkEvent", "TerrainRequestUpdatesEvent",
 		};
+
+		// The Sharp3D route: the class table of a server real 5.12 joined and drew
+		// (capture of 2026-11-24, read by graal-client-repro's g3d-replay), in its
+		// id order: objects Sun, GameObject, Camera, Sky; events BigDataStart,
+		// BigDataChunk, ConnectionMessage, GhostAlwaysObject.
+		const std::vector<std::string_view> kSharpObjects{"Sun", "GameObject", "Camera", "Sky"};
+		const std::vector<std::string_view> kSharpEvents{
+			"BigDataStartEvent", "BigDataChunkEvent", "ConnectionMessageEvent", "GhostAlwaysObjectEvent",
+		};
+		const Profile kSharp24{24, "5.x (5.00r7, 5.12), Sharp3D route", false, true, 0, kSharpObjects, kSharpEvents, {}, false, true};
 
 		const std::array<Profile, 3> kProfiles{
 			Profile{19, "3.153, 4.04r2", true, false, 3, kObjects404, kEvents404, kDatablocks404, true},
@@ -64,6 +75,11 @@ namespace graal3d
 				return &p;
 		}
 		return nullptr;
+	}
+
+	const Profile* sharp3dProfileForProtocol(uint32_t protocol)
+	{
+		return protocol == kSharp24.protocol ? &kSharp24 : nullptr;
 	}
 
 	std::optional<uint32_t> eventClassId(const Profile& profile, std::string_view name)

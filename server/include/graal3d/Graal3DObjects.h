@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-20, 2026-11-25: see CHANGES-SEIHAI.md.
 // New file: the ghosted objects of a Graal 3D world in the GameObject era (4.20r6
 // and 5.x): GameObject, the Graal class every 3D thing is, and Sun. Their update
 // layouts come from a static read of the 5.00r7 Graal3DEngine.dll (protocol 24,
@@ -8,7 +8,7 @@
 // A GameObject update is thirteen sections, each one flag and then its payload:
 //
 //   1 name        string                       8 shape data     int14 length + data
-//   2 velocity    3 floats                     9 chat           string
+//   2 scale       3 floats                     9 chat           string
 //   3 shape       string (.dts .dif .3ds .ft) 10 script classes string
 //   4 skin        string                      11 attr[1..8]     8 x (flag -> string)
 //   5 transform   position (3 floats), then   12 nickname       string + R, G, B, A bytes
@@ -29,6 +29,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -43,7 +44,7 @@ namespace graal3d
 	namespace GameObjectBits
 	{
 		inline constexpr uint32_t Name = 0x1;
-		inline constexpr uint32_t Velocity = 0x2;
+		inline constexpr uint32_t Scale = 0x2; // section 2: scale (lab 2026-11-25, real 4.206)
 		inline constexpr uint32_t Shape = 0x8;
 		inline constexpr uint32_t Skin = 0x10;
 		inline constexpr uint32_t Transform = 0x20;
@@ -81,7 +82,7 @@ namespace graal3d
 	struct GameObjectState
 	{
 		std::string name;
-		std::array<float, 3> velocity{};
+		std::array<float, 3> scale{1.0f, 1.0f, 1.0f};
 		std::string shape;
 		std::string skin;
 		Transform transform;
@@ -153,6 +154,126 @@ namespace graal3d
 	void writeSkyUpdate(BitWriter& writer, const SkyState& sky);
 	SkyState readSkyUpdate(BitReader& reader);
 
+	// A lab field list for `rawobject` and `rawevent` world lines: the bits of a
+	// ghost update or an event payload, written in order, for classes whose
+	// layout is not read yet (TerrainBlock, WaterBlock, TerrainChunkEvent and the
+	// like). The client skips what it does not read, since each update and event
+	// carries its length. Tokens (see bin/docs/graal3d.md):
+	//
+	//   f0 f1                 a flag
+	//   i<N>:<v>              an N-bit int (1..32), decimal, 0x hex or negative
+	//   u8:<v> u16:<v> u32:<v> the same as i8, i16, i32
+	//   f32:<v>               a raw 32-bit float
+	//   str:<text>            a string (in the packet's string mode); %20 for a
+	//                         space, %25 for %, - for the empty string
+	//   hex:<bytes>           bytes, as hex
+	//   file:<path>           a file's bytes
+	//   zfile:<path>          a file's bytes, zlib-compressed (with the header)
+	//
+	// hex, file and zfile take an optional length prefix: `file@10:<path>` writes
+	// the byte count as an int10 first.
+	struct RawField
+	{
+		enum class Type
+		{
+			Flag,
+			Int,
+			F32,
+			String,
+			Bytes,
+		};
+		Type type = Type::Flag;
+		int bits = 0;          // Int: its width; Bytes: the width of its length prefix (0: none)
+		uint32_t value = 0;    // Flag, Int
+		float f32 = 0.0f;
+		std::string data;      // String: the text; Bytes: the bytes (after loadRawFiles)
+		std::string file;      // Bytes from a file, read by loadRawFiles
+		bool compress = false; // zlib the file's bytes
+
+		bool operator==(const RawField&) const = default;
+	};
+
+	// Parses tokens; on a bad one returns nothing and says why in `error`.
+	std::optional<std::vector<RawField>> parseRawFields(const std::vector<std::string_view>& tokens, std::string& error);
+
+	// Writes the fields. A Bytes field whose file was not loaded writes nothing
+	// but its length prefix (0).
+	void writeRawFields(BitWriter& writer, const std::vector<RawField>& fields);
+
+	// The payload's length in bits (strings as plain ones).
+	size_t rawFieldBits(const std::vector<RawField>& fields);
+
+	// Reads the file of every file and zfile field with `read` (empty optional:
+	// cannot read it). Returns one error per file that could not be read or is
+	// too long for its length prefix.
+	std::vector<std::string> loadRawFiles(std::vector<RawField>& fields,
+										  const std::function<std::optional<std::string>(const std::string&)>& read);
+
+	// Streamed terrain for 5.x clients (Graal_analysis torque/terrain-512.md,
+	// read from the real 5.12 client): a TerrainBlock ghost that carries only
+	// settings, then up to 256 TerrainChunkEvents of 16 x 16 squares each.
+	// Chunk (x, y) is the file heights<x>-<y>.dat in `folder`: zlib-compressed
+	// chunk data, the same files the client keeps in its cache. The client
+	// sends the stamp of every chunk it holds once the block arrives; the
+	// server sends the chunks whose stamp differs. The client stamps its own
+	// re-encoding of a chunk, so files written in that form (mode 2, ids
+	// ascending) are not sent again (terrain lab, 2026-11-25).
+	struct TerrainChunk
+	{
+		std::string packed;  // zlib bytes, at most 1023
+		uint32_t stamp = 0;  // Torque calculateCRC of the inflated bytes
+	};
+
+	struct Terrain
+	{
+		std::string folder;
+		uint32_t squareSize = 8;
+		bool repeat = false;
+		std::array<std::optional<TerrainChunk>, 256> chunks; // y * 16 + x, filled by loadTerrain
+	};
+
+	// Torque's calculateCRC: the CRC-32 table, starting at 0xFFFFFFFF, without
+	// the final inversion.
+	uint32_t terrainStamp(std::string_view plain);
+
+	// The TerrainBlock update: init, the name "Terrain", 0, two empty strings,
+	// 1.0, 0.01, 8, the square size, the repeat byte.
+	std::vector<RawField> terrainBlockFields(const Terrain& terrain);
+
+	// Reads heights<x>-<y>.dat from the terrain folder with `read`. A missing
+	// file leaves its chunk empty. Returns one error per file that is too long
+	// for the event's int10 length or does not inflate.
+	std::vector<std::string> loadTerrain(Terrain& terrain,
+										 const std::function<std::optional<std::string>(const std::string&)>& read);
+
+	// The image extensions a 3D client drops from a texture name before it asks
+	// for the file, and that the server tries, in this order, for a bare name.
+	inline constexpr const char* kImageExtensions[] = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tga", ".dds"};
+
+	// A Sky's comma-separated texture list with any image extension dropped, so a
+	// world file can name the real files ("sky_fr.png,..." becomes "sky_fr,...").
+	std::string skyTextureNames(std::string_view list);
+
+	// Checks a .3ds file's structure. Each of these crashed the real Linux 4.206
+	// client (lab, 2026-11-25): no materials, a cut file, a chunk length past its
+	// parent. Returns why the file is unsafe, or nothing.
+	std::optional<std::string> unsafe3ds(std::string_view data);
+
+	// A WaterBlock for 4.20r6 and 5.x (Graal_analysis torque/terrain-512.md
+	// section 5, a static read of the real 5.12 client; not yet run live). The
+	// client takes the scale only when x and y are both at least 1024.
+	struct WaterSettings
+	{
+		std::array<float, 3> position{};
+		std::array<float, 3> scale{1024.0f, 1024.0f, 10.0f};
+		std::string surfaceTexture; // the others are left empty
+		uint32_t liquidType = 0;    // stock TGE: 0 water, 1 ocean, 2 river, 3 stagnant, 4 lava ...
+	};
+
+	// The update: the name, the position with no rotation, the scale, the
+	// textures, the liquid type, then stock TGE 1.x's default look.
+	std::vector<RawField> waterBlockFields(const WaterSettings& water);
+
 	// One object the server ghosts: its class and state.
 	struct GhostObject
 	{
@@ -164,6 +285,7 @@ namespace graal3d
 			Sky,
 			TgeCamera, // protocol 19: a stock TGE Camera, `tgeCamera` and `datablockId`
 			TgePlayer, // protocol 19: a stock TGE Player, `tgePlayer` and `datablockId`
+			Raw,       // a lab object: `rawClass`, with `raw` as its update (rawobject)
 		};
 
 		Kind kind = Kind::GameObject;
@@ -173,6 +295,8 @@ namespace graal3d
 		tge::CameraState tgeCamera;
 		tge::PlayerState tgePlayer;
 		std::string tgeShape; // TgePlayer: its PlayerData's shape file
+		std::string rawClass;
+		std::vector<RawField> raw;
 		uint32_t datablockId = tge::FirstDatablockId;
 
 		// TgeCamera and TgePlayer masks: 1 = position and rotation, 2 = the
@@ -189,13 +313,15 @@ namespace graal3d
 				case Kind::TgeCamera: return "Camera";
 				case Kind::TgePlayer: return "Player";
 				case Kind::Sky: return "Sky";
+				case Kind::Raw: return rawClass;
 				default: return "GameObject";
 			}
 		}
 		// The protocol 19 kinds; the GameObject era ghosts every other one.
 		[[nodiscard]] bool isTge() const { return kind == Kind::TgeCamera || kind == Kind::TgePlayer; }
-		// Whether a client of that era takes this kind: a Sky goes to both.
-		[[nodiscard]] bool sentTo(bool tgeEra) const { return kind == Kind::Sky || isTge() == tgeEra; }
+		// Whether a client of that era takes this kind: a Sky goes to both, and a
+		// raw object to any client whose class table has its class.
+		[[nodiscard]] bool sentTo(bool tgeEra) const { return kind == Kind::Sky || kind == Kind::Raw || isTge() == tgeEra; }
 		// The update for `mask` (ignored for Sun and Sky, which are always sent whole).
 		// `controlled`: the receiving client controls this object (a TgePlayer then
 		// leaves its move section out of updates after the first).
@@ -204,7 +330,7 @@ namespace graal3d
 		{
 			if (isTge())
 				return TgeMove | TgeDatablock;
-			return kind == Kind::Sun || kind == Kind::Sky ? 1u : gameObjectFullMask(object);
+			return kind == Kind::Sun || kind == Kind::Sky || kind == Kind::Raw ? 1u : gameObjectFullMask(object);
 		}
 		[[nodiscard]] uint32_t changesFrom(const GhostObject& before) const;
 	};
@@ -212,7 +338,8 @@ namespace graal3d
 	// What the server ghosts to every 3D client, from config/graal3dworld.txt.
 	// One entry per line, words separated by spaces, `#` starts a comment:
 	//
-	//   object <name> <shape> <x> <y> <z> [<axis x> <axis y> <axis z> <angle>]
+	//   object <name> <shape> <x> <y> <z> [<axis x> <axis y> <axis z> <angle> [<sx> <sy> <sz>]]
+	//                             (the scale is section 2: lab 2026-11-25)
 	//   sun <dir x> <dir y> <dir z> <r> <g> <b> <a> <ambient r> <g> <b> <a>
 	//   playershape <shape>       the shape of every player's own object
 	//   spawn <x> <y> <z>         where a player's object starts
@@ -240,6 +367,24 @@ namespace graal3d
 	//                             bindings call moveForward2, moveBackward2,
 	//                             moveLeft2, moveRight2 and jump, which only a
 	//                             script like this defines.
+	//   rawobject <class> <fields...>
+	//                             lab: ghost an object of <class> (TerrainBlock,
+	//                             WaterBlock, ...) whose update is the raw fields
+	//                             (see RawField), to every client whose class
+	//                             table has the class
+	//   rawevent [late] <class> <fields...>
+	//                             lab: post one guaranteed event of <class>
+	//                             (TerrainChunkEvent, ...) with the raw fields as
+	//                             its payload, when the world is ghosted, or with
+	//                             `late` once the client has its control object
+	//   water <x> <y> <z> <sx> <sy> <sz> [<surface texture> [<liquid type>]]
+	//                             a WaterBlock (see WaterSettings), for 4.20r6
+	//                             and 5.x
+	//   terrain <folder> [<square size>] [repeat]
+	//                             streamed terrain for 4.20r6 and 5.x (see
+	//                             Terrain): a TerrainBlock ghost, then the
+	//                             chunks in <folder> (relative to the server
+	//                             folder) as the client asks for them
 	struct World
 	{
 		std::vector<GhostObject> objects; // the sun, if any, is one of them
@@ -260,6 +405,14 @@ namespace graal3d
 			std::string file; // empty: the server's weapon of that name
 		};
 		std::vector<Weapon3D> weapons;
+		struct RawEvent
+		{
+			std::string className;
+			std::vector<RawField> fields;
+			bool late = false;
+		};
+		std::vector<RawEvent> rawEvents;
+		std::optional<Terrain> terrain; // its TerrainBlock ghost is in `objects`, as a Raw object
 		std::vector<std::string> errors;  // one per line that was not understood
 	};
 

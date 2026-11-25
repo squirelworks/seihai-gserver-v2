@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
 // New file: one accepted Graal 3D (Torque) UDP connection, server side. It keeps
 // Torque's notify protocol (sequence numbers, acks, pings), resends guaranteed
 // events that were lost, drives the mission start phases and carries Graal's
@@ -74,6 +74,13 @@ namespace graal3d
 			std::function<void(std::string_view)> log;
 			std::function<void(MissionState)> onMission;
 			std::function<void(const ClientState&)> onClientState;
+			// A TerrainRequestUpdatesEvent: the stamp of every chunk the client
+			// holds (0: none), index y * 16 + x.
+			std::function<void(const std::array<uint32_t, 256>&)> onTerrainRequest;
+			// Optional: one line for each event and each control-object update the
+			// client sends, for a lab's multi-client trace. Left empty, nothing is
+			// formatted.
+			std::function<void(std::string_view)> trace;
 		};
 
 		// Time-outs in milliseconds.
@@ -94,6 +101,15 @@ namespace graal3d
 		// Queues a text message for the client (BigDataStartEvent + chunks).
 		// Ignored for profiles whose game packets are not implemented.
 		void sendText(const TextMessage& message);
+
+		// Lab: queues one guaranteed event of `className` whose payload is the raw
+		// fields (a `rawevent` world line). False if the client's class table has
+		// no such event class.
+		bool postRawEvent(std::string_view className, const std::vector<RawField>& fields);
+
+		// Posts one TerrainChunkEvent: chunk x, y (0-15), its stamp and its zlib
+		// bytes (at most 1023). False if the client has no such event class.
+		bool postTerrainChunk(uint32_t x, uint32_t y, uint32_t stamp, std::string_view packed);
 
 		// Strings inside game packets carry the packet string flag (default on;
 		// see TorqueBitStream.h). Set before anything is sent.
@@ -155,6 +171,8 @@ namespace graal3d
 			BigDataMode mode = BigDataMode::Raw;
 			uint32_t sequence = 0;
 			uint32_t count = 0;
+			std::string payload;     // an event this server does not decode: its bits, for the log
+			size_t payloadBits = 0;
 		};
 
 		struct Ghost
@@ -206,10 +224,13 @@ namespace graal3d
 		std::optional<uint32_t> allocateGhostIndex();
 		void onEstablished();
 		void log(std::string_view text) const;
+		void traceEvent(const InEvent& ev, bool guaranteed) const;
+		void traceState(const ClientState& state) const;
 
 		const Profile& m_profile;
 		uint32_t m_connectSequence;
 		Callbacks m_cb;
+		mutable std::string m_lastStateTrace; // a state line is traced only when it changes
 
 		// ConnectionProtocol state, as in Torque.
 		uint32_t m_lastSeqRecvd = 0;
@@ -263,6 +284,11 @@ namespace graal3d
 		bool m_datablocksSent = false;
 		bool m_ghostingAllowed = false;
 		bool m_phase2Acked = false;
+		// Sharp3D route: the GhostAlwaysObjectEvent that creates each ghost, by
+		// event sequence; its ack marks the ghost created.
+		std::map<int32_t, ObjectKey> m_ghostAlwaysEvents;
+		void postGhostAlways(ObjectKey key, Ghost& ghost);
+		void finishGhostAlways();
 		uint32_t m_lastMoveAck = 0;
 		size_t m_movesReceived = 0;
 		bool m_controlMoved = false; // the Player moved since its packet data last went out

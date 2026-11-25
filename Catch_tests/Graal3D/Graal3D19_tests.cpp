@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-13, 2026-11-19, 2026-11-21: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-13, 2026-11-19, 2026-11-21, 2026-11-25: see CHANGES-SEIHAI.md.
 // New file: tests for the protocol 19 (3.153, 4.04r2) game layer. The client side
 // here is written from the 4.04r2 client's readers as Graal_analysis
 // torque/protocol19-server.md describes them, not from the server's writers, so a
@@ -612,7 +612,7 @@ namespace
 	}
 } // namespace
 
-TEST_CASE("protocol 19 accept lists Camera, Player, Sky, their datablocks and the events with three class types", "[graal3d][tge]")
+TEST_CASE("protocol 19 accept lists Camera, Player, Sky, TerrainBlock, WaterBlock, their datablocks and the events with three class types", "[graal3d][tge]")
 {
 	const auto* profile = profileForProtocol(19);
 	REQUIRE(profile);
@@ -630,7 +630,8 @@ TEST_CASE("protocol 19 accept lists Camera, Player, Sky, their datablocks and th
 	}
 	REQUIRE(r.readU32() == 19);
 	const std::vector<std::tuple<uint32_t, uint32_t, std::string>> classes{
-		{0, 0, "Camera"}, {0, 1, "Player"}, {0, 2, "Sky"}, {1, 0, "CameraData"}, {1, 1, "PlayerData"},
+		{0, 0, "Camera"}, {0, 1, "Player"}, {0, 2, "Sky"}, {0, 3, "TerrainBlock"}, {0, 4, "WaterBlock"},
+		{1, 0, "CameraData"}, {1, 1, "PlayerData"},
 	};
 	REQUIRE(table.size() > classes.size());
 	for (size_t i = 0; i < classes.size(); ++i)

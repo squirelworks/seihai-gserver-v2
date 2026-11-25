@@ -263,7 +263,24 @@ int Server::init(const std::string_view serverip, const std::string_view serverp
 		auto world = graal3d::parseWorld(worldText);
 		for (const auto& error : world.errors)
 			log::printLine(log::server, "** [Error] Graal3D: graal3dworld.txt {}", error);
+		// graal3dshapecheck = skip (default), warn or off: what to do with a world
+		// object whose .3ds would crash a client (see bin/docs/graal3d.md).
+		const auto shapeCheck = m_settings.get<std::string>("graal3dshapecheck").value_or("skip"s);
+		m_graal3d->setShapeCheck(shapeCheck == "warn" ? graal3d::Service::ShapeCheck::Warn
+								 : shapeCheck == "off" ? graal3d::Service::ShapeCheck::Off
+													   : graal3d::Service::ShapeCheck::Skip);
+		if (shapeCheck != "skip" && shapeCheck != "warn" && shapeCheck != "off")
+			log::printLine(log::server, "** [Error] Graal3D: graal3dshapecheck {} is not skip, warn or off; using skip.", shapeCheck);
+		// graal3dtrace = <file>: a line for everything each 3D client sends (see bin/docs/graal3d.md).
+		m_graal3d->setTrace(m_settings.get<std::string>("graal3dtrace").value_or(""s));
 		m_graal3d->setWorld(std::move(world), m_settings.get<bool>("graal3dstringprefix").value_or(true));
+		// graal3droute = sharp3d: the route of a server real 5.12 joined (see bin/docs/graal3d.md).
+		const auto route = m_settings.get<std::string>("graal3droute").value_or("mission"s);
+		m_graal3d->setSharp3DRoute(route == "sharp3d");
+		if (route != "mission" && route != "sharp3d")
+			log::printLine(log::server, "** [Error] Graal3D: graal3droute {} is not mission or sharp3d; using mission.", route);
+		else if (route == "sharp3d")
+			log::printLine(log::server, "Graal3D: Sharp3D route for protocol 24 clients.");
 		if (udpPort < 65536 && m_graal3d->start(oInter, static_cast<uint16_t>(udpPort)))
 		{
 			auto indent = log::server.indent();

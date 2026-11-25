@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-25: see CHANGES-SEIHAI.md.
 // New file: the wire format of the Torque UDP connection that the Graal 3.153 to 5.x
 // clients open to a 3D server, on the gserver's port + 1. Out-of-band handshake
 // packets, the per-version profiles (protocol 19, 21, 24), the data packet header,
@@ -60,12 +60,20 @@ namespace graal3d
 		// The TGE game packet of 3.153 and 4.04r2 (move ack, moves, datablocks,
 		// three mission phases): see Graal3DTge.h.
 		bool tgePackets = false;
+		// The Sharp3D route (graal3droute = sharp3d): the world goes out as
+		// GhostAlwaysObjectEvents, there are no mission-start commands, and a
+		// Camera is the control object. Its class table has no RemoteCommandEvent
+		// or NetStringEvent.
+		bool ghostAlwaysWorld = false;
 
 		[[nodiscard]] uint32_t eventType() const { return hasDatablocks ? 2 : 1; }
 		[[nodiscard]] bool gamePackets() const { return gameObjectPackets || tgePackets; }
 	};
 
 	const Profile* profileForProtocol(uint32_t protocol);
+
+	// The Sharp3D route's profile for a protocol (24 only), or nullptr.
+	const Profile* sharp3dProfileForProtocol(uint32_t protocol);
 
 	// Server class ids: the index in the profile's object or event list.
 	std::optional<uint32_t> eventClassId(const Profile& profile, std::string_view name);

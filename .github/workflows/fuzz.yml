@@ -57,7 +57,7 @@ jobs:
             libantlr4-runtime-dev libsodium-dev libtomcrypt-dev libtommath-dev \
             libbz2-dev zlib1g-dev uuid-dev pkgconf libclang-rt-18-dev libfuzzer-18-dev
       - name: ANTLR 4.10.1 tool
-        run: curl -sSfL -o "$RUNNER_TEMP/antlr.jar" https://repo1.maven.org/maven2/org/antlr/antlr4/4.10.1/antlr4-4.10.1-complete.jar
+        run: curl -sSfL --retry 6 --retry-delay 30 --retry-all-errors -o "$RUNNER_TEMP/antlr.jar" https://repo1.maven.org/maven2/org/antlr/antlr4/4.10.1/antlr4-4.10.1-complete.jar
       - name: Configure
         run: |
           CC=clang-18 CXX=clang++-18 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \

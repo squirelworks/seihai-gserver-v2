@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-20: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-20, 2026-11-25: see CHANGES-SEIHAI.md.
 // New file: tests for the Graal 3D (Torque) UDP side. The client bytes are from the
 // 2026-10-30 Wine lab, where the real 5.12 client joined a test 3D server
 // (Graal_analysis torque/network.md, "The full handshake, live").
@@ -80,7 +80,7 @@ namespace
 			: r(payload) { r.setStringBuffer(&buffer); }
 	};
 
-	ServerPacket readServerPacket(std::string_view datagram)
+	ServerPacket readServerPacket(std::string_view datagram, bool cameraControl = false)
 	{
 		BitReader r(datagram);
 		std::string stringBuffer;
@@ -104,6 +104,11 @@ namespace
 			GameObjectState state;
 			std::string moveType;
 			out.controlMask = readGameObjectUpdate(r, state, moveType);
+			if (cameraControl)
+			{
+				REQUIRE_FALSE(r.readFlag()); // camera mode
+				REQUIRE_FALSE(r.readFlag()); // followed object
+			}
 		}
 		if (r.readFlag())
 		{
@@ -221,12 +226,14 @@ namespace
 		std::vector<MissionState> mission;
 		std::vector<ClientState> states;
 		std::vector<std::string> logs;
+		std::vector<std::array<uint32_t, 256>> terrainRequests;
 		Connection conn{profile, 0x400, now, Connection::Callbacks{
 												  [this](std::string_view d) { sent.emplace_back(d); },
 												  [this](const TextMessage& m) { texts.push_back(m); },
 												  [this](std::string_view l) { logs.emplace_back(l); },
 												  [this](MissionState s) { mission.push_back(s); },
 												  [this](const ClientState& c) { states.push_back(c); },
+												  [this](const std::array<uint32_t, 256>& s) { terrainRequests.push_back(s); },
 											  }};
 
 		void tick(uint64_t ms)
@@ -1133,5 +1140,447 @@ SCENARIO("Bit counts and patches stay inside the stream")
 		fuzz.readInt(static_cast<int>(state % 48));
 		fuzz.readString();
 		fuzz.readBytes(static_cast<size_t>(state % 32));
+	}
+}
+
+SCENARIO("Raw lab fields parse and write in order")
+{
+	std::string error;
+	const auto fields = parseRawFields({"f1", "i4:9", "u16:0x1234", "i10:-1", "f32:1.5", "str:a%20b", "hex@10:0a0b", "f0"}, error);
+	REQUIRE(fields);
+	REQUIRE(fields->size() == 8);
+
+	BitWriter w;
+	writeRawFields(w, *fields);
+	REQUIRE(rawFieldBits(*fields) == w.bitPosition());
+
+	const auto bytes = w.toString();
+	BitReader r(bytes);
+	REQUIRE(r.readFlag());
+	REQUIRE(r.readInt(4) == 9);
+	REQUIRE(r.readInt(16) == 0x1234);
+	REQUIRE(r.readInt(10) == 0x3FF);
+	REQUIRE(r.readU32() == 0x3FC00000u); // 1.5f
+	REQUIRE(r.readString() == "a b");
+	REQUIRE(r.readInt(10) == 2);
+	REQUIRE(r.readBytes(2) == std::string("\x0a\x0b"));
+	REQUIRE_FALSE(r.readFlag());
+	REQUIRE_FALSE(r.overrun());
+
+	THEN("bad tokens are refused with a reason")
+	{
+		for (std::string_view bad : {"i4:16", "i33:0", "u8:x", "str:%2", "hex:abc", "f32:", "q:1", "u8@4:1", "file@40:x", "f2"})
+		{
+			error.clear();
+			REQUIRE_FALSE(parseRawFields({bad}, error));
+			REQUIRE_FALSE(error.empty());
+		}
+	}
+}
+
+SCENARIO("Raw fields read files, zlib-compressed on request")
+{
+	std::string error;
+	auto fields = parseRawFields({"i4:3", "zfile@10:chunk.bin", "file:missing.bin"}, error);
+	REQUIRE(fields);
+	const std::string chunk(768, '\x07');
+	const auto errors = loadRawFiles(*fields, [&](const std::string& path) -> std::optional<std::string> {
+		if (path == "chunk.bin")
+			return chunk;
+		return std::nullopt;
+	});
+	REQUIRE(errors.size() == 1);
+	REQUIRE(errors[0] == "cannot read missing.bin");
+
+	BitWriter w;
+	writeRawFields(w, *fields);
+	const auto bytes = w.toString();
+	BitReader r(bytes);
+	REQUIRE(r.readInt(4) == 3);
+	const auto length = r.readInt(10);
+	const auto packed = r.readBytes(length);
+	std::string unpacked(chunk.size(), '\0');
+	uLongf size = static_cast<uLongf>(unpacked.size());
+	REQUIRE(uncompress(reinterpret_cast<Bytef*>(unpacked.data()), &size, reinterpret_cast<const Bytef*>(packed.data()),
+					   static_cast<uLong>(packed.size())) == Z_OK);
+	REQUIRE(unpacked == chunk);
+
+	THEN("a file too long for its length prefix is an error")
+	{
+		auto small = parseRawFields({"file@4:big.bin"}, error);
+		REQUIRE(small);
+		const auto errs = loadRawFiles(*small, [](const std::string&) { return std::optional<std::string>(std::string(16, 'x')); });
+		REQUIRE(errs.size() == 1);
+	}
+}
+
+SCENARIO("The world file takes rawobject and rawevent lines")
+{
+	const auto world = parseWorld(
+		"rawobject TerrainBlock f1 str:terrain.ter u32:256\n"
+		"rawevent TerrainChunkEvent i4:1 i4:2 u32:7 hex@10:789c0300000000001\n" // odd hex: an error
+		"rawevent TerrainChunkEvent i4:1 i4:2 u32:7 hex@10:00\n"
+		"rawevent late TerrainChunkEvent f1\n"
+		"rawevent late\n");
+	REQUIRE(world.objects.size() == 1);
+	REQUIRE(world.objects[0].kind == GhostObject::Kind::Raw);
+	REQUIRE(world.objects[0].className() == "TerrainBlock");
+	REQUIRE(world.objects[0].raw.size() == 3);
+	REQUIRE(world.rawEvents.size() == 2);
+	REQUIRE_FALSE(world.rawEvents[0].late);
+	REQUIRE(world.rawEvents[0].className == "TerrainChunkEvent");
+	REQUIRE(world.rawEvents[1].late);
+	REQUIRE(world.errors.size() == 2);
+}
+
+SCENARIO("A raw object is ghosted with its fields, and a raw event is posted")
+{
+	Harness h;
+	std::string error;
+	GhostObject terrain;
+	terrain.kind = GhostObject::Kind::Raw;
+	terrain.rawClass = "TerrainBlock";
+	terrain.raw = *parseRawFields({"f1", "str:lab.ter", "u32:256"}, error);
+	h.conn.setGhost(1, terrain);
+
+	GhostObject unknown = terrain;
+	unknown.rawClass = "NoSuchClass";
+	h.conn.setGhost(2, unknown);
+
+	REQUIRE(h.conn.postRawEvent("TerrainChunkEvent", *parseRawFields({"i4:5", "i4:6", "u32:99"}, error)));
+	REQUIRE_FALSE(h.conn.postRawEvent("NoSuchEvent", {}));
+
+	h.conn.receive(kFirstData, h.now);
+	h.tick(60);
+	const auto pkt = readServerPacket(h.sent.back());
+
+	THEN("the ghost carries exactly the fields")
+	{
+		REQUIRE(pkt.ghosts.size() == 1);
+		REQUIRE(pkt.ghosts[0].classId == *objectClassId(h.profile, "TerrainBlock"));
+		PayloadReader p(pkt.ghosts[0].payload);
+		REQUIRE(p.r.readFlag());
+		REQUIRE(p.r.readString() == "lab.ter");
+		REQUIRE(p.r.readU32() == 256);
+		REQUIRE(p.r.bitPosition() == pkt.ghosts[0].bits);
+	}
+
+	THEN("the event carries exactly the fields")
+	{
+		const auto id = *eventClassId(h.profile, "TerrainChunkEvent");
+		const ClientEvent* chunk = nullptr;
+		for (const auto& ev : pkt.events)
+			if (ev.classId == id)
+				chunk = &ev;
+		REQUIRE(chunk);
+		REQUIRE(chunk->bits == 4 + 4 + 32);
+		BitReader r(chunk->payload);
+		REQUIRE(r.readInt(4) == 5);
+		REQUIRE(r.readInt(4) == 6);
+		REQUIRE(r.readU32() == 99);
+	}
+}
+
+SCENARIO("A TerrainRequestUpdatesEvent from the client is logged with its stamps")
+{
+	Harness h;
+	h.conn.receive(kFirstData, h.now);
+	h.tick(60);
+
+	BitWriter payload;
+	for (int i = 0; i < 256; ++i)
+		payload.writeU32(i == 17 ? 42u : 0u);
+	std::vector<OutEvent> events;
+	events.push_back(OutEvent{"TerrainRequestUpdatesEvent", std::move(payload)});
+	h.conn.receive(clientDataPacket(h.profile, 2, 1, 1, events, 0), h.now);
+
+	bool found = false;
+	for (const auto& l : h.logs)
+		if (l.find("TerrainRequestUpdatesEvent: 8192 bits, 1 chunks with a stamp (1,1)=42") != std::string::npos)
+			found = true;
+	REQUIRE(found);
+	REQUIRE(h.terrainRequests.size() == 1);
+	REQUIRE(h.terrainRequests[0][17] == 42);
+	REQUIRE(h.terrainRequests[0][0] == 0);
+}
+
+SCENARIO("A terrain line ghosts a TerrainBlock and loads the chunk files")
+{
+	const auto world = parseWorld("terrain world/terrain 4 repeat\nterrain again\n");
+	REQUIRE(world.terrain);
+	REQUIRE(world.terrain->folder == "world/terrain");
+	REQUIRE(world.terrain->squareSize == 4);
+	REQUIRE(world.terrain->repeat);
+	REQUIRE(world.errors.size() == 1); // one terrain only
+	REQUIRE(world.objects.size() == 1);
+	REQUIRE(world.objects[0].className() == "TerrainBlock");
+
+	THEN("the TerrainBlock update is the 5.12 layout")
+	{
+		BitWriter w;
+		writeRawFields(w, world.objects[0].raw);
+		const auto bytes = w.toString();
+		BitReader r(bytes);
+		REQUIRE(r.readFlag());
+		REQUIRE(r.readString() == "Terrain");
+		REQUIRE(r.readU32() == 0);
+		REQUIRE(r.readString().empty());
+		REQUIRE(r.readString().empty());
+		REQUIRE(r.readU32() == 0x3F800000u);
+		REQUIRE(r.readU32() == 0x3C23D70Au);
+		REQUIRE(r.readU32() == 8);
+		REQUIRE(r.readU32() == 4);
+		REQUIRE(r.readInt(8) == 1);
+		REQUIRE(r.bitPosition() == rawFieldBits(world.objects[0].raw));
+	}
+
+	THEN("each chunk file is kept with Torque's stamp of its inflated bytes")
+	{
+		Terrain t = *world.terrain;
+		const std::string plain = "chunk data";
+		std::string packed(64, '\0');
+		uLongf size = static_cast<uLongf>(packed.size());
+		REQUIRE(compress(reinterpret_cast<Bytef*>(packed.data()), &size, reinterpret_cast<const Bytef*>(plain.data()), plain.size()) == Z_OK);
+		packed.resize(size);
+		const auto errors = loadTerrain(t, [&](const std::string& path) -> std::optional<std::string> {
+			if (path == "world/terrain/heights3-1.dat")
+				return packed;
+			if (path == "world/terrain/heights0-0.dat")
+				return std::string("not zlib");
+			if (path == "world/terrain/heights15-15.dat")
+				return std::string(1024, 'x');
+			return std::nullopt;
+		});
+		REQUIRE(errors.size() == 2);
+		REQUIRE(t.chunks[1 * 16 + 3]);
+		REQUIRE(t.chunks[1 * 16 + 3]->packed == packed);
+		REQUIRE(t.chunks[1 * 16 + 3]->stamp == (static_cast<uint32_t>(crc32(0, reinterpret_cast<const Bytef*>(plain.data()), plain.size())) ^ 0xFFFFFFFFu));
+		REQUIRE_FALSE(t.chunks[0]);
+		REQUIRE_FALSE(t.chunks[255]);
+	}
+}
+
+SCENARIO("An object line's last three numbers are its scale, section 2 of the update")
+{
+	const auto world = parseWorld("object Big tree.3ds 1 2 3  0 0 1 0  2 2 3\nobject Plain tree.3ds 0 0 0\n");
+	REQUIRE(world.errors.empty());
+	REQUIRE(world.objects.size() == 2);
+	REQUIRE(world.objects[0].object.scale == std::array<float, 3>{2, 2, 3});
+	REQUIRE(world.objects[1].object.scale == std::array<float, 3>{1, 1, 1});
+	REQUIRE((gameObjectFullMask(world.objects[0].object) & GameObjectBits::Scale) != 0);
+	REQUIRE((gameObjectFullMask(world.objects[1].object) & GameObjectBits::Scale) == 0);
+
+	BitWriter w;
+	writeGameObjectUpdate(w, world.objects[0].object, gameObjectFullMask(world.objects[0].object));
+	const auto bytes = w.toString();
+	BitReader r(bytes);
+	REQUIRE(r.readFlag());
+	(void)r.readString();
+	REQUIRE(r.readFlag()); // section 2
+	REQUIRE(r.readF32() == 2.0f);
+	REQUIRE(r.readF32() == 2.0f);
+	REQUIRE(r.readF32() == 3.0f);
+}
+
+namespace
+{
+	std::string chunk3ds(uint16_t id, const std::string& body)
+	{
+		std::string out;
+		const uint32_t length = static_cast<uint32_t>(body.size() + 6);
+		out.push_back(static_cast<char>(id & 0xFF));
+		out.push_back(static_cast<char>(id >> 8));
+		for (int i = 0; i < 4; ++i)
+			out.push_back(static_cast<char>((length >> (8 * i)) & 0xFF));
+		return out + body;
+	}
+} // namespace
+
+SCENARIO("A .3ds the real client crashes on is found before it is served")
+{
+	const auto mesh = chunk3ds(0x4000, std::string("box\0", 4) + chunk3ds(0x4100, chunk3ds(0x4110, std::string(2, '\0'))));
+	const auto material = chunk3ds(0xAFFF, chunk3ds(0xA000, std::string("m\0", 2)));
+	const auto good = chunk3ds(0x4D4D, chunk3ds(0x3D3D, material + mesh));
+	REQUIRE_FALSE(unsafe3ds(good));
+
+	REQUIRE(unsafe3ds(chunk3ds(0x4D4D, chunk3ds(0x3D3D, mesh))) == "it has meshes but no materials");
+	REQUIRE(unsafe3ds(good.substr(0, good.size() / 2)));               // cut in half
+	std::string longer = good;
+	longer[2] = static_cast<char>(longer[2] + 100);                    // main length past the end
+	REQUIRE(unsafe3ds(longer));
+	std::string inner = good;
+	inner[8] = static_cast<char>(inner[8] + 50);                       // the editor chunk past its parent
+	REQUIRE(unsafe3ds(inner));
+	REQUIRE(unsafe3ds("not a 3ds") == "not a 3D Studio file");
+}
+
+SCENARIO("A Sky's textures may be named with their extensions")
+{
+	REQUIRE(skyTextureNames("sky_fr.png,sky_rt.JPG,sky_bk,clouds.v2.gif") == "sky_fr,sky_rt,sky_bk,clouds.v2");
+	REQUIRE(skyTextureNames("plain") == "plain");
+	const auto world = parseWorld("sky sky_fr.png,sky_up.png 500 0.6 0.7 0.9\n");
+	REQUIRE(world.objects.size() == 1);
+	REQUIRE(world.objects[0].sky.materialList == "sky_fr,sky_up");
+}
+
+SCENARIO("A water line ghosts a WaterBlock in the 5.12 layout")
+{
+	const auto world = parseWorld("water -1024 -1024 0.5 2048 2048 20 lake 1\nwater 1 2 3\n");
+	REQUIRE(world.objects.size() == 1);
+	REQUIRE(world.errors.size() == 1);
+	REQUIRE(world.objects[0].className() == "WaterBlock");
+	BitWriter w;
+	writeRawFields(w, world.objects[0].raw);
+	const auto bytes = w.toString();
+	BitReader r(bytes);
+	REQUIRE(r.readFlag());
+	REQUIRE(r.readString() == "Water");
+	REQUIRE(r.readF32() == -1024.0f);
+	REQUIRE(r.readF32() == -1024.0f);
+	REQUIRE(r.readF32() == 0.5f);
+	for (int i = 0; i < 3; ++i)
+		REQUIRE(r.readF32() == 0.0f);
+	REQUIRE_FALSE(r.readFlag());
+	REQUIRE(r.readF32() == 2048.0f);
+	REQUIRE(r.readF32() == 2048.0f);
+	REQUIRE(r.readF32() == 20.0f);
+	REQUIRE(r.readString() == "lake");
+	for (int i = 0; i < 6; ++i)
+		REQUIRE(r.readString().empty());
+	REQUIRE(r.readU32() == 1);
+	// 5 floats, 2 bytes, 12 floats, 4 colour bytes, a float, a byte.
+	REQUIRE(rawFieldBits(world.objects[0].raw) == r.bitPosition() + 5 * 32 + 16 + 12 * 32 + 32 + 32 + 8);
+}
+
+SCENARIO("A TerrainChunkEvent carries x, y, the stamp and the zlib bytes")
+{
+	Harness h;
+	const std::string packed = "\x78\x9c\x03\x00\x00\x00\x00\x01";
+	REQUIRE(h.conn.postTerrainChunk(5, 14, 0xDEADBEEF, packed));
+	REQUIRE_FALSE(h.conn.postTerrainChunk(0, 0, 0, std::string(1024, 'x')));
+	h.conn.receive(kFirstData, h.now);
+	h.tick(60);
+	const auto pkt = readServerPacket(h.sent.back());
+	const auto id = *eventClassId(h.profile, "TerrainChunkEvent");
+	const ClientEvent* chunk = nullptr;
+	for (const auto& ev : pkt.events)
+		if (ev.classId == id)
+			chunk = &ev;
+	REQUIRE(chunk);
+	REQUIRE(chunk->bits == 4 + 4 + 32 + 10 + 8 * packed.size());
+	BitReader r(chunk->payload);
+	REQUIRE(r.readInt(4) == 5);
+	REQUIRE(r.readInt(4) == 14);
+	REQUIRE(r.readU32() == 0xDEADBEEF);
+	REQUIRE(r.readInt(10) == packed.size());
+	REQUIRE(r.readBytes(packed.size()) == packed);
+}
+
+SCENARIO("The Sharp3D route sends the world as ghost-always events and controls the Camera")
+{
+	const Profile& profile = *sharp3dProfileForProtocol(24);
+	REQUIRE(profile.ghostAlwaysWorld);
+	REQUIRE_FALSE(sharp3dProfileForProtocol(21));
+	REQUIRE_FALSE(eventClassId(profile, "RemoteCommandEvent"));
+	REQUIRE_FALSE(eventClassId(profile, "NetStringEvent"));
+	REQUIRE(*objectClassId(profile, "Sun") == 0);
+	REQUIRE(*objectClassId(profile, "GameObject") == 1);
+	REQUIRE(*objectClassId(profile, "Camera") == 2);
+	REQUIRE(*objectClassId(profile, "Sky") == 3);
+	REQUIRE(*eventClassId(profile, "GhostAlwaysObjectEvent") == 3);
+
+	uint64_t now = 1000;
+	std::vector<std::string> sent;
+	std::vector<MissionState> mission;
+	std::vector<std::string> logs;
+	Connection conn{profile, 0, now, Connection::Callbacks{
+										 [&](std::string_view d) { sent.emplace_back(d); },
+										 [](const TextMessage&) {},
+										 [&](std::string_view l) { logs.emplace_back(l); },
+										 [&](MissionState m) { mission.push_back(m); },
+										 [](const ClientState&) {},
+									 }};
+	GhostObject sun;
+	sun.kind = GhostObject::Kind::Sun;
+	GhostObject ground;
+	ground.object.name = "Ground";
+	ground.object.shape = "isle.3ds";
+	GhostObject camera;
+	camera.kind = GhostObject::Kind::Camera;
+	camera.object.name = "G3DCamera_lab";
+	conn.setGhost(1, sun);
+	conn.setGhost(2, ground);
+	conn.setGhost(3, camera);
+	conn.setCameraObject(3);
+	conn.setControlObject(3);
+
+	conn.receive(kFirstData, now);
+	now += 60;
+	REQUIRE(conn.update(now));
+	REQUIRE(mission == std::vector<MissionState>{MissionState::Phase1Sent});
+	const auto first = readServerPacket(sent.back(), true);
+
+	THEN("every object is a GhostAlwaysObjectEvent and no command or ghost section goes out")
+	{
+		REQUIRE(first.ghosts.empty());
+		REQUIRE_FALSE(first.control);
+		REQUIRE(first.events.size() == 3);
+		const std::vector<uint32_t> classes{0, 1, 2};
+		for (size_t i = 0; i < 3; ++i)
+		{
+			const auto& ev = first.events[i];
+			REQUIRE(ev.classId == *eventClassId(profile, "GhostAlwaysObjectEvent"));
+			PayloadReader p(ev.payload);
+			REQUIRE(p.r.readInt(12) == i); // ghost index
+			REQUIRE(p.r.readFlag());
+			REQUIRE(p.r.readInt(12) == classes[i]);
+			const auto bits = p.r.readInt(14);
+			REQUIRE(12 + 1 + 12 + 14 + bits == ev.bits);
+			if (i == 1)
+			{
+				GameObjectState state;
+				std::string moveType;
+				readGameObjectUpdate(p.r, state, moveType);
+				REQUIRE(state.shape == "isle.3ds");
+			}
+		}
+	}
+
+	WHEN("the client acks the events")
+	{
+		sent.clear();
+		conn.receive(clientDataPacket(profile, 2, 1, 1, {}, 0), now);
+		now += 60;
+		REQUIRE(conn.update(now));
+
+		THEN("the mission is done and the Camera is the control object in every packet")
+		{
+			REQUIRE(mission.back() == MissionState::Done);
+			REQUIRE_FALSE(sent.empty());
+			const auto pkt = readServerPacket(sent.back(), true);
+			REQUIRE(pkt.control);
+			REQUIRE(pkt.controlIndex == 2);
+			REQUIRE(pkt.camera);
+			REQUIRE(pkt.cameraIndex == 2);
+			REQUIRE(pkt.ghosts.empty());
+
+			conn.receive(clientDataPacket(profile, 3, 2, 1, {}, 0), now);
+			now += 1000;
+			REQUIRE(conn.update(now));
+			const auto later = readServerPacket(sent.back(), true);
+			REQUIRE(later.control);
+			REQUIRE(later.controlIndex == 2);
+		}
+
+		THEN("a later change goes out in the ghost section")
+		{
+			ground.object.chat = "hi";
+			conn.setGhost(2, ground);
+			now += 1000;
+			REQUIRE(conn.update(now));
+			const auto pkt = readServerPacket(sent.back(), true);
+			REQUIRE(pkt.ghosts.size() == 1);
+			REQUIRE(pkt.ghosts[0].index == 1);
+		}
 	}
 }

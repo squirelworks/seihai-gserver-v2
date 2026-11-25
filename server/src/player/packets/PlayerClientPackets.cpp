@@ -996,10 +996,11 @@ HandlePacketResult PlayerClient::msgPLI_UPDATEFILE(CString& pPacket)
 	if (m_versionId < CLVER_2_1 && getExtension(file).isEmpty())
 		file << ".gif";
 
-	const auto& fileSystem = m_server->getFileSystem();
 	time_t fModTime = 0;
 
-	if (const auto info = fileSystem.infoi(fs::FileCategory::ALL, file.toStringView()); info != nullptr)
+	// The same lookup as a file request, so a 3D client's bare texture name
+	// finds <name>.png and gets "up to date" instead of the whole file again.
+	if (const auto info = findClientFile(std::filesystem::path{file.toString()}); info != nullptr)
 		fModTime = clock::to_time_t(toSystemClock(info->modifiedTime));
 
 	//printf("UPDATEFILE: %s\n", file.text());

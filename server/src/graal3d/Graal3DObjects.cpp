@@ -1,10 +1,16 @@
-// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
-// New file: GameObject and Sun updates for the Graal 3D world. See Graal3DObjects.h.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-20, 2026-11-25: see CHANGES-SEIHAI.md.
+// New file: GameObject and Sun updates for the Graal 3D world, and the lab's raw
+// objects and events. See Graal3DObjects.h.
 
 #include <graal3d/Graal3DObjects.h>
 
 #include <cmath>
+#include <format>
 #include <cstdlib>
+#include <cctype>
+#include <cstring>
+
+#include <zlib.h>
 
 namespace graal3d
 {
@@ -52,8 +58,8 @@ namespace graal3d
 		uint32_t mask = 0;
 		if (a.name != b.name)
 			mask |= Name;
-		if (a.velocity != b.velocity)
-			mask |= Velocity;
+		if (a.scale != b.scale)
+			mask |= Scale;
 		if (a.shape != b.shape)
 			mask |= Shape;
 		if (a.skin != b.skin)
@@ -78,8 +84,8 @@ namespace graal3d
 	{
 		// Name, transform and flags always; the rest when set.
 		uint32_t mask = Name | GameObjectBits::Transform | Flags;
-		if (s.velocity != std::array<float, 3>{})
-			mask |= Velocity;
+		if (s.scale != std::array<float, 3>{1.0f, 1.0f, 1.0f})
+			mask |= Scale;
 		if (!s.shape.empty())
 			mask |= Shape;
 		if (!s.skin.empty())
@@ -100,8 +106,8 @@ namespace graal3d
 	{
 		if (w.writeFlag(mask & Name))
 			w.writeString(s.name);
-		if (w.writeFlag(mask & Velocity))
-			writeFloats(w, s.velocity.data(), 3);
+		if (w.writeFlag(mask & Scale))
+			writeFloats(w, s.scale.data(), 3);
 		if (w.writeFlag(mask & Shape))
 			w.writeString(s.shape);
 		if (w.writeFlag(mask & Skin))
@@ -146,8 +152,8 @@ namespace graal3d
 		}
 		if (r.readFlag())
 		{
-			readFloats(r, s.velocity.data(), 3);
-			mask |= Velocity;
+			readFloats(r, s.scale.data(), 3);
+			mask |= Scale;
 		}
 		if (r.readFlag())
 		{
@@ -357,6 +363,11 @@ namespace graal3d
 			tge::writePlayerUpdate(w, tgePlayer, datablockId, (mask & TgeDatablock) != 0, controlled);
 			return;
 		}
+		if (kind == Kind::Raw)
+		{
+			writeRawFields(w, raw);
+			return;
+		}
 		writeGameObjectUpdate(w, object, mask);
 		if (kind == Kind::Camera)
 		{
@@ -381,7 +392,247 @@ namespace graal3d
 		}
 		if (kind == Kind::TgePlayer)
 			return tgePlayer == before.tgePlayer ? 0u : TgeMove;
+		if (kind == Kind::Raw)
+			return rawClass == before.rawClass && raw == before.raw ? 0u : 1u;
 		return gameObjectChanges(before.object, object);
+	}
+
+	// --- Raw lab fields ---------------------------------------------------------
+
+	namespace
+	{
+		std::optional<uint32_t> parseInt(std::string_view text, int bits)
+		{
+			if (text.empty())
+				return std::nullopt;
+			const std::string word{text};
+			char* end = nullptr;
+			const bool negative = word[0] == '-';
+			const long long v = negative ? std::strtoll(word.c_str(), &end, 0) : static_cast<long long>(std::strtoull(word.c_str(), &end, 0));
+			if (end != word.c_str() + word.size())
+				return std::nullopt;
+			const unsigned long long limit = bits >= 32 ? 0xFFFFFFFFull : ((1ull << bits) - 1);
+			if (negative)
+			{
+				// Two's complement in `bits` bits.
+				if (-v > static_cast<long long>(limit / 2 + 1))
+					return std::nullopt;
+				return static_cast<uint32_t>(static_cast<unsigned long long>(v) & limit);
+			}
+			if (static_cast<unsigned long long>(v) > limit)
+				return std::nullopt;
+			return static_cast<uint32_t>(v);
+		}
+
+		std::optional<std::string> hexDecode(std::string_view text)
+		{
+			if (text.size() % 2 != 0)
+				return std::nullopt;
+			std::string out;
+			for (size_t i = 0; i < text.size(); i += 2)
+			{
+				const auto b = parseInt(std::string("0x") + std::string(text.substr(i, 2)), 8);
+				if (!b || !std::isxdigit(static_cast<unsigned char>(text[i])) || !std::isxdigit(static_cast<unsigned char>(text[i + 1])))
+					return std::nullopt;
+				out.push_back(static_cast<char>(*b));
+			}
+			return out;
+		}
+
+		std::optional<std::string> percentDecode(std::string_view text)
+		{
+			if (text == "-")
+				return std::string{};
+			std::string out;
+			for (size_t i = 0; i < text.size(); ++i)
+			{
+				if (text[i] != '%')
+				{
+					out.push_back(text[i]);
+					continue;
+				}
+				if (i + 2 >= text.size())
+					return std::nullopt;
+				auto hex = hexDecode(text.substr(i + 1, 2));
+				if (!hex)
+					return std::nullopt;
+				out += *hex;
+				i += 2;
+			}
+			return out;
+		}
+
+	} // namespace
+
+	std::optional<std::vector<RawField>> parseRawFields(const std::vector<std::string_view>& tokens, std::string& error)
+	{
+		std::vector<RawField> out;
+		for (const auto token : tokens)
+		{
+			RawField f;
+			const auto colon = token.find(':');
+			if (token == "f0" || token == "f1")
+			{
+				f.type = RawField::Type::Flag;
+				f.value = token == "f1" ? 1 : 0;
+				out.push_back(std::move(f));
+				continue;
+			}
+			if (colon == std::string_view::npos)
+			{
+				error = "no ':' in raw field " + std::string(token);
+				return std::nullopt;
+			}
+			auto kind = token.substr(0, colon);
+			const auto value = token.substr(colon + 1);
+
+			// Bytes fields may carry a length prefix: name@bits.
+			int prefix = 0;
+			if (const auto at = kind.find('@'); at != std::string_view::npos)
+			{
+				const auto width = parseInt(kind.substr(at + 1), 8);
+				if (!width || *width < 1 || *width > 32)
+				{
+					error = "bad length width in raw field " + std::string(token);
+					return std::nullopt;
+				}
+				prefix = static_cast<int>(*width);
+				kind = kind.substr(0, at);
+			}
+
+			bool ok = true;
+			if (kind == "hex" || kind == "file" || kind == "zfile")
+			{
+				f.type = RawField::Type::Bytes;
+				f.bits = prefix;
+				if (kind == "hex")
+				{
+					auto bytes = hexDecode(value);
+					ok = bytes.has_value();
+					if (ok)
+						f.data = std::move(*bytes);
+				}
+				else
+				{
+					f.file = value;
+					f.compress = kind == "zfile";
+					ok = !value.empty();
+				}
+			}
+			else if (prefix != 0)
+				ok = false;
+			else if (kind == "f32")
+			{
+				f.type = RawField::Type::F32;
+				const std::string word{value};
+				char* end = nullptr;
+				f.f32 = std::strtof(word.c_str(), &end);
+				ok = !word.empty() && end == word.c_str() + word.size();
+			}
+			else if (kind == "str")
+			{
+				f.type = RawField::Type::String;
+				auto text = percentDecode(value);
+				ok = text.has_value() && text->size() <= 255;
+				if (ok)
+					f.data = std::move(*text);
+			}
+			else
+			{
+				int bits = 0;
+				if (kind == "u8")
+					bits = 8;
+				else if (kind == "u16")
+					bits = 16;
+				else if (kind == "u32")
+					bits = 32;
+				else if (kind.size() > 1 && kind[0] == 'i')
+				{
+					const auto width = parseInt(kind.substr(1), 8);
+					bits = width ? static_cast<int>(*width) : 0;
+				}
+				ok = bits >= 1 && bits <= 32;
+				if (ok)
+				{
+					const auto v = parseInt(value, bits);
+					ok = v.has_value();
+					f.type = RawField::Type::Int;
+					f.bits = bits;
+					f.value = v.value_or(0);
+				}
+			}
+			if (!ok)
+			{
+				error = "bad raw field " + std::string(token);
+				return std::nullopt;
+			}
+			out.push_back(std::move(f));
+		}
+		return out;
+	}
+
+	void writeRawFields(BitWriter& w, const std::vector<RawField>& fields)
+	{
+		for (const auto& f : fields)
+		{
+			switch (f.type)
+			{
+				case RawField::Type::Flag: w.writeFlag(f.value != 0); break;
+				case RawField::Type::Int: w.writeInt(f.value, f.bits); break;
+				case RawField::Type::F32: w.writeF32(f.f32); break;
+				case RawField::Type::String: w.writeString(f.data); break;
+				case RawField::Type::Bytes:
+					if (f.bits > 0)
+						w.writeInt(static_cast<uint32_t>(f.data.size()), f.bits);
+					w.writeBytes(std::string_view(f.data));
+					break;
+			}
+		}
+	}
+
+	size_t rawFieldBits(const std::vector<RawField>& fields)
+	{
+		BitWriter w;
+		writeRawFields(w, fields);
+		return w.bitPosition();
+	}
+
+	std::vector<std::string> loadRawFiles(std::vector<RawField>& fields,
+										  const std::function<std::optional<std::string>(const std::string&)>& read)
+	{
+		std::vector<std::string> errors;
+		for (auto& f : fields)
+		{
+			if (f.type != RawField::Type::Bytes || f.file.empty())
+				continue;
+			auto bytes = read(f.file);
+			if (!bytes)
+			{
+				errors.push_back("cannot read " + f.file);
+				continue;
+			}
+			if (f.compress)
+			{
+				uLongf size = compressBound(static_cast<uLong>(bytes->size()));
+				std::string packed(size, '\0');
+				if (compress2(reinterpret_cast<Bytef*>(packed.data()), &size, reinterpret_cast<const Bytef*>(bytes->data()),
+							  static_cast<uLong>(bytes->size()), Z_BEST_COMPRESSION) != Z_OK)
+				{
+					errors.push_back("cannot compress " + f.file);
+					continue;
+				}
+				packed.resize(size);
+				bytes = std::move(packed);
+			}
+			if (f.bits > 0 && f.bits < 32 && bytes->size() >= (size_t{1} << f.bits))
+			{
+				errors.push_back(f.file + " is " + std::to_string(bytes->size()) + " bytes, too long for an int" + std::to_string(f.bits) +
+								 " length");
+				continue;
+			}
+			f.data = std::move(*bytes);
+		}
+		return errors;
 	}
 
 	namespace
@@ -440,14 +691,16 @@ namespace graal3d
 				continue;
 
 			bool ok = false;
-			if (w[0] == "object" && (w.size() == 6 || w.size() == 10))
+			if (w[0] == "object" && (w.size() == 6 || w.size() == 10 || w.size() == 13))
 			{
 				GhostObject obj;
 				obj.object.name = w[1];
 				obj.object.shape = w[2];
 				ok = toFloats(w, 3, obj.object.transform.position.data(), 3);
-				if (ok && w.size() == 10)
+				if (ok && w.size() >= 10)
 					ok = toFloats(w, 6, obj.object.transform.axis.data(), 3) && toFloats(w, 9, &obj.object.transform.angle, 1);
+				if (ok && w.size() == 13)
+					ok = toFloats(w, 10, obj.object.scale.data(), 3);
 				if (ok)
 					world.objects.push_back(std::move(obj));
 			}
@@ -465,7 +718,7 @@ namespace graal3d
 				GhostObject sky;
 				sky.kind = GhostObject::Kind::Sky;
 				if (w[1] != "-")
-					sky.sky.materialList = w[1];
+					sky.sky.materialList = skyTextureNames(w[1]);
 				ok = true;
 				if (w.size() >= 3)
 					ok = toFloats(w, 2, &sky.sky.visibleDistance, 1);
@@ -513,6 +766,88 @@ namespace graal3d
 				world.tgePlayerShape = w[1];
 				ok = true;
 			}
+			else if (w[0] == "rawobject" && w.size() >= 2)
+			{
+				std::string why;
+				auto fields = parseRawFields({w.begin() + 2, w.end()}, why);
+				if (!fields)
+				{
+					world.errors.push_back("line " + std::to_string(lineNo) + ": " + why);
+					continue;
+				}
+				GhostObject raw;
+				raw.kind = GhostObject::Kind::Raw;
+				raw.rawClass = w[1];
+				raw.raw = std::move(*fields);
+				world.objects.push_back(std::move(raw));
+				ok = true;
+			}
+			else if (w[0] == "water" && w.size() >= 7 && w.size() <= 9)
+			{
+				WaterSettings water;
+				ok = toFloats(w, 1, water.position.data(), 3) && toFloats(w, 4, water.scale.data(), 3);
+				if (ok && w.size() >= 8)
+					water.surfaceTexture = w[7];
+				if (ok && w.size() == 9)
+				{
+					char* end = nullptr;
+					const std::string word(w[8]);
+					water.liquidType = static_cast<uint32_t>(std::strtoul(word.c_str(), &end, 10));
+					ok = end && *end == '\0';
+				}
+				if (ok)
+				{
+					GhostObject block;
+					block.kind = GhostObject::Kind::Raw;
+					block.rawClass = "WaterBlock";
+					block.raw = waterBlockFields(water);
+					world.objects.push_back(std::move(block));
+				}
+			}
+			else if (w[0] == "terrain" && w.size() >= 2 && w.size() <= 4 && !world.terrain)
+			{
+				Terrain terrain;
+				terrain.folder = w[1];
+				ok = true;
+				for (size_t i = 2; i < w.size() && ok; ++i)
+				{
+					if (w[i] == "repeat")
+						terrain.repeat = true;
+					else
+					{
+						char* end = nullptr;
+						const std::string word(w[i]);
+						const unsigned long size = std::strtoul(word.c_str(), &end, 10);
+						ok = end && *end == '\0' && size >= 1 && size <= 1024;
+						terrain.squareSize = static_cast<uint32_t>(size);
+					}
+				}
+				if (ok)
+				{
+					GhostObject block;
+					block.kind = GhostObject::Kind::Raw;
+					block.rawClass = "TerrainBlock";
+					block.raw = terrainBlockFields(terrain);
+					world.objects.push_back(std::move(block));
+					world.terrain = std::move(terrain);
+				}
+			}
+			else if (w[0] == "rawevent" && w.size() >= 2)
+			{
+				const bool late = w[1] == "late";
+				const size_t cls = late ? 2 : 1;
+				std::string why = "no event class";
+				std::optional<std::vector<RawField>> fields;
+				if (w.size() > cls)
+					fields = parseRawFields({w.begin() + static_cast<std::ptrdiff_t>(cls) + 1, w.end()}, why);
+				if (!fields)
+				{
+					world.errors.push_back("line " + std::to_string(lineNo) + ": " + why);
+					continue;
+				}
+				world.rawEvents.push_back({std::string(w[cls]), std::move(*fields), late});
+				ok = true;
+			}
 			else if (w[0] == "camera" && (w.size() == 4 || w.size() == 8))
 			{
 				std::array<float, 3> offset{};
@@ -533,6 +868,200 @@ namespace graal3d
 				world.errors.push_back("line " + std::to_string(lineNo) + ": " + std::string(line));
 		}
 		return world;
+	}
+
+	uint32_t terrainStamp(std::string_view plain)
+	{
+		const auto crc = crc32(0L, reinterpret_cast<const Bytef*>(plain.data()), static_cast<uInt>(plain.size()));
+		return static_cast<uint32_t>(crc) ^ 0xFFFFFFFFu;
+	}
+
+	std::vector<RawField> terrainBlockFields(const Terrain& terrain)
+	{
+		const auto u32 = [](uint32_t v) { return RawField{RawField::Type::Int, 32, v}; };
+		const auto f32 = [](float v) {
+			RawField f{RawField::Type::F32};
+			f.f32 = v;
+			return f;
+		};
+		const auto str = [](std::string text) {
+			RawField f{RawField::Type::String};
+			f.data = std::move(text);
+			return f;
+		};
+		return {
+			RawField{RawField::Type::Flag, 1, 1},
+			str("Terrain"),
+			u32(0),
+			str(""),
+			str(""),
+			f32(1.0f),
+			f32(0.01f),
+			u32(8),
+			u32(terrain.squareSize),
+			RawField{RawField::Type::Int, 8, terrain.repeat ? 1u : 0u},
+		};
+	}
+
+	std::string skyTextureNames(std::string_view list)
+	{
+		// The client drops an image extension and asks for the bare name (lab,
+		// 2026-11-25), so the world file may name the real files.
+		std::string out;
+		size_t start = 0;
+		while (start <= list.size())
+		{
+			auto end = list.find(',', start);
+			if (end == std::string_view::npos)
+				end = list.size();
+			std::string name(list.substr(start, end - start));
+			if (const auto dot = name.rfind('.'); dot != std::string::npos)
+			{
+				std::string ext = name.substr(dot);
+				for (auto& ch : ext)
+					ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+				for (const auto* image : kImageExtensions)
+					if (ext == image)
+						name.resize(dot);
+			}
+			if (!out.empty() || start > 0)
+				out += ',';
+			out += name;
+			start = end + 1;
+		}
+		return out;
+	}
+
+	std::optional<std::string> unsafe3ds(std::string_view data)
+	{
+		const auto u16 = [&](size_t at) { return static_cast<uint32_t>(static_cast<uint8_t>(data[at]) | static_cast<uint8_t>(data[at + 1]) << 8); };
+		const auto u32 = [&](size_t at) { return u16(at) | u16(at + 2) << 16; };
+		if (data.size() < 6 || u16(0) != 0x4D4D)
+			return "not a 3D Studio file";
+		if (u32(2) != data.size())
+			return "its main chunk is " + std::to_string(u32(2)) + " bytes, the file " + std::to_string(data.size());
+		bool meshes = false, materials = false;
+		std::optional<std::string> problem;
+		// Walks the chunks inside [start, end); containers are walked too.
+		std::function<void(size_t, size_t)> walk = [&](size_t start, size_t end) {
+			size_t at = start;
+			while (at < end && !problem)
+			{
+				if (end - at < 6)
+				{
+					problem = "a chunk header is cut at byte " + std::to_string(at);
+					return;
+				}
+				const uint32_t id = u16(at), length = u32(at + 2);
+				if (length < 6 || length > end - at)
+				{
+					problem = "chunk 0x" + std::format("{:04X}", id) + " at byte " + std::to_string(at) + " runs past its parent";
+					return;
+				}
+				size_t body = at + 6;
+				if (id == 0x4000)
+				{
+					const auto nul = data.find('\0', body);
+					if (nul == std::string_view::npos || nul >= at + length)
+					{
+						problem = "an object name is not terminated";
+						return;
+					}
+					body = nul + 1;
+				}
+				if (id == 0x4100)
+					meshes = true;
+				if (id == 0xAFFF)
+					materials = true;
+				if (id == 0x4D4D || id == 0x3D3D || id == 0x4000 || id == 0x4100 || id == 0xAFFF)
+					walk(body, at + length);
+				at += length;
+			}
+		};
+		walk(6, data.size());
+		if (problem)
+			return problem;
+		if (meshes && !materials)
+			return "it has meshes but no materials";
+		return std::nullopt;
+	}
+
+	std::vector<RawField> waterBlockFields(const WaterSettings& water)
+	{
+		std::vector<RawField> f;
+		const auto flag = [&](bool v) { f.push_back(RawField{RawField::Type::Flag, 1, v ? 1u : 0u}); };
+		const auto num = [&](uint32_t v, int bits) { f.push_back(RawField{RawField::Type::Int, bits, v}); };
+		const auto f32 = [&](float v) {
+			RawField r{RawField::Type::F32};
+			r.f32 = v;
+			f.push_back(r);
+		};
+		const auto str = [&](std::string text) {
+			RawField r{RawField::Type::String};
+			r.data = std::move(text);
+			f.push_back(r);
+		};
+		flag(true);
+		str("Water");
+		for (const float v : water.position)
+			f32(v);
+		f32(0.0f), f32(0.0f), f32(0.0f); // quaternion x, y, z: no rotation
+		flag(false);                      // w is not negative
+		for (const float v : water.scale)
+			f32(v);
+		str(water.surfaceTexture);
+		for (int i = 0; i < 4; ++i)
+			str(""); // specular mask, environment maps over and under, shore
+		str(""), str(""); // submerge textures
+		num(water.liquidType, 32);
+		// Density, viscosity, wave magnitude, surface opacity, environment map intensity.
+		for (const float v : {1.0f, 1.0f, 0.3f, 0.75f, 0.4f})
+			f32(v);
+		num(0, 8), num(0, 8); // remove wet edges, use depth mask
+		// Surface and shore tessellation, parallax, flow angle and rate, distortion
+		// grid scale, magnitude and time, shore depth, minimum and maximum alpha,
+		// depth gradient.
+		for (const float v : {50.0f, 60.0f, 0.5f, 0.0f, 0.0f, 0.1f, 0.05f, 0.5f, 20.0f, 0.03f, 1.0f, 1.0f})
+			f32(v);
+		for (int i = 0; i < 4; ++i)
+			num(255, 8); // specular colour
+		f32(6.0f);       // specular power
+		num(0, 8);       // ignore terrain
+		return f;
+	}
+
+	std::vector<std::string> loadTerrain(Terrain& terrain,
+										 const std::function<std::optional<std::string>(const std::string&)>& read)
+	{
+		std::vector<std::string> errors;
+		for (int y = 0; y < 16; ++y)
+		{
+			for (int x = 0; x < 16; ++x)
+			{
+				auto& slot = terrain.chunks[static_cast<size_t>(y * 16 + x)];
+				slot.reset();
+				const std::string name = "heights" + std::to_string(x) + "-" + std::to_string(y) + ".dat";
+				auto packed = read(terrain.folder + "/" + name);
+				if (!packed)
+					continue;
+				if (packed->empty() || packed->size() > 1023)
+				{
+					errors.push_back(name + " is " + std::to_string(packed->size()) + " bytes; a chunk takes 1 to 1023");
+					continue;
+				}
+				std::string plain(4096, '\0');
+				uLongf size = static_cast<uLongf>(plain.size());
+				if (uncompress(reinterpret_cast<Bytef*>(plain.data()), &size, reinterpret_cast<const Bytef*>(packed->data()),
+							   static_cast<uLong>(packed->size())) != Z_OK)
+				{
+					errors.push_back(name + " does not inflate");
+					continue;
+				}
+				plain.resize(size);
+				slot = TerrainChunk{std::move(*packed), terrainStamp(plain)};
+			}
+		}
+		return errors;
 	}
 
 	graal3d::Transform facing(const std::array<float, 3>& position, const std::array<float, 3>& target)

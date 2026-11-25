@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-01, 2026-11-04, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-18, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-01, 2026-11-04, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-18, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -651,6 +651,24 @@ bool Player::isGraal3DClient() const
 	return isClient() && m_server->getGraal3D() != nullptr && graal3d::Service::clientHasGraal3D(m_versionId);
 }
 
+fs::FileData* Player::findClientFile(const std::filesystem::path& file) const
+{
+	const auto& filesystem = m_server->getFileSystem();
+	auto info = filesystem.infoi(fs::FileCategory::ALL, file.filename());
+
+	// The 5.x 3D client asks for every texture (material or Sky) by its bare,
+	// lower-cased name and stores what it gets under that name (lab 2026-11-25).
+	if (info == nullptr && isGraal3DClient() && !file.has_extension())
+	{
+		for (const auto* ext : graal3d::kImageExtensions)
+		{
+			if ((info = filesystem.infoi(fs::FileCategory::ALL, file.filename().string() + ext)) != nullptr)
+				break;
+		}
+	}
+	return info;
+}
+
 std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file, const PacketQueue channel)
 {
 	const auto& filesystem = m_server->getFileSystem();
@@ -689,18 +707,7 @@ std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file, const 
 	}
 	else
 	{
-		auto info = filesystem.infoi(fs::FileCategory::ALL, file.filename());
-
-		// The 5.x 3D client asks for Torque textures (a Sky's, for one) without an
-		// extension, and stores what it gets under the name it asked for.
-		if (info == nullptr && isGraal3DClient() && !file.has_extension())
-		{
-			for (const auto* ext : {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".dds"})
-			{
-				if ((info = filesystem.infoi(fs::FileCategory::ALL, file.filename().string() + ext)) != nullptr)
-					break;
-			}
-		}
+		auto info = findClientFile(file);
 
 		if (info == nullptr)
 		{
