@@ -164,6 +164,18 @@ class G3DLabWorlds(unittest.TestCase):
         sun = next(l for l in (self.out / "FZ-s001/config/graal3dworld.txt").read_text().splitlines() if l.startswith("sun "))
         self.assertEqual(len(sun.split()), 12)
 
+    def test_fuzz_case_worlds_hold_only_their_case(self):
+        cases = Path(self.tmp.name) / "3ds-lamp"
+        cases.mkdir()
+        (cases / "fl0001.3ds").write_bytes(b"bad")
+        (cases / "manifest.tsv").write_text("case\tchange\n")
+        made = dict(g.build(self.out, self.pack, None, None, round_=1, cases=[cases]))
+        self.assertIn("K-3ds-lamp-fl0001", made)
+        self.assertNotIn("T1", made)
+        files = sorted(p.name for p in (self.out / "K-3ds-lamp-fl0001/world/g3dlab").iterdir())
+        self.assertEqual(files, ["fl0001.3ds"])
+        self.assertIn("object FuzzCase fl0001.3ds", (self.out / "K-3ds-lamp-fl0001/config/graal3dworld.txt").read_text())
+
 
 if __name__ == "__main__":
     unittest.main()

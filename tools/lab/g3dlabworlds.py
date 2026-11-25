@@ -39,6 +39,9 @@ fuzzed GameObject (every section on or off, edge floats, long, empty, missing
 or odd strings), or one fuzzed sun, sky or object line. Each
 --levels DIR adds one variant per NAME_graal3dworld.txt in it (as written by
 `seihai-servertools gen terrain DIR --world NAME --3d`), served as it is.
+Each --cases DIR (a graal-client-repro g3d-fuzzcases set) adds one world per
+.3ds/.dts/.dif in it: C0 plus that shape, holding only the world file and
+the case, to copy over a server that already has C0's files.
 Run each variant on both routes (graal3droute = mission, then sharp3d).
 
 Tests: python3 -m unittest tools/lab/test_g3dlabworlds.py
@@ -251,7 +254,7 @@ def raw_gameobject(name, shape, pos, section2):
 
 # --------------------------------------------------------------- variants
 
-def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None, round_=1, levels=(), count=40):
+def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None, round_=1, levels=(), count=40, cases=()):
     pack, out = Path(pack), Path(out)
     scene = json.loads((pack / "scene.json").read_text())
     if ground:
@@ -335,7 +338,28 @@ def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None, roun
             what = f"generated level {name} ({len(files)} models), served as written"
             (dest / "VARIANT.md").write_text(f"# {vid}\n\nIn place of C0: {what}\n")
             variants.append((vid, what))
-    if round_ in (2, 3):
+    for d in cases:
+        # One world per malformed shape: config and the one case file only. The
+        # server keeps C0's world/g3dlab files; copy each case's over them.
+        for f in sorted(Path(d).iterdir()):
+            if f.suffix.lower() not in (".3ds", ".dts", ".dif"):
+                continue
+            vid = f"K-{Path(d).name}-{f.stem}"
+            if only and vid not in only:
+                continue
+            w = World(scene)
+            w.extra = [f"object FuzzCase {f.name} {control.spawn[0] + 3:g} {control.spawn[1]:g} 0"]
+            dest = out / vid
+            if dest.exists():
+                shutil.rmtree(dest)
+            (dest / "config").mkdir(parents=True)
+            (dest / "world" / LAB).mkdir(parents=True)
+            shutil.copyfile(f, dest / "world" / LAB / f.name)
+            what = f"C0 plus one {f.suffix[1:]} shape: fuzz case {f.name} from {Path(d).name} (its manifest.tsv says what changed)"
+            (dest / "config" / "graal3dworld.txt").write_text(w.text(f"{vid}: {what}"))
+            (dest / "VARIANT.md").write_text(f"# {vid}\n\n{what}\nOnly the case file is here: keep C0's world/g3dlab files on the server.\n")
+            variants.append((vid, what))
+    if round_ in (2, 3) or cases:
         return finish(out, variants, only, round_)
 
     w = World(scene)
@@ -563,10 +587,11 @@ def main(argv=None):
     p.add_argument("--seed", type=int, default=2026)
     p.add_argument("--round", type=int, choices=(1, 2, 3), default=1)
     p.add_argument("--count", type=int, default=40, help="round 3: how many fuzz variants")
+    p.add_argument("--cases", action="append", default=[], help="a folder of fuzz-case shapes (g3d-fuzzcases): one world each")
     p.add_argument("--levels", action="append", default=[], help="a folder of generated NAME_graal3dworld.txt worlds")
     a = p.parse_args(argv)
     only = set(a.only.split(",")) if a.only else None
-    made = build(a.out, a.pack, a.mbg, only, a.seed, a.extra, a.ground, a.round, a.levels, a.count)
+    made = build(a.out, a.pack, a.mbg, only, a.seed, a.extra, a.ground, a.round, a.levels, a.count, a.cases)
     print(f"{len(made)} variants in {a.out}")
     return 0
 
