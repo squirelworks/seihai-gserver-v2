@@ -351,7 +351,7 @@ a z size of d. The example's surface is at 0.5, and `liquidheight` reads that wi
 little wave motion. Liquid types follow stock TGE (0 water,
 1 ocean, 2 river, 3 stagnant, 4 lava, ...), and the rest of its look takes stock TGE
 1.x's defaults. The layout is from a static read of the 5.12 client (Graal_analysis
-`torque/terrain-512.md` section 5); 5.12 has drawn it live.
+`torque/terrain-512.md` section 5); live 5.12 reads its `liquidheight` as above.
 
 ## Lab: raw objects and events
 
