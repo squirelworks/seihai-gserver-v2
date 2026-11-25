@@ -1012,10 +1012,10 @@ namespace graal3d
 			}
 			else if (const auto w = m_server.getWeapon(weapon.name); w != nullptr)
 			{
-				if (const auto& bytecode = w->getScript().getClientByteCode(); !bytecode.empty())
+				if (const auto& bytecode = w->getScript().getClientSideByteCode(); !bytecode.empty())
 					script.assign(reinterpret_cast<const char*>(bytecode.data()), bytecode.size());
 				else
-					script = std::string(w->getScript().getClientSide());
+					script = std::string(w->getScript().getClientSideScript());
 			}
 			if (script.empty())
 			{
