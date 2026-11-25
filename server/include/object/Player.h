@@ -52,13 +52,6 @@ class Weapon;
 
 enum class LevelItemType;
 
-enum
-{
-	PLSETPROPS_SETBYPLAYER = 0x01, // if set, do serverside checks to prevent attributes from being changed
-	PLSETPROPS_FORWARD = 0x02,     // forward data to other players
-	PLSETPROPS_FORWARDSELF = 0x04, // forward data back to the player
-};
-
 enum class CursorNumbers : uint8_t
 {
 	DEFAULT = 0,
@@ -341,6 +334,7 @@ public:
 	virtual bool enterLevel(const std::shared_ptr<Level>& level, const PixelPosition& position, std::optional<time_t> clientCachedTime);
 	virtual bool enterLevel(const std::shared_ptr<Level>& level, const MapPosition& mapPosition, const LocalPixelPosition& position, std::optional<time_t> clientCachedTime);
 	virtual bool enterLevel(const std::shared_ptr<Level>& level, std::optional<time_t> clientCachedTime);
+	virtual bool enterSubLevel(const std::shared_ptr<SubLevel>& subLevel, std::optional<time_t> clientCachedTime);
 	virtual bool leaveLevel(bool keepLevelReference);
 	virtual bool leaveSubLevel(const std::shared_ptr<SubLevel>& subLevel);
 	virtual bool sendStaticLevelData(const std::shared_ptr<StaticLevelData>& staticLevelData, const std::shared_ptr<SubLevel>& subLevel, std::optional<time_t> clientCachedTime);
@@ -488,7 +482,9 @@ public:
 	//HandlePacketResult msgPLI_SHOOT(CString& pPacket);
 	//HandlePacketResult msgPLI_SHOOT2(CString& pPacket);
 	//HandlePacketResult msgPLI_SERVERWARP(CString& pPacket);
+	//HandlePacketResult msgPLI_MUTEPLAYER(CString& pPacket);
 	//HandlePacketResult msgPLI_PROCESSLIST(CString& pPacket);
+	HandlePacketResult msgPLI_PROCESSRUNNING(CString& pPacket);
 	//HandlePacketResult msgPLI_ENTERLEVEL(CString& pPacket);
 	//HandlePacketResult msgPLI_VERIFYWANTSEND(CString& pPacket);
 	//HandlePacketResult msgPLI_UPDATECLASS(CString& pPacket);
@@ -503,7 +499,7 @@ public:
 	HandlePacketResult msgPLI_SENDTEXT(CString& pPacket);
 
 	//HandlePacketResult msgPLI_UPDATEGANI(CString& pPacket);
-	//HandlePacketResult msgPLI_UPDATESCRIPT(CString& pPacket);
+	//HandlePacketResult msgPLI_UPDATEWEAPON(CString& pPacket);
 	//HandlePacketResult msgPLI_UPDATEPACKAGEREQUESTFILE(CString& pPacket);
 
 protected:
@@ -830,7 +826,8 @@ inline void Player::markPropSent(const PlayerProp prop) noexcept
 	DO(PlayerProp::Y2, PropertyPixelCoordinate, account.character.localPixelY)                                                 \
 	DO(PlayerProp::Z2, PropertyPixelCoordinateZ, account.character.localPixelZ)                                                \
 	DO(PlayerProp::PLAYERLISTCATEGORY, PropertyNumeric<GBYTE1>, (uint8_t)m_playerListCategory)                                 \
-	DO(PlayerProp::COMMUNITYNAME, PropertyString, account.communityName)
+	DO(PlayerProp::COMMUNITYNAME, PropertyString, account.communityName)                                                       \
+	DO(PlayerProp::GRALATS2, PropertyNumeric<GBYTE5>, account.character.gralats)
 
 //----------------------------
 

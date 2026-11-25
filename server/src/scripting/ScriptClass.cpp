@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12, 2026-11-16: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-16, 2026-11-25: see CHANGES-SEIHAI.md.
 #include <array>
 #include <cassert>
 #include <chrono>
@@ -35,57 +35,7 @@ ScriptClass::ScriptClass(const std::string_view className, const std::string_vie
 ScriptClass& ScriptClass::setScript(std::string_view classScript)
 {
 	m_script = {name, ScriptType::CLASS, classScript};
-	m_plainChecksum = 0;
-	m_encryptedChecksum = 0;
-	m_desKey.clear();
-	m_header.clear();
-	m_headerWithCRC.clear();
-
-	if (const auto& bytecode = m_script.getClientByteCode(); !bytecode.empty())
-	{
-		// Set the cryptographic key to be the script's hash.
-		constexpr string::string_hash hash{};
-		auto scriptHash = static_cast<uint64_t>(hash(classScript));
-
-		// Package the key into two GBYTE5's.
-		const auto hashBytes = reinterpret_cast<uint32_t*>(&scriptHash);
-		const CString key = CString() >> (long long)(hashBytes[0]) >> (long long)(hashBytes[1]);
-		m_desKey = key.toString();
-
-		// Classic clients cache plain weapon bytecode under PLO_WEAPONHASH; classes use
-		// PLO_CLASSBYTECODE on ask. Modern clients (5.24 / 6.00β1 on) cache the DES-encrypted
-		// body under PLO_LOADSCRIPT, the same split weapons use. The DES is the client's
-		// script-cache cipher: whole 8-byte blocks, each key byte bit-reversed.
-		std::array<uint8_t, 8> keyBytes{};
-		for (size_t i = 0; i < 4; ++i)
-		{
-			keyBytes[i] = static_cast<uint8_t>(hashBytes[0] >> (8 * i));
-			keyBytes[i + 4] = static_cast<uint8_t>(hashBytes[1] >> (8 * i));
-		}
-		const auto stored = seihai::scriptCacheEncrypt(std::string_view{reinterpret_cast<const char*>(bytecode.data()), bytecode.size()}, keyBytes);
-
-		m_plainChecksum = crc32(0L, Z_NULL, 0);
-		m_plainChecksum = crc32(m_plainChecksum, bytecode.data(), static_cast<uInt>(bytecode.size()));
-
-		m_encryptedChecksum = crc32(0L, Z_NULL, 0);
-		m_encryptedChecksum = crc32(m_encryptedChecksum, stored.data(), static_cast<uInt>(stored.size()));
-
-		// [GBYTE2 length_header_and_bytecode]
-		// [STRING type,name,[0/1 save_to_disk],[GBYTE[10] desKey]]
-		std::vector<std::string> headerParts =
-		{
-			"class",
-			name,
-			"1",
-			m_desKey
-		};
-		m_header = string::toCSV(headerParts);
-
-		// The CRC is a GINT5, like the key fields. CString's long long constructor writes decimal text.
-		const CString crc = CString() >> static_cast<long long>(m_encryptedChecksum);
-		headerParts.push_back(crc.toString());
-		m_headerWithCRC = string::toCSV(headerParts);
-	}
+	generateScriptHeader();
 
 	// Set the modification time to now.
 	modTime = std::chrono::system_clock::now();
@@ -94,6 +44,43 @@ ScriptClass& ScriptClass::setScript(std::string_view classScript)
 	onScriptModified.post(this);
 
 	return *this;
+}
+
+void ScriptClass::generateScriptHeader()
+{
+	// Seihai: a class whose new script has no clientside bytecode keeps no header from its old one.
+	m_plainChecksum = 0;
+	m_encryptedChecksum = 0;
+	m_desKey.clear();
+	m_header.clear();
+	m_headerWithCRC.clear();
+
+	if (const auto& bytecode = m_script.getClientSideByteCode(); bytecode.empty())
+		return;
+
+	// Classic clients cache plain weapon bytecode under PLO_WEAPONHASH; classes use
+	// PLO_CLASSBYTECODE on ask. Modern clients (5.24 / 6.00β1 on) cache the DES-encrypted
+	// body under PLO_LOADSCRIPT, the same split weapons use.
+	std::string desKey;
+	m_script.calculateClientByteCodeChecksums(desKey, m_plainChecksum, m_encryptedChecksum);
+	m_desKey = desKey;
+
+	// Create the header.
+	// [GBYTE2 length_header_and_bytecode]
+	// [STRING type,name,[0/1 save_to_disk],[GBYTE[10] desKey]]
+	std::vector<std::string> headerParts =
+	{
+		"class",
+		name,
+		"1",
+		desKey
+	};
+	m_header = string::toCSV(headerParts);
+
+	// Header with CRC32.
+	const CString crc32 = CString() >> (long long)m_encryptedChecksum;
+	headerParts.push_back(crc32.toString());
+	m_headerWithCRC = string::toCSV(headerParts);
 }
 
 void ScriptClass::registerWithPlayer(const std::shared_ptr<Player>& player) const
@@ -112,13 +99,13 @@ void ScriptClass::registerWithPlayer(const std::shared_ptr<Player>& player) cons
 
 void ScriptClass::sendByteCodeToPlayer(const std::shared_ptr<Player>& player) const
 {
-	if (const auto& bytecode = m_script.getClientByteCode(); !bytecode.empty())
+	if (const auto& bytecode = m_script.getClientSideByteCode(); !bytecode.empty())
 	{
 		const auto bytecodePtr = reinterpret_cast<const char*>(bytecode.data());
 		const std::string_view bytecodeView(bytecodePtr, bytecode.size());
 
 		if (scriptPackets::usesModernScriptCache(player->getVersion()))
-			player->sendRawPacket(CString() >> (char)PLO_WEAPONBYTECODE2 >> (short)m_header.length() << m_header << bytecodeView);
+			player->sendRawPacket(CString() >> (char)PLO_HEADEREDBYTECODE >> (short)m_header.length() << m_header << bytecodeView);
 		else if (scriptPackets::usesClassicScriptBytecode(player->getVersion()) || player->getVersion() >= CLVER_3_153)
 			player->sendRawPacket(CString() >> (char)PLO_CLASSBYTECODE >> (char)name.length() << name << bytecodeView);
 	}

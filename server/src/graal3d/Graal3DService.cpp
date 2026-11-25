@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-14, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-14, 2026-11-19, 2026-11-20, 2026-11-25: see CHANGES-SEIHAI.md.
 // New file: the gserver's Graal 3D UDP side. See Graal3DService.h.
 
 #include <graal3d/Graal3DService.h>
@@ -649,10 +649,10 @@ namespace graal3d
 			}
 			else if (const auto w = m_server.getWeapon(weapon.name); w != nullptr)
 			{
-				if (const auto& bytecode = w->getScript().getClientByteCode(); !bytecode.empty())
+				if (const auto& bytecode = w->getScript().getClientSideByteCode(); !bytecode.empty())
 					script.assign(reinterpret_cast<const char*>(bytecode.data()), bytecode.size());
 				else
-					script = std::string(w->getScript().getClientSide());
+					script = std::string(w->getScript().getClientSideScript());
 			}
 			if (script.empty())
 			{

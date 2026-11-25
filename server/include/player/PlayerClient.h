@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
 #ifndef PLAYERCLIENT_H
 #define PLAYERCLIENT_H
 
@@ -90,6 +90,7 @@ public:
 	bool doTimedEvents() override;
 	bool handleLogin(CString& pPacket) override;
 	bool sendLogin() override;
+	clock::time_point getFrameStartTime() const noexcept;
 
 	bool processChat(const CString& pChat);
 
@@ -118,6 +119,8 @@ public:
 	bool enterLevel(const std::shared_ptr<Level>& level, std::optional<time_t> clientCachedTime) override;
 	using Player::enterLevel;
 
+	bool enterSubLevel(const std::shared_ptr<SubLevel>& subLevel, std::optional<time_t> clientCachedTime) override;
+
 	bool leaveLevel(bool keepLevelReference) override;
 	using Player::leaveLevel;
 
@@ -144,6 +147,12 @@ public:
 	void resetLevelCache(const StaticLevelData* level) const;
 	void resetLevelCache(const SubLevel* level, std::string_view group = ""sv);
 	void resetLevelCache(std::string_view group);
+	void cacheStaticLevelAsSeen(const StaticLevelDataPtr& staticData);
+	void cacheDynamicLevelAsSeen(const SubLevelPtr& subLevel);
+
+protected:
+	template<typename T>
+	[[a::inline]] void cacheLevelAsSeen(std::vector<std::unique_ptr<CachedLevel<T>>>& cache, const std::shared_ptr<T>& level);
 
 public:
 	[[a::inline]] bool hasSeenFile(const std::string& file) const;
@@ -210,13 +219,13 @@ public:
 	HandlePacketResult msgPLI_SHOOT(CString& pPacket);
 	HandlePacketResult msgPLI_SHOOT2(CString& pPacket);
 	HandlePacketResult msgPLI_SERVERWARP(CString& pPacket);
+	HandlePacketResult msgPLI_MUTEPLAYER(CString& pPacket);
 	HandlePacketResult msgPLI_PROCESSLIST(CString& pPacket);
 	HandlePacketResult msgPLI_ENTERLEVEL(CString& pPacket);
-	HandlePacketResult msgPLI_MUTEPLAYER(CString& pPacket);
 	HandlePacketResult msgPLI_PROCESSRUNNING(CString& pPacket);
 	HandlePacketResult msgPLI_UPDATECLASS(CString& pPacket);
 	HandlePacketResult msgPLI_UPDATEGANI(CString& pPacket);
-	HandlePacketResult msgPLI_UPDATESCRIPT(CString& pPacket);
+	HandlePacketResult msgPLI_UPDATEWEAPON(CString& pPacket);
 	HandlePacketResult msgPLI_VERIFYWANTSEND(CString& pPacket);
 	HandlePacketResult msgPLI_UPDATEPACKAGEREQUESTFILE(CString& pPacket);
 	HandlePacketResult msgPLI_PONG(CString& pPacket);
@@ -340,6 +349,27 @@ inline void PlayerClient::setLastMovementTime(const clock::time_point time)
 {
 	m_lastMovement = time;
 	m_grMovementUpdated = true;
+}
+
+template<typename T>
+inline void PlayerClient::cacheLevelAsSeen(std::vector<std::unique_ptr<CachedLevel<T>>>& cache, const std::shared_ptr<T>& level)
+{
+	const auto curTime = getFrameStartTime();
+
+	// Save the time we left the level for the client-side caching.
+	bool found = false;
+	for (auto& cl : cache)
+	{
+		if (const auto cllevel = cl->level.lock(); cllevel == level)
+		{
+			cl->lastEnteredTime = curTime;
+			found = true;
+			break;
+		}
+	}
+
+	if (!found)
+		cache.push_back(std::make_unique<CachedLevel<T>>(CachedLevel<T>{.level = level, .lastEnteredTime = curTime}));
 }
 
 ///////////////////////////////////////////////////////////////////////////////

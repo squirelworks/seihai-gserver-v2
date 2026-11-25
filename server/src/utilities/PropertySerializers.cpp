@@ -592,13 +592,6 @@ std::format_context::iterator PropertyTileCoordinateZ::format(std::format_contex
 
 CString PropertyGS1Script::serialize() const
 {
-	auto server = BabyDI::Get<Server>();
-
-	// TODO: v4 GS1 scripts!
-	// Modern sends scripts in a different way.
-	if (server->Generation == ServerGeneration::MODERN)
-		return CString() >> (short)0;
-
 	// Seihai: a line break would end the packet, and the client would read every later script line as a packet of its
 	// own. Without an NPC-server nothing turned the level file's newlines into \xa7 (as for weapons, #27).
 	const auto text = Weapon::gs1WireText(script);

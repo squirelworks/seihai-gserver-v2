@@ -263,6 +263,7 @@ public:
 	int loadServerObjects();
 	void loadWeapons(bool print = false);
 	void loadMapLevels() const;
+	void loadGanis();
 
 	// Folder Configuration
 	void loadAllFolders();
