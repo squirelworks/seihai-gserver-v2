@@ -269,6 +269,8 @@ namespace graal3d
 
 	// Checks a PNG's header for a sane width and height; other images pass.
 	inline constexpr uint32_t kMaxImageSide = 8192;
+	// The largest side 5.12 drew; 2048 and 4096 drew white (live, 2026-11-25).
+	inline constexpr uint32_t kMaxDrawnImageSide = 1024;
 	std::optional<std::string> unsafeImage(std::string_view data);
 
 	// unsafe3ds, unsafeDts or unsafeImage, by the file's extension.
