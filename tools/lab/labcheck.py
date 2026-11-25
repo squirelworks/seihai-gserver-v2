@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
+# Seihai project, 2026-11-12, 2026-11-25: see CHANGES-SEIHAI.md.
 """Expected-vs-actual checks for the real-client lab runs (issues #25, #26, #27, #34).
 
 Reads what a packet-logging gserver wrote during a run and prints a Markdown
@@ -71,11 +71,12 @@ PLI_PONG = 162
 
 # Version labels as the server prints them ("[G3D20126 (4.208)]").
 PING_LABELS = {"4.208", "6.015", "6.034/6.035", "6.037", "6.037 (Linux)"}
-# A bytecode weapon goes out as 193 (PLO_WEAPONHASH, plain-bytecode CRC) to 4.04r2 to 4.20r8 (#26, #60) and as
-# 197 (PLO_LOADSCRIPT, CRC of the encrypted GRESCR01 body) to 5.07 and later (#58). Older 4.x builds get the
-# bytecode itself (132).
-WEAPONHASH_LABELS = {"4.042", "4.110", "4.208"}
-LOADSCRIPT_LABELS = {"5.07", "5.12"}
+# A bytecode weapon goes out as 193 (PLO_WEAPONHASH, plain-bytecode CRC) to 4.04r2 up to the last 5.x build and as
+# 197 (PLO_LOADSCRIPT, CRC of the encrypted GRESCR01 body) from 6.00 beta 1 (#26, #60, #58; the classic/modern cut
+# of server/include/misc/ScriptPacketGuards.h since 2026-11-15, re-checked with a real 5.12 on 2026-11-25). Older 4.x
+# builds get the bytecode itself (132).
+WEAPONHASH_LABELS = {"4.042", "4.110", "4.208", "5.07", "5.12", "5.24"}
+LOADSCRIPT_LABELS = {"6.015", "6.034/6.035", "6.037", "6.037 (Linux)"}
 WEAPONCACHE_LABELS = WEAPONHASH_LABELS | LOADSCRIPT_LABELS
 
 TS = r"\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]"
