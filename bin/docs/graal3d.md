@@ -262,6 +262,11 @@ at start-up. Put `heights.info` (one texture name a line, in material order, eac
 `heights.info` over TCP when it has none, then fetches each texture by its bare
 name.
 
+`heights.info` is newline-separated. A script that sets terrain materials through
+`setmaterials` instead must separate the names with commas, because the 5.12 client
+reads a newline-separated list as one name (lab, 2026-11-25). The native
+`terrain` line does not send `setmaterials`.
+
 When the block arrives, the client sends a `TerrainRequestUpdatesEvent` with the
 stamp of every chunk it already holds. The server answers with every chunk whose
 stamp differs, so a returning client downloads only what changed. The stamp is
