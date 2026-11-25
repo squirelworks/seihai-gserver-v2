@@ -501,11 +501,10 @@ bool PlayerClient::sendLogin()
 			}
 		}
 
-		// Tell the client if the server is connected to the listserver. A 5.x
-		// client joining a 3D server keeps its "Connecting..." window over the 3D
-		// view until it gets this, so a 3D client gets it even when no listserver
-		// is connected.
-		if (m_server->getServerList().getConnected() || isGraal3DClient())
+		// Tell the client if the server is connected to the listserver. An add-on
+		// may need it sent anyway: a 5.x client joining a 3D server keeps its
+		// "Connecting..." window over the 3D view until it gets this.
+		if (m_server->getServerList().getConnected() || addonNeeds().alwaysServerListConnected)
 			sendPacket(CString() >> (char)PLO_SERVERLISTCONNECTED);
 
 		// Reset the client.

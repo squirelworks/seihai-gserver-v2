@@ -1654,8 +1654,9 @@ HandlePacketResult PlayerClient::msgPLI_VERIFYWANTSEND(CString& pPacket)
 		const auto info = m_server->getFileSystem().infoi(fs::FileCategory::ALL, fileName.toStringView());
 		if (info == nullptr)
 		{
-			// A 3D client's login waits on this answer: sendFile tells it the file is missing.
-			if (!isGraal3DClient())
+			// An add-on may need an answer (a 3D client's login waits on it): sendFile
+			// tells the client the file is missing.
+			if (!addonNeeds().answerMissingChecksumFiles)
 				return HandlePacketResult::Handled;
 		}
 		else

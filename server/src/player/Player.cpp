@@ -591,12 +591,10 @@ void Player::sendPacketUnchecked(const CString& packet, const PacketQueue channe
 	log::print(log::networkdump, "\n\n");
 #endif
 
-	// A client in Graal 3D mode ignores flag packets on TCP; send them on its 3D link too.
-	if (m_graal3dLinked && m_server != nullptr)
-	{
-		if (auto* graal3d = m_server->getGraal3D(); graal3d != nullptr)
-			graal3d->mirrorPacket(getId(), packet);
-	}
+	// An add-on holding a side link for this player sees its packets (a client in
+	// Graal 3D mode ignores flag packets on TCP; the add-on sends them on its 3D link).
+	if (m_addonLinked && m_server != nullptr)
+		m_server->getAddons().onPacketToPlayer(getId(), packet);
 
 	// append buffer
 	m_fileQueue.addPacket(channel, packet);
@@ -647,9 +645,11 @@ bool Player::sendGpakKey(std::string_view filename, bool raw)
 	return true;
 }
 
-bool Player::isGraal3DClient() const
+AddonClientNeeds Player::addonNeeds() const
 {
-	return isClient() && m_server->getGraal3D() != nullptr && graal3d::Service::clientHasGraal3D(m_versionId);
+	if (!isClient() || m_server == nullptr)
+		return {};
+	return m_server->getAddons().clientNeeds(m_versionId);
 }
 
 fs::FileData* Player::findClientFile(const std::filesystem::path& file) const
@@ -657,24 +657,26 @@ fs::FileData* Player::findClientFile(const std::filesystem::path& file) const
 	const auto& filesystem = m_server->getFileSystem();
 	auto info = filesystem.infoi(fs::FileCategory::ALL, file.filename());
 
-	// The 5.x 3D client asks for every texture (material or Sky) by its bare,
-	// lower-cased name and stores what it gets under that name (lab 2026-11-25).
-	// 3.153 asks for Sky textures as .gif, never .png (lab 2026-11-25), so an image
-	// name with the wrong image extension also finds the same stem with another.
-	if (info == nullptr && isGraal3DClient())
+	// An add-on's client may ask for a file by its bare name (the 5.x 3D client
+	// asks so for every texture, material or Sky, lower-cased, lab 2026-11-25)
+	// and store what it gets under that name. 3.153 asks for Sky textures as
+	// .gif, never .png (lab 2026-11-25), so a name with one of those extensions
+	// also finds the same stem with another.
+	if (info == nullptr)
 	{
+		const auto extensions = addonNeeds().bareNameExtensions;
 		auto stem = file.filename();
-		bool image = !file.has_extension();
-		if (!image)
+		bool tryStem = !file.has_extension();
+		if (!tryStem)
 		{
 			auto ext = stem.extension().string();
 			std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-			image = std::any_of(std::begin(graal3d::kImageExtensions), std::end(graal3d::kImageExtensions), [&](const char* e) { return ext == e; });
+			tryStem = std::any_of(extensions.begin(), extensions.end(), [&](const char* e) { return ext == e; });
 			stem.replace_extension();
 		}
-		if (image)
+		if (tryStem)
 		{
-			for (const auto* ext : graal3d::kImageExtensions)
+			for (const auto* ext : extensions)
 			{
 				if ((info = filesystem.infoi(fs::FileCategory::ALL, stem.string() + ext)) != nullptr)
 					break;
@@ -728,8 +730,6 @@ std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file, const 
 		{
 			if (m_server->cached.warnOnMissingFiles.getValue() == true)
 				return {sendFailure("File not found when trying to send to player"), false};
-			if (isGraal3DClient())
-				return {sendFailure("Graal3D: file not found, told the client"), false};
 			// A missing file always gets an answer. warnonmissingfiles only decides whether it is logged.
 			// With no answer the client keeps asking.
 			return {sendFailure({}), false};

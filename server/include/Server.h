@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-11, 2026-11-12, 2026-11-16: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-11, 2026-11-12, 2026-11-16, 2026-11-25: see CHANGES-SEIHAI.md.
 #ifndef SERVER_H
 #define SERVER_H
 
@@ -29,9 +29,9 @@
 #include <Account.h>
 #include <ServerList.h>
 #include <UpdatePackage.h>
+#include <addons/ServerAddons.h>
 #include <animation/GameAni.h>
 #include <filesystem/FileSystem.h>
-#include <graal3d/Graal3DService.h>
 #include <level/Level.h>
 #include <level/LevelItem.h>
 #include <level/LevelShoot.h>
@@ -469,8 +469,9 @@ public:
 	bool hasNPCServer() const { return m_playerList.contains(NPCServerPlayerID); }
 	std::shared_ptr<NPCServer> getNPCServer() const { return m_npcServer; }
 
-	// The Graal 3D (Torque UDP) side, or nullptr when the `graal3d` option is off.
-	graal3d::Service* getGraal3D() const { return m_graal3d.get(); }
+	// The add-ons running on this server (addons/ServerAddons.h); empty by default.
+	ServerAddons& getAddons() { return m_addons; }
+	const ServerAddons& getAddons() const { return m_addons; }
 
 	void queueNPCEventLocal(const LevelPtr& level, ScriptEventType type, ScriptObject source, auto&&... args)
 	{
@@ -592,7 +593,7 @@ private:
 	std::unique_ptr<UPNP> m_upnp;
 	std::thread m_upnpThread;
 
-	std::unique_ptr<graal3d::Service> m_graal3d;
+	ServerAddons m_addons;
 
 	std::optional<seclogin::ServerIdentity> m_secureLoginIdentity;
 };
