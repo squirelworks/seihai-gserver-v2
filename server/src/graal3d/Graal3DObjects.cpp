@@ -819,7 +819,8 @@ namespace graal3d
 						char* end = nullptr;
 						const std::string word(w[i]);
 						const unsigned long size = std::strtoul(word.c_str(), &end, 10);
-						ok = end && *end == '\0' && size >= 1 && size <= 1024;
+						// 1 to 64: a huge square size killed a live 5.12 right after "Terrain lit" (lab, 2026-11-25).
+						ok = end && *end == '\0' && size >= 1 && size <= 64;
 						terrain.squareSize = static_cast<uint32_t>(size);
 					}
 				}

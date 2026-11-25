@@ -1237,6 +1237,10 @@ SCENARIO("The world file takes rawobject and rawevent lines")
 	REQUIRE(world.objects.size() == 1);
 	REQUIRE(world.objects[0].kind == GhostObject::Kind::Raw);
 	REQUIRE(world.objects[0].className() == "TerrainBlock");
+	// A square size past 64 is refused: a huge one killed a live 5.12.
+	REQUIRE(parseWorld("terrain world/terrain 64\n").terrain);
+	REQUIRE_FALSE(parseWorld("terrain world/terrain 65\n").terrain);
+	REQUIRE_FALSE(parseWorld("terrain world/terrain 2147483647\n").terrain);
 	REQUIRE(world.objects[0].raw.size() == 3);
 	REQUIRE(world.rawEvents.size() == 2);
 	REQUIRE_FALSE(world.rawEvents[0].late);
