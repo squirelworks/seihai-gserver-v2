@@ -33,7 +33,10 @@ Round 1 (the default) varies textures, sky, object count, GameObject section
 rotated, a zero rotation axis), model name case, .3ds structure (no UVs, no
 smoothing groups, no local axes, no version chunk, an odd version, the mesh
 twice, an empty mesh, a 65535-point mesh), 2048 objects, the ground alone, and
-a bare ghost of each networked class this server has no writer for. Each
+a bare ghost of each networked class this server has no writer for. Round 3
+(`--count N`, `--seed S`) is seeded fuzz: each world is the control plus one
+fuzzed GameObject (every section on or off, edge floats, long, empty, missing
+or odd strings), or one fuzzed sun, sky or object line. Each
 --levels DIR adds one variant per NAME_graal3dworld.txt in it (as written by
 `seihai-servertools gen terrain DIR --world NAME --3d`), served as it is.
 Run each variant on both routes (graal3droute = mission, then sharp3d).
@@ -248,7 +251,7 @@ def raw_gameobject(name, shape, pos, section2):
 
 # --------------------------------------------------------------- variants
 
-def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None, round_=1, levels=()):
+def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None, round_=1, levels=(), count=40):
     pack, out = Path(pack), Path(out)
     scene = json.loads((pack / "scene.json").read_text())
     if ground:
@@ -309,6 +312,8 @@ def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None, roun
     probe = next((o for o in control.objects if o[1] != control.ground), None)
     if round_ == 2:
         round2(scene, control, probe, base_files, textures, variant)
+    if round_ == 3:
+        round3(scene, control, probe, textures, variant, seed, count)
     for d in levels:
         for txt in sorted(Path(d).glob("*_graal3dworld.txt")):
             name = txt.name[: -len("_graal3dworld.txt")]
@@ -330,7 +335,7 @@ def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None, roun
             what = f"generated level {name} ({len(files)} models), served as written"
             (dest / "VARIANT.md").write_text(f"# {vid}\n\nIn place of C0: {what}\n")
             variants.append((vid, what))
-    if round_ == 2:
+    if round_ in (2, 3):
         return finish(out, variants, only, round_)
 
     w = World(scene)
@@ -394,6 +399,93 @@ def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None, roun
                             textures("both") + [(name, bytes(patched))])
 
     return finish(out, variants, only, round_)
+
+
+# Values that break naive readers: zeroes of both signs, tiny and huge
+# magnitudes, infinities and NaN (f32 tokens take "inf" and "nan").
+EDGE_FLOATS = ["0", "-0", "1e-38", "1e-45", "1e30", "-1e30", "3.4e38", "inf", "-inf", "nan", "-1", "1", "65536"]
+
+
+def fuzz_string(rng, model):
+    kind = rng.randrange(7)
+    if kind == 0:
+        return "-"                                         # empty
+    if kind == 1:
+        return "x" * rng.choice((200, 255))                 # long (the server takes up to 255)
+    if kind == 2:
+        return model                                       # a real model
+    if kind == 3:
+        return "missing_" + str(rng.randrange(1000)) + ".3ds"
+    if kind == 4:
+        return "%25s%25n%25d"                              # printf directives, percent-escaped
+    if kind == 5:
+        return "../" * rng.randrange(1, 4) + model         # path walk
+    return "%c3%a9t%c3%a9"                                 # UTF-8
+
+
+def fuzz_gameobject(rng, model, pos):
+    """A GameObject update whose 13 sections are each on or off at random,
+    with edge values; the transform keeps a sane position half the time."""
+    f = []
+    fl = lambda: "f32:" + (rng.choice(EDGE_FLOATS) if rng.random() < 0.7 else f"{rng.uniform(-100, 100):.3f}")
+    s = lambda: "str:" + fuzz_string(rng, model)
+    sec = lambda: rng.random() < 0.5
+    f += ["f1", s()] if sec() else ["f0"]                                   # 1 name
+    f += ["f1", fl(), fl(), fl()] if sec() else ["f0"]                      # 2 velocity or scale
+    f += ["f1", s()] if sec() else ["f0"]                                   # 3 shape
+    f += ["f1", s()] if sec() else ["f0"]                                   # 4 skin
+    if sec():                                                               # 5 transform
+        p = [f"f32:{v:g}" for v in pos] if rng.random() < 0.5 else [fl(), fl(), fl()]
+        f += ["f1"] + p + [fl(), fl(), fl(), fl()]
+    else:
+        f += ["f0"]
+    f += ["f1", "str:" + rng.choice(["interpolate", "list", "rigid", "-", "bogus"])] if sec() else ["f0"]  # 6 movetype
+    f += ["f0"]                                                             # 7 movement data: never (no length)
+    if sec():                                                               # 8 shape data, int14 length + bytes
+        n = rng.choice((0, 1, 16, 255))
+        f += ["f1", f"hex@14:{''.join(f'{rng.randrange(256):02x}' for _ in range(n))}"] if n else ["f1", "i14:0"]
+    else:
+        f += ["f0"]
+    f += ["f1", s()] if sec() else ["f0"]                                   # 9 chat
+    f += ["f1", s()] if sec() else ["f0"]                                   # 10 script classes
+    if sec():                                                               # 11 attr[1..8]
+        f += ["f1"] + sum((["f1", s()] if sec() else ["f0"] for _ in range(8)), [])
+    else:
+        f += ["f0"]
+    if sec():                                                               # 12 nickname + RGBA
+        f += ["f1", s()] + [f"u8:{rng.randrange(256)}" for _ in range(4)]
+    else:
+        f += ["f0"]
+    f += ["f1", f"u16:{rng.randrange(65536)}"] if sec() else ["f0"]         # 13 flags
+    return "rawobject GameObject " + " ".join(f)
+
+
+def round3(scene, control, probe, textures, variant, seed, count):
+    """Seeded fuzz: each variant is C0 plus one fuzzed GameObject (FZ-g), or C0
+    with one fuzzed sun (FZ-s), sky (FZ-k) or object line (FZ-o)."""
+    rng = random.Random(seed)
+    model = probe[1] if probe else control.ground
+    x, y, z = (probe[2], probe[3], probe[4]) if probe else (0, 0, 0)
+    e = lambda: rng.choice(EDGE_FLOATS)
+    for i in range(count):
+        kind = "gsko"[i % 4]
+        w = World(scene)
+        if kind == "g":
+            line = fuzz_gameobject(rng, model, (x + 1.5, y, z))
+            w.extra = [line]
+            what = "one fuzzed GameObject: " + line[len("rawobject GameObject "):][:160]
+        elif kind == "s":
+            w.sun = "sun " + " ".join(e() for _ in range(11))
+            what = "fuzzed sun line: " + w.sun
+        elif kind == "k":
+            w.sky_distance = float(e())
+            w.fog = tuple(float(e()) for _ in range(3))
+            what = f"fuzzed sky: distance {w.sky_distance}, fog {w.fog}"
+        else:
+            vals = [e() for _ in range(7)]
+            w.extra = [f"object FuzzObj {model} " + " ".join(vals)]
+            what = "fuzzed object line: " + w.extra[0]
+        variant(f"FZ-{kind}{i:03d}", what, w, textures("both"))
 
 
 def round2(scene, control, probe, base_files, textures, variant):
@@ -469,11 +561,12 @@ def main(argv=None):
     p.add_argument("--extra", action="append", default=[], help="another folder of files every variant gets")
     p.add_argument("--only", help="comma-separated variant ids")
     p.add_argument("--seed", type=int, default=2026)
-    p.add_argument("--round", type=int, choices=(1, 2), default=1)
+    p.add_argument("--round", type=int, choices=(1, 2, 3), default=1)
+    p.add_argument("--count", type=int, default=40, help="round 3: how many fuzz variants")
     p.add_argument("--levels", action="append", default=[], help="a folder of generated NAME_graal3dworld.txt worlds")
     a = p.parse_args(argv)
     only = set(a.only.split(",")) if a.only else None
-    made = build(a.out, a.pack, a.mbg, only, a.seed, a.extra, a.ground, a.round, a.levels)
+    made = build(a.out, a.pack, a.mbg, only, a.seed, a.extra, a.ground, a.round, a.levels, a.count)
     print(f"{len(made)} variants in {a.out}")
     return 0
 

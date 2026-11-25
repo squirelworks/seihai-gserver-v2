@@ -151,6 +151,19 @@ class G3DLabWorlds(unittest.TestCase):
         self.assertIn("rawobject WaterBlock f0", (self.out / "R-WaterBlock/config/graal3dworld.txt").read_text())
         self.assertIn("round 2", (self.out / "RUNSHEET.md").read_text())
 
+    def test_round_three_is_seeded_fuzz(self):
+        made = g.build(self.out, self.pack, None, None, seed=5, round_=3, count=8)
+        ids = [v for v, _ in made]
+        self.assertEqual(ids, ["C0", "FZ-g000", "FZ-s001", "FZ-k002", "FZ-o003", "FZ-g004", "FZ-s005", "FZ-k006", "FZ-o007"])
+        first = (self.out / "FZ-g000/config/graal3dworld.txt").read_text()
+        again = Path(self.tmp.name) / "again"
+        g.build(again, self.pack, None, {"FZ-g000"}, seed=5, round_=3, count=8)
+        self.assertEqual((again / "FZ-g000/config/graal3dworld.txt").read_text(), first)
+        line = next(l for l in first.splitlines() if l.startswith("rawobject GameObject"))
+        self.assertTrue(all(len(w) <= 4 + 255 * 3 for w in line.split()))
+        sun = next(l for l in (self.out / "FZ-s001/config/graal3dworld.txt").read_text().splitlines() if l.startswith("sun "))
+        self.assertEqual(len(sun.split()), 12)
+
 
 if __name__ == "__main__":
     unittest.main()
