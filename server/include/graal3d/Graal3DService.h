@@ -123,6 +123,7 @@ namespace graal3d
 		// Lab: the world's rawevent lines (`late`: the ones for after the mission
 		// start) and, for protocol 19, its rawobject lines.
 		void sendRawEvents(const std::string& account, Connection& connection, bool late);
+		void sendTerrain(const std::string& account, Connection& connection, const std::array<uint32_t, 256>& stamps);
 		void ghostRawObjects(const std::string& account, Connection& connection, ObjectKey firstKey);
 		void sendWorldWeapons(Connection& connection);
 		std::string compileClientScript(const std::string& name, std::string_view source);

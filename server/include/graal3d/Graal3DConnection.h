@@ -74,6 +74,9 @@ namespace graal3d
 			std::function<void(std::string_view)> log;
 			std::function<void(MissionState)> onMission;
 			std::function<void(const ClientState&)> onClientState;
+			// A TerrainRequestUpdatesEvent: the stamp of every chunk the client
+			// holds (0: none), index y * 16 + x.
+			std::function<void(const std::array<uint32_t, 256>&)> onTerrainRequest;
 		};
 
 		// Time-outs in milliseconds.
@@ -99,6 +102,10 @@ namespace graal3d
 		// fields (a `rawevent` world line). False if the client's class table has
 		// no such event class.
 		bool postRawEvent(std::string_view className, const std::vector<RawField>& fields);
+
+		// Posts one TerrainChunkEvent: chunk x, y (0-15), its stamp and its zlib
+		// bytes (at most 1023). False if the client has no such event class.
+		bool postTerrainChunk(uint32_t x, uint32_t y, uint32_t stamp, std::string_view packed);
 
 		// Strings inside game packets carry the packet string flag (default on;
 		// see TorqueBitStream.h). Set before anything is sent.

@@ -209,6 +209,41 @@ namespace graal3d
 	std::vector<std::string> loadRawFiles(std::vector<RawField>& fields,
 										  const std::function<std::optional<std::string>(const std::string&)>& read);
 
+	// Streamed terrain for 5.x clients (Graal_analysis torque/terrain-512.md,
+	// read from the real 5.12 client): a TerrainBlock ghost that carries only
+	// settings, then up to 256 TerrainChunkEvents of 16 x 16 squares each.
+	// Chunk (x, y) is the file heights<x>-<y>.dat in `folder`: zlib-compressed
+	// chunk data, the same files the client keeps in its cache. The client
+	// sends the stamp of every chunk it holds once the block arrives; the
+	// server sends the chunks whose stamp differs.
+	struct TerrainChunk
+	{
+		std::string packed;  // zlib bytes, at most 1023
+		uint32_t stamp = 0;  // Torque calculateCRC of the inflated bytes
+	};
+
+	struct Terrain
+	{
+		std::string folder;
+		uint32_t squareSize = 8;
+		bool repeat = false;
+		std::array<std::optional<TerrainChunk>, 256> chunks; // y * 16 + x, filled by loadTerrain
+	};
+
+	// Torque's calculateCRC: the CRC-32 table, starting at 0xFFFFFFFF, without
+	// the final inversion.
+	uint32_t terrainStamp(std::string_view plain);
+
+	// The TerrainBlock update: init, the name "Terrain", 0, two empty strings,
+	// 1.0, 0.01, 8, the square size, the repeat byte.
+	std::vector<RawField> terrainBlockFields(const Terrain& terrain);
+
+	// Reads heights<x>-<y>.dat from the terrain folder with `read`. A missing
+	// file leaves its chunk empty. Returns one error per file that is too long
+	// for the event's int10 length or does not inflate.
+	std::vector<std::string> loadTerrain(Terrain& terrain,
+										 const std::function<std::optional<std::string>(const std::string&)>& read);
+
 	// One object the server ghosts: its class and state.
 	struct GhostObject
 	{
@@ -311,6 +346,11 @@ namespace graal3d
 	//                             (TerrainChunkEvent, ...) with the raw fields as
 	//                             its payload, when the world is ghosted, or with
 	//                             `late` once the client has its control object
+	//   terrain <folder> [<square size>] [repeat]
+	//                             streamed terrain for 4.20r6 and 5.x (see
+	//                             Terrain): a TerrainBlock ghost, then the
+	//                             chunks in <folder> (relative to the server
+	//                             folder) as the client asks for them
 	struct World
 	{
 		std::vector<GhostObject> objects; // the sun, if any, is one of them
@@ -338,6 +378,7 @@ namespace graal3d
 			bool late = false;
 		};
 		std::vector<RawEvent> rawEvents;
+		std::optional<Terrain> terrain; // its TerrainBlock ghost is in `objects`, as a Raw object
 		std::vector<std::string> errors;  // one per line that was not understood
 	};
 

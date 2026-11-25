@@ -183,6 +183,20 @@ namespace graal3d
 		return true;
 	}
 
+	bool Connection::postTerrainChunk(uint32_t x, uint32_t y, uint32_t stamp, std::string_view packed)
+	{
+		if (!eventClassId(m_profile, "TerrainChunkEvent") || packed.size() > 1023)
+			return false;
+		BitWriter payload;
+		payload.writeInt(x & 15, 4);
+		payload.writeInt(y & 15, 4);
+		payload.writeU32(stamp);
+		payload.writeInt(static_cast<uint32_t>(packed.size()), 10);
+		payload.writeBytes(packed);
+		postEvent("TerrainChunkEvent", std::move(payload));
+		return true;
+	}
+
 	void Connection::sendCommand(std::string_view command, const std::vector<std::string>& args)
 	{
 		// commandToClient sends the command name as a tagged string: the string
@@ -1150,15 +1164,16 @@ namespace graal3d
 
 		if (ev.name == "TerrainRequestUpdatesEvent")
 		{
-			// Graal_analysis graal3d/torque-engine-4x.md: 256 x u32, one stamp per
-			// 16 x 16 terrain chunk, what the client already holds. Logged for the
-			// terrain labs; the server streams no terrain of its own.
+			// Graal_analysis torque/terrain-512.md: 256 x u32, one stamp per
+			// 16 x 16 terrain chunk, what the client already holds.
 			BitReader r(ev.payload);
 			std::string held;
 			size_t nonZero = 0;
+			std::array<uint32_t, 256> stamps{};
 			for (int i = 0; i < 256 && r.bitsLeft() >= 32; ++i)
 			{
 				const auto stamp = r.readU32();
+				stamps[static_cast<size_t>(i)] = stamp;
 				if (stamp == 0)
 					continue;
 				if (++nonZero <= 8)
@@ -1167,6 +1182,8 @@ namespace graal3d
 			log("TerrainRequestUpdatesEvent: " + std::to_string(ev.payloadBits) + " bits, " + std::to_string(nonZero) +
 				" chunks with a stamp" + held + (nonZero > 8 ? " ..." : ""));
 			log("  payload " + hexPreview(ev.payload, 1024));
+			if (m_cb.onTerrainRequest)
+				m_cb.onTerrainRequest(stamps);
 			return;
 		}
 

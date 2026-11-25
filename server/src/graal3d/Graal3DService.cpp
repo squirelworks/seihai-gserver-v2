@@ -327,6 +327,11 @@ namespace graal3d
 		};
 
 		cb.onClientState = [this, playerId](const ClientState& state) { handleClientState(playerId, state); };
+		cb.onTerrainRequest = [this, playerId, account](const std::array<uint32_t, 256>& stamps) {
+			if (auto it = m_byPlayer.find(playerId); it != m_byPlayer.end())
+				if (auto s = m_sessions.find(it->second); s != m_sessions.end())
+					sendTerrain(account, *s->second.connection, stamps);
+		};
 
 		Session session{from, playerId, std::make_unique<Connection>(*profile, req->sequence, now, std::move(cb))};
 		auto& connection = *session.connection;
@@ -439,6 +444,16 @@ namespace graal3d
 								 " bits, more than an int14 length holds");
 			++raw;
 		}
+		if (m_world.terrain)
+		{
+			for (auto& e : loadTerrain(*m_world.terrain, read))
+				errors.push_back("terrain " + m_world.terrain->folder + ": " + e);
+			size_t chunks = 0;
+			for (const auto& c : m_world.terrain->chunks)
+				chunks += c ? 1 : 0;
+			log::printLine(log::server, "Graal3D: terrain from {}: {} of 256 chunks, square size {}{}.", m_world.terrain->folder, chunks,
+						   m_world.terrain->squareSize, m_world.terrain->repeat ? ", repeating" : "");
+		}
 		for (const auto& e : errors)
 			log::printLine(log::server, "** [Error] Graal3D: graal3dworld.txt {}", e);
 		if (raw > 0)
@@ -464,15 +479,45 @@ namespace graal3d
 			log::printLine(log::server, "Graal3D: {}'s client has no event class {}: its raw events are not sent.", account, name);
 	}
 
+	void Service::sendTerrain(const std::string& account, Connection& connection, const std::array<uint32_t, 256>& stamps)
+	{
+		if (!m_world.terrain)
+		{
+			log::printLine(log::server, "Graal3D: {} asked for terrain chunks; the world has no terrain line.", account);
+			return;
+		}
+		size_t sent = 0, current = 0;
+		for (size_t i = 0; i < 256; ++i)
+		{
+			const auto& chunk = m_world.terrain->chunks[i];
+			if (!chunk)
+				continue;
+			if (chunk->stamp == stamps[i])
+			{
+				++current;
+				continue;
+			}
+			if (!connection.postTerrainChunk(static_cast<uint32_t>(i % 16), static_cast<uint32_t>(i / 16), chunk->stamp, chunk->packed))
+			{
+				log::printLine(log::server, "Graal3D: {}'s client has no TerrainChunkEvent class: no terrain sent.", account);
+				return;
+			}
+			++sent;
+		}
+		log::printLine(log::server, "Graal3D: {} gets {} terrain chunks ({} already current).", account, sent, current);
+	}
+
 	void Service::ghostRawObjects(const std::string& account, Connection& connection, ObjectKey firstKey)
 	{
 		// Every raw object goes to every client; Connection::setGhost logs the ones
 		// whose class the client's table does not have.
 		ObjectKey key = firstKey;
 		size_t count = 0;
+		const bool skipTerrain = connection.profile().tgePackets && m_world.terrain;
 		for (const auto& object : m_world.objects)
 		{
-			if (object.kind == GhostObject::Kind::Raw)
+			// The terrain line's TerrainBlock is the 5.x layout; 4.04r2's is stock TGE.
+			if (object.kind == GhostObject::Kind::Raw && !(skipTerrain && object.rawClass == "TerrainBlock"))
 			{
 				connection.setGhost(key, object);
 				++count;

@@ -226,12 +226,14 @@ namespace
 		std::vector<MissionState> mission;
 		std::vector<ClientState> states;
 		std::vector<std::string> logs;
+		std::vector<std::array<uint32_t, 256>> terrainRequests;
 		Connection conn{profile, 0x400, now, Connection::Callbacks{
 												  [this](std::string_view d) { sent.emplace_back(d); },
 												  [this](const TextMessage& m) { texts.push_back(m); },
 												  [this](std::string_view l) { logs.emplace_back(l); },
 												  [this](MissionState s) { mission.push_back(s); },
 												  [this](const ClientState& c) { states.push_back(c); },
+												  [this](const std::array<uint32_t, 256>& s) { terrainRequests.push_back(s); },
 											  }};
 
 		void tick(uint64_t ms)
@@ -1297,6 +1299,89 @@ SCENARIO("A TerrainRequestUpdatesEvent from the client is logged with its stamps
 		if (l.find("TerrainRequestUpdatesEvent: 8192 bits, 1 chunks with a stamp (1,1)=42") != std::string::npos)
 			found = true;
 	REQUIRE(found);
+	REQUIRE(h.terrainRequests.size() == 1);
+	REQUIRE(h.terrainRequests[0][17] == 42);
+	REQUIRE(h.terrainRequests[0][0] == 0);
+}
+
+SCENARIO("A terrain line ghosts a TerrainBlock and loads the chunk files")
+{
+	const auto world = parseWorld("terrain world/terrain 4 repeat\nterrain again\n");
+	REQUIRE(world.terrain);
+	REQUIRE(world.terrain->folder == "world/terrain");
+	REQUIRE(world.terrain->squareSize == 4);
+	REQUIRE(world.terrain->repeat);
+	REQUIRE(world.errors.size() == 1); // one terrain only
+	REQUIRE(world.objects.size() == 1);
+	REQUIRE(world.objects[0].className() == "TerrainBlock");
+
+	THEN("the TerrainBlock update is the 5.12 layout")
+	{
+		BitWriter w;
+		writeRawFields(w, world.objects[0].raw);
+		const auto bytes = w.toString();
+		BitReader r(bytes);
+		REQUIRE(r.readFlag());
+		REQUIRE(r.readString() == "Terrain");
+		REQUIRE(r.readU32() == 0);
+		REQUIRE(r.readString().empty());
+		REQUIRE(r.readString().empty());
+		REQUIRE(r.readU32() == 0x3F800000u);
+		REQUIRE(r.readU32() == 0x3C23D70Au);
+		REQUIRE(r.readU32() == 8);
+		REQUIRE(r.readU32() == 4);
+		REQUIRE(r.readInt(8) == 1);
+		REQUIRE(r.bitPosition() == rawFieldBits(world.objects[0].raw));
+	}
+
+	THEN("each chunk file is kept with Torque's stamp of its inflated bytes")
+	{
+		Terrain t = *world.terrain;
+		const std::string plain = "chunk data";
+		std::string packed(64, '\0');
+		uLongf size = static_cast<uLongf>(packed.size());
+		REQUIRE(compress(reinterpret_cast<Bytef*>(packed.data()), &size, reinterpret_cast<const Bytef*>(plain.data()), plain.size()) == Z_OK);
+		packed.resize(size);
+		const auto errors = loadTerrain(t, [&](const std::string& path) -> std::optional<std::string> {
+			if (path == "world/terrain/heights3-1.dat")
+				return packed;
+			if (path == "world/terrain/heights0-0.dat")
+				return std::string("not zlib");
+			if (path == "world/terrain/heights15-15.dat")
+				return std::string(1024, 'x');
+			return std::nullopt;
+		});
+		REQUIRE(errors.size() == 2);
+		REQUIRE(t.chunks[1 * 16 + 3]);
+		REQUIRE(t.chunks[1 * 16 + 3]->packed == packed);
+		REQUIRE(t.chunks[1 * 16 + 3]->stamp == (static_cast<uint32_t>(crc32(0, reinterpret_cast<const Bytef*>(plain.data()), plain.size())) ^ 0xFFFFFFFFu));
+		REQUIRE_FALSE(t.chunks[0]);
+		REQUIRE_FALSE(t.chunks[255]);
+	}
+}
+
+SCENARIO("A TerrainChunkEvent carries x, y, the stamp and the zlib bytes")
+{
+	Harness h;
+	const std::string packed = "\x78\x9c\x03\x00\x00\x00\x00\x01";
+	REQUIRE(h.conn.postTerrainChunk(5, 14, 0xDEADBEEF, packed));
+	REQUIRE_FALSE(h.conn.postTerrainChunk(0, 0, 0, std::string(1024, 'x')));
+	h.conn.receive(kFirstData, h.now);
+	h.tick(60);
+	const auto pkt = readServerPacket(h.sent.back());
+	const auto id = *eventClassId(h.profile, "TerrainChunkEvent");
+	const ClientEvent* chunk = nullptr;
+	for (const auto& ev : pkt.events)
+		if (ev.classId == id)
+			chunk = &ev;
+	REQUIRE(chunk);
+	REQUIRE(chunk->bits == 4 + 4 + 32 + 10 + 8 * packed.size());
+	BitReader r(chunk->payload);
+	REQUIRE(r.readInt(4) == 5);
+	REQUIRE(r.readInt(4) == 14);
+	REQUIRE(r.readU32() == 0xDEADBEEF);
+	REQUIRE(r.readInt(10) == packed.size());
+	REQUIRE(r.readBytes(packed.size()) == packed);
 }
 
 SCENARIO("The Sharp3D route sends the world as ghost-always events and controls the Camera")

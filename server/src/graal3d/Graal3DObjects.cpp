@@ -779,6 +779,34 @@ namespace graal3d
 				world.objects.push_back(std::move(raw));
 				ok = true;
 			}
+			else if (w[0] == "terrain" && w.size() >= 2 && w.size() <= 4 && !world.terrain)
+			{
+				Terrain terrain;
+				terrain.folder = w[1];
+				ok = true;
+				for (size_t i = 2; i < w.size() && ok; ++i)
+				{
+					if (w[i] == "repeat")
+						terrain.repeat = true;
+					else
+					{
+						char* end = nullptr;
+						const std::string word(w[i]);
+						const unsigned long size = std::strtoul(word.c_str(), &end, 10);
+						ok = end && *end == '\0' && size >= 1 && size <= 1024;
+						terrain.squareSize = static_cast<uint32_t>(size);
+					}
+				}
+				if (ok)
+				{
+					GhostObject block;
+					block.kind = GhostObject::Kind::Raw;
+					block.rawClass = "TerrainBlock";
+					block.raw = terrainBlockFields(terrain);
+					world.objects.push_back(std::move(block));
+					world.terrain = std::move(terrain);
+				}
+			}
 			else if (w[0] == "rawevent" && w.size() >= 2)
 			{
 				const bool late = w[1] == "late";
@@ -815,6 +843,73 @@ namespace graal3d
 				world.errors.push_back("line " + std::to_string(lineNo) + ": " + std::string(line));
 		}
 		return world;
+	}
+
+	uint32_t terrainStamp(std::string_view plain)
+	{
+		const auto crc = crc32(0L, reinterpret_cast<const Bytef*>(plain.data()), static_cast<uInt>(plain.size()));
+		return static_cast<uint32_t>(crc) ^ 0xFFFFFFFFu;
+	}
+
+	std::vector<RawField> terrainBlockFields(const Terrain& terrain)
+	{
+		const auto u32 = [](uint32_t v) { return RawField{RawField::Type::Int, 32, v}; };
+		const auto f32 = [](float v) {
+			RawField f{RawField::Type::F32};
+			f.f32 = v;
+			return f;
+		};
+		const auto str = [](std::string text) {
+			RawField f{RawField::Type::String};
+			f.data = std::move(text);
+			return f;
+		};
+		return {
+			RawField{RawField::Type::Flag, 1, 1},
+			str("Terrain"),
+			u32(0),
+			str(""),
+			str(""),
+			f32(1.0f),
+			f32(0.01f),
+			u32(8),
+			u32(terrain.squareSize),
+			RawField{RawField::Type::Int, 8, terrain.repeat ? 1u : 0u},
+		};
+	}
+
+	std::vector<std::string> loadTerrain(Terrain& terrain,
+										 const std::function<std::optional<std::string>(const std::string&)>& read)
+	{
+		std::vector<std::string> errors;
+		for (int y = 0; y < 16; ++y)
+		{
+			for (int x = 0; x < 16; ++x)
+			{
+				auto& slot = terrain.chunks[static_cast<size_t>(y * 16 + x)];
+				slot.reset();
+				const std::string name = "heights" + std::to_string(x) + "-" + std::to_string(y) + ".dat";
+				auto packed = read(terrain.folder + "/" + name);
+				if (!packed)
+					continue;
+				if (packed->empty() || packed->size() > 1023)
+				{
+					errors.push_back(name + " is " + std::to_string(packed->size()) + " bytes; a chunk takes 1 to 1023");
+					continue;
+				}
+				std::string plain(4096, '\0');
+				uLongf size = static_cast<uLongf>(plain.size());
+				if (uncompress(reinterpret_cast<Bytef*>(plain.data()), &size, reinterpret_cast<const Bytef*>(packed->data()),
+							   static_cast<uLong>(packed->size())) != Z_OK)
+				{
+					errors.push_back(name + " does not inflate");
+					continue;
+				}
+				plain.resize(size);
+				slot = TerrainChunk{std::move(*packed), terrainStamp(plain)};
+			}
+		}
+		return errors;
 	}
 
 	graal3d::Transform facing(const std::array<float, 3>& position, const std::array<float, 3>& target)
