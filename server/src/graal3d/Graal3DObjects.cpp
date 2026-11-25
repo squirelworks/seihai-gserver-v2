@@ -686,7 +686,7 @@ namespace graal3d
 			if (!line.empty() && line.back() == '\r')
 				line.remove_suffix(1);
 
-			const auto w = words(line);
+			auto w = words(line);
 			if (w.empty())
 				continue;
 
@@ -805,12 +805,38 @@ namespace graal3d
 					world.objects.push_back(std::move(block));
 				}
 			}
-			else if (w[0] == "replicator" && (w.size() == 9 || w.size() == 10 || w.size() == 14) &&
+			else if (w[0] == "replicator" && w.size() >= 9 &&
 					 (w[1] == "DynamicShapeReplicator" || w[1] == "DynamicGrass" || w[1] == "DynamicGrassReplicator"))
 			{
 				ReplicatorSettings rep;
 				rep.cls = w[1];
-				ok = toFloats(w, 2, rep.position.data(), 3);
+				// Options after the shapes: scale=<min>[,<max>] (both default 1).
+				bool optionsOk = true;
+				while (w.size() > 9 && w.back().find('=') != std::string_view::npos)
+				{
+					const auto option = w.back();
+					w.pop_back();
+					const auto eq = option.find('=');
+					const auto key = option.substr(0, eq);
+					std::string value(option.substr(eq + 1));
+					if (key != "scale")
+					{
+						optionsOk = false;
+						continue;
+					}
+					const auto number = [](const std::string& text, float& out) {
+						char* end = nullptr;
+						out = std::strtof(text.c_str(), &end);
+						return !text.empty() && end && *end == '\0' && std::isfinite(out) && out > 0.0f;
+					};
+					const auto comma = value.find(',');
+					float lo = 0.0f, hi = 0.0f;
+					if (!number(value.substr(0, comma), lo) || !number(comma == std::string::npos ? value : value.substr(comma + 1), hi) || hi < lo)
+						optionsOk = false;
+					rep.scaleMin = lo;
+					rep.scaleMax = hi;
+				}
+				ok = optionsOk && (w.size() == 9 || w.size() == 10 || w.size() == 14) && toFloats(w, 2, rep.position.data(), 3);
 				const auto whole = [&](size_t i, uint32_t max, uint32_t& out) {
 					char* end = nullptr;
 					const std::string word(w[i]);
@@ -820,9 +846,11 @@ namespace graal3d
 					out = static_cast<uint32_t>(v);
 					return true;
 				};
-				// The client clamps radius to 1-64 and the counts to 0-20; out of
-				// range here is a typo, so the line is refused.
-				ok = ok && whole(5, 64, rep.radius) && rep.radius >= 1 && whole(6, 20, rep.minPerCell) && whole(7, 20, rep.maxPerCell) &&
+				// The client clamps radius to 1-64 and the counts to 0-20 (0-100
+				// for the grass classes); out of range here is a typo, so the line
+				// is refused.
+				const uint32_t maxCount = rep.cls == "DynamicShapeReplicator" ? 20 : 100;
+				ok = ok && whole(5, 64, rep.radius) && rep.radius >= 1 && whole(6, maxCount, rep.minPerCell) && whole(7, maxCount, rep.maxPerCell) &&
 					 rep.minPerCell <= rep.maxPerCell;
 				rep.shapeFiles = w[8];
 				if (ok && w.size() >= 10)
@@ -1243,7 +1271,7 @@ namespace graal3d
 			signedNum(v, 16); // box min
 		for (const int v : {rep.boxMax[0], rep.boxMax[1], 32767})
 			signedNum(v, 16); // box max
-		vec(1.0f, 1.0f, 1.0f), vec(1.0f, 1.0f, 1.0f); // scale min, max
+		vec(rep.scaleMin, rep.scaleMin, rep.scaleMin), vec(rep.scaleMax, rep.scaleMax, rep.scaleMax); // scale min, max
 		vec(0.0f, 0.0f, 0.0f), vec(0.0f, 0.0f, 360.0f); // rotation min, max
 		f32(0.0f);                                      // offset z
 		flag(true), flag(false), flag(false), flag(false), flag(false); // on terrain only

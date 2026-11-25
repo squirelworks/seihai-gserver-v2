@@ -310,11 +310,13 @@ namespace graal3d
 		// The default covers the whole world.
 		std::array<int, 2> boxMin{-32767, -32767};
 		std::array<int, 2> boxMax{32767, 32767};
+		float scaleMin = 1.0f; // each copy is scaled by a random factor between these
+		float scaleMax = 1.0f;
 	};
 
 	// The update: an empty GameObject update (13 cleared section flags), then the
 	// replicator's part: position with no rotation, seed, shapes, radius, grid
-	// counts, the box (z -32767..32767), scale 1 to 1, rotation 0 to 360
+	// counts, the box (z -32767..32767), the scale range, rotation 0 to 360
 	// about z, no height offset, terrain only, slopes up to 90 degrees, no
 	// alignment, no surface exclusion, shown.
 	std::vector<RawField> replicatorFields(const ReplicatorSettings& replicator);
@@ -430,7 +432,7 @@ namespace graal3d
 	//                             a WaterBlock (see WaterSettings), for 4.20r6
 	//                             and 5.x
 	//   replicator <class> <x> <y> <z> <radius> <min> <max> <shapes>
-	//              [<seed> [<x0> <y0> <x1> <y1>]]
+	//              [<seed> [<x0> <y0> <x1> <y1>]] [scale=<min>[,<max>]]
 	//                             lab: ground cover (see ReplicatorSettings) for
 	//                             5.x; <class> is DynamicShapeReplicator,
 	//                             DynamicGrass or DynamicGrassReplicator; the

@@ -300,14 +300,15 @@ world in this layout from a generated height field.
 ## Lab: ground cover (`replicator`)
 
 ```
-# replicator <class> <x> <y> <z> <radius> <min> <max> <shapes> [<seed> [<x0> <y0> <x1> <y1>]]
-replicator DynamicGrass 10 -20 1.5 4 1 3 grass.dts
-replicator DynamicGrass 0 0 0 8 2 6 a.dts,b.dts 1 -512 -512 512 512
+# replicator <class> <x> <y> <z> <radius> <min> <max> <shapes> [<seed> [<x0> <y0> <x1> <y1>]] [scale=<min>[,<max>]]
+replicator DynamicShapeReplicator 10 -20 1.5 4 5 5 labcube.3ds scale=3
+replicator DynamicShapeReplicator 0 0 0 8 2 6 a.dts,b.dts 1 -512 -512 512 512 scale=1,3
 ```
 
 Ghosts a `DynamicShapeReplicator`, `DynamicGrass` or `DynamicGrassReplicator`: ground
 cover scattered around the point on a grid of 8-unit cells. `<radius>` is in cells
-(1 to 64), `<min>` and `<max>` are objects per cell (0 to 20), and `<shapes>` is the
+(1 to 64), `<min>` and `<max>` are objects per cell (0 to 20; 0 to 100 for the grass
+classes), `scale=` sets the random scale range of each copy (default 1), and `<shapes>` is the
 shape list as one string; 5.12 splits it at commas, so write several shapes as
 `a.dts,b.dts` with no spaces. The box is the world x/y region cover may grow in: 5.12
 grows an 8-unit cell only if its corner lies in `[x0, x1)` and `[y0, y1)`. Without one,
@@ -316,9 +317,12 @@ replicator's position, and cover is placed by casting rays, so it needs real gro
 (streamed terrain or solid objects). On the real 5.12 a replicator over streamed terrain
 grew a carpet of scaled, randomly rotated shapes on the slopes around the player (lab,
 2026-11-25). The start-up check looks up each replicator shape and checks it like a
-world object's. The layout is from a static read of the real 5.12 client
+world object's. Live results so far (lab, 2026-11-25): two shapes in the list are both
+used, picked per copy; two 5.12 clients see identical cover for the same seed;
+`DynamicGrass` and `DynamicGrassReplicator` create the ghost but draw nothing with
+shapes (they likely expect textures); 4.20r8 takes the ghost without a crash. The layout is from a static read of the real 5.12 client
 (Graal_analysis `torque/replicators-512.md`) and has not been seen live yet. The other
-fields are fixed: scale 1, any rotation about z, terrain only, slopes up to 90 degrees,
+fields are fixed: any rotation about z, terrain only, slopes up to 90 degrees,
 no alignment, shown. Only clients that take streamed
 terrain get it.
 

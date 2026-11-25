@@ -1236,6 +1236,34 @@ SCENARIO("A replicator line ghosts ground cover in the 5.12 layout")
 	REQUIRE(world.errors.size() == 3);
 	REQUIRE(world.replicatorShapes == std::vector<std::string>{"grass.dts"});
 	REQUIRE(parseWorld("replicator DynamicGrass 0 0 0 4 1 3 a.dts,b.3ds,\n").replicatorShapes == std::vector<std::string>{"a.dts", "b.3ds"});
+	// scale= after the other words; the grass classes take up to 100 per cell.
+	const auto scaled = parseWorld("replicator DynamicShapeReplicator 0 0 0 4 1 3 a.3ds 7 scale=3\n"
+								   "replicator DynamicShapeReplicator 0 0 0 4 1 3 a.3ds scale=2,4\n"
+								   "replicator DynamicShapeReplicator 0 0 0 4 1 3 a.3ds scale=4,2\n"     // max below min
+								   "replicator DynamicShapeReplicator 0 0 0 4 1 3 a.3ds size=2\n"        // unknown option
+								   "replicator DynamicShapeReplicator 0 0 0 4 1 50 a.3ds\n"              // past 20
+								   "replicator DynamicGrass 0 0 0 4 1 50 grass\n");
+	REQUIRE(scaled.objects.size() == 3);
+	REQUIRE(scaled.errors.size() == 3);
+	const auto scaleOf = [](const GhostObject& o) {
+		BitWriter sw;
+		writeRawFields(sw, o.raw);
+		const auto bytes = sw.toString();
+		BitReader sr(bytes);
+		for (int i = 0; i < 14; ++i)
+			sr.readFlag();
+		for (int i = 0; i < 6; ++i)
+			sr.readF32();
+		sr.readFlag(), sr.readU32(), sr.readString();
+		sr.readInt(8), sr.readInt(8), sr.readInt(8);
+		for (int i = 0; i < 6; ++i)
+			sr.readFlag(), sr.readInt(15);
+		const float lo = sr.readF32();
+		sr.readF32(), sr.readF32();
+		return std::pair{lo, sr.readF32()};
+	};
+	REQUIRE(scaleOf(scaled.objects[0]) == std::pair{3.0f, 3.0f});
+	REQUIRE(scaleOf(scaled.objects[1]) == std::pair{2.0f, 4.0f});
 	const auto& object = world.objects[0];
 	REQUIRE(object.className() == "DynamicGrass");
 	REQUIRE(object.layout512);
