@@ -101,15 +101,15 @@ static PacketHandleArray GeneratePacketHandlers()
 	handlers[PLI_TAMPERCHECK] = &PlayerClient::msgPLI_TAMPERCHECK;
 	handlers[PLI_SHOOT] = &PlayerClient::msgPLI_SHOOT;
 	handlers[PLI_SERVERWARP] = &PlayerClient::msgPLI_SERVERWARP;
+	handlers[PLI_MUTEPLAYER] = &PlayerClient::msgPLI_MUTEPLAYER;
 	handlers[PLI_PROCESSLIST] = &PlayerClient::msgPLI_PROCESSLIST;
 	handlers[PLI_ENTERLEVEL] = &PlayerClient::msgPLI_ENTERLEVEL;
-	handlers[PLI_MUTEPLAYER] = &PlayerClient::msgPLI_MUTEPLAYER;
 	handlers[PLI_PROCESSRUNNING] = &PlayerClient::msgPLI_PROCESSRUNNING;
 	handlers[PLI_VERIFYWANTSEND] = &PlayerClient::msgPLI_VERIFYWANTSEND;
 	handlers[PLI_SHOOT2] = &PlayerClient::msgPLI_SHOOT2;
 	handlers[PLI_REQUESTUPDATEBOARD] = &PlayerClient::msgPLI_REQUESTUPDATEBOARD;
 	handlers[PLI_UPDATEGANI] = &PlayerClient::msgPLI_UPDATEGANI;
-	handlers[PLI_UPDATESCRIPT] = &PlayerClient::msgPLI_UPDATESCRIPT;
+	handlers[PLI_UPDATEWEAPON] = &PlayerClient::msgPLI_UPDATEWEAPON;
 	handlers[PLI_UPDATEPACKAGEREQUESTFILE] = &PlayerClient::msgPLI_UPDATEPACKAGEREQUESTFILE;
 	handlers[PLI_PONG] = &PlayerClient::msgPLI_PONG;
 	handlers[PLI_UPDATECLASS] = &PlayerClient::msgPLI_UPDATECLASS;
@@ -313,18 +313,18 @@ bool PlayerClient::handleLogin(CString& pPacket)
 	switch (m_type)
 	{
 		case PLTYPE_CLIENT:
-			Encryption.setGen(ENCRYPT_GEN_2);
+			Encryption.setGeneration(EncryptionGeneration::GEN_2);
 			break;
 		case PLTYPE_CLIENT2:
-			Encryption.setGen(ENCRYPT_GEN_4);
+			Encryption.setGeneration(EncryptionGeneration::GEN_4);
 			break;
 		default:
 		case PLTYPE_CLIENT3:
-			Encryption.setGen(ENCRYPT_GEN_5);
+			Encryption.setGeneration(EncryptionGeneration::GEN_5);
 			break;
 		case PLTYPE_WEB:
-			Encryption.setGen(ENCRYPT_GEN_1);
-			m_fileQueue.setCodec(ENCRYPT_GEN_1, 0);
+			Encryption.setGeneration(EncryptionGeneration::GEN_1);
+			m_fileQueue.setCodec(EncryptionGeneration::GEN_1, 0);
 			break;
 	}
 
@@ -338,7 +338,7 @@ bool PlayerClient::handleLogin(CString& pPacket)
 		// 1.41 registers itself as PLTYPE_CLIENT, but does include an encryption key.
 		if (m_versionId == CLVER_UNKNOWN)
 		{
-			Encryption.setGen(ENCRYPT_GEN_3);
+			Encryption.setGeneration(EncryptionGeneration::GEN_3);
 			pPacket.setRead(1);
 		}
 	}
@@ -349,15 +349,16 @@ bool PlayerClient::handleLogin(CString& pPacket)
 		m_encryptionKey = static_cast<unsigned char>(pPacket.readGChar());
 
 		Encryption.reset(m_encryptionKey);
-		if (Encryption.getGen() > ENCRYPT_GEN_3)
-			m_fileQueue.setCodec(Encryption.getGen(), m_encryptionKey);
+		if (Encryption.getGeneration() > EncryptionGeneration::GEN_3)
+			m_fileQueue.setCodec(Encryption.getGeneration(), m_encryptionKey);
 
 		// Read Client-Version
 		m_version = pPacket.readChars(8);
 		m_versionId = getVersionIDByVersion(m_version);
 
-		// Seihai: 5.12 steps the gen-5 cipher once per whole 4-byte group on
-		// compressed bodies (rounded down); every other client rounds up.
+		// Seihai: every gen-5 client read so far steps the cipher once per whole 4-byte group on zlib and bz2
+		// bodies (rounded down), in both directions (gs2lib gen5StepsForClient). Upstream turns partial
+		// iteration off for CLVER_4_0211 to CLVER_5_12 only, and for the input side only.
 		const auto gen5Steps = CEncryption::gen5StepsForClient(m_versionId);
 		Encryption.setGen5Steps(gen5Steps);
 		m_fileQueue.setGen5Steps(gen5Steps);
@@ -688,6 +689,11 @@ bool PlayerClient::sendLogin()
 	m_loaded = true;
 
 	return true;
+}
+
+clock::time_point PlayerClient::getFrameStartTime() const noexcept
+{
+	return m_server->getFrameStartTime();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1354,9 +1360,29 @@ bool PlayerClient::enterLevel(const std::shared_ptr<Level>& level, const std::op
 		sendPacket(CString() >> (char)PLO_PLAYERPROPS >> (char)PlayerProp::Z << getProp<PlayerProp::Z>().serialize());
 	}
 
+	succeed = enterSubLevel(subLevel, clientCachedTime);
+	if (!succeed)
+	{
+		leaveLevel();
+		sendPacket(CString() >> (char)PLO_WARPFAILED << level->levelName);
+		return false;
+	}
+
+	return true;
+}
+
+bool PlayerClient::enterSubLevel(const std::shared_ptr<SubLevel>& subLevel, const std::optional<time_t> clientCachedTime)
+{
+	const auto level = subLevel->parentLevel.lock();
+	if (level == nullptr)
+		return false;
+
+	if (!sendDynamicLevelData(subLevel->parentLevel.lock(), clientCachedTime))
+		return false;
+
 	// If the level is a sparring zone and you have 100 AP, change AP to 99 and
 	// the apcounter to 1.
-	if (level->isSparringZone(getMapPosition()) && account.character.ap == 100)
+	if (subLevel->isSparringZone && account.character.ap == 100)
 	{
 		account.apCounter = 1;
 		sendPropsFromResults(setPropWith<PlayerProp::ALIGNMENT>(props::SetBy::SERVER, 99_ui8));
@@ -1451,36 +1477,11 @@ bool PlayerClient::leaveSubLevel(const std::shared_ptr<SubLevel>& subLevel)
 	const auto staticData = subLevel->staticData.lock();
 	if (staticData == nullptr) return false;
 
-	auto curTime = m_server->getFrameStartTime();
-	auto cacheLevel = [&curTime]<typename T>(std::vector<std::unique_ptr<CachedLevel<T>>>& cache, const std::shared_ptr<T>& level)
-	{
-		// Save the time we left the level for the client-side caching.
-		bool found = false;
-		for (auto& cl : cache)
-		{
-			if (const auto cllevel = cl->level.lock(); cllevel == level)
-			{
-				cl->lastEnteredTime = curTime;
-				found = true;
-				break;
-			}
-		}
-
-		if (!found)
-			cache.push_back(std::make_unique<CachedLevel<T>>(CachedLevel<T>{.level = level, .lastEnteredTime = curTime}));
-	};
-
 	// Static levels.
-	cacheLevel(m_cachedStaticLevels, staticData);
+	cacheStaticLevelAsSeen(staticData);
 
 	// Dynamic levels.
-	std::string groupName = account.groupName;
-	if (!groupName.empty())
-	{
-		if (const auto level = subLevel->parentLevel.lock(); level != nullptr && !level->isGroupMap)
-			groupName.clear();
-	}
-	cacheLevel(m_cachedDynamicLevels[groupName], subLevel);
+	cacheDynamicLevelAsSeen(subLevel);
 
 	return true;
 }
@@ -1491,9 +1492,11 @@ bool PlayerClient::sendStaticLevelData(const std::shared_ptr<StaticLevelData>& s
 		return false;
 
 	const PlayerPtr self = shared_from_this();
-	auto levelModTime = clock::to_time_t(staticLevelData->modTime);
-	const auto cachedModTime = getLevelLastEnteredTimeForWarping(staticLevelData.get());
-	if (!clientCachedTime.has_value()) clientCachedTime = levelModTime;
+	const auto levelModTime = clock::to_time_t(staticLevelData->modTime);
+	if (!m_loaded) clientCachedTime = std::nullopt;
+
+	if (m_loaded && clientCachedTime == levelModTime)
+		return true;
 
 	bool sentBoard = false;
 
@@ -1510,7 +1513,7 @@ bool PlayerClient::sendStaticLevelData(const std::shared_ptr<StaticLevelData>& s
 	// If we have not entered this level during this session, send board data.
 	// Also send if the client sends a cache time that doesn't match the level.
 	// Clients will cache level data so this can be skipped if nothing has changed.
-	if (!cachedModTime.has_value() || clientCachedTime.value() < levelModTime)
+	if (!clientCachedTime.has_value() || clientCachedTime.value() < levelModTime)
 	{
 		// Send board data (tiles, layers, heights).
 		if (subLevel != nullptr)
@@ -1560,8 +1563,13 @@ bool PlayerClient::sendStaticLevelData(const std::shared_ptr<StaticLevelData>& s
 
 	// Fix the level name.
 	// If the player is on a gmap, we need to set the level back to the gmap.
+	if (subLevel != nullptr && subLevel->isOnGmap)
+	{
+		sendPacket(CString() >> (char)PLO_LEVELNAME << getLevelName());
+		sendPacket(CString() >> (char)PLO_LEVELBOARD);
+	}
+
 	// If the player is the leader on their level, also send the isleader packet.
-	sendPacket(CString() >> (char)PLO_LEVELNAME << getLevelName());
 	checkAndInformIfLevelLeader();
 
 	return true;
@@ -1598,9 +1606,9 @@ bool PlayerClient::sendDynamicLevelData(const std::shared_ptr<Level>& level, std
 	level->sendNPCsToPlayer(self, cachedModTime);
 
 	// Move the carry NPC to the new level.
-	sendPacket(CString() >> (char)PLO_SETACTIVELEVEL << level->levelName);
 	if (m_carryNPC != 0)
 	{
+		sendPacket(CString() >> (char)PLO_SETACTIVELEVEL << level->levelName);
 		if (const auto npc = m_server->getNPC(m_carryNPC); npc)
 		{
 			if (npc->level != level->levelName)
@@ -1662,7 +1670,7 @@ void PlayerClient::checkAndInformIfLevelLeader()
 	if (level == nullptr)
 		return;
 
-	if (level->isSinglePlayer || level->isPlayerLeader(m_id) || level->isGmap())
+	if (!level->isGmap() && (level->isSinglePlayer || level->isPlayerLeader(m_id)))
 		sendPacket(CString() >> (char)PLO_ISLEADER);
 }
 
@@ -1814,6 +1822,22 @@ void PlayerClient::resetLevelCache(const std::string_view group)
 
 	// Finally, clear the cache for the group.
 	m_cachedDynamicLevels.erase(std::string{group});
+}
+
+void PlayerClient::cacheStaticLevelAsSeen(const StaticLevelDataPtr& staticData)
+{
+	cacheLevelAsSeen(m_cachedStaticLevels, staticData);
+}
+
+void PlayerClient::cacheDynamicLevelAsSeen(const SubLevelPtr& subLevel)
+{
+	std::string groupName = account.groupName;
+	if (!groupName.empty())
+	{
+		if (const auto level = subLevel->parentLevel.lock(); level != nullptr && !level->isGroupMap)
+			groupName.clear();
+	}
+	cacheLevelAsSeen(m_cachedDynamicLevels[groupName], subLevel);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -2033,7 +2057,7 @@ void PlayerClient::dropItemsOnDeath()
 	account.character.gralats -= drop_gralats;
 	account.character.arrows -= (drop_arrows * 5);
 	account.character.bombs -= (drop_bombs * 5);
-	sendPacket(CString() >> (char)PLO_PLAYERPROPS >> (char)PlayerProp::GRALATS >> (int)account.character.gralats >> (char)PlayerProp::ARROWS >> (char)account.character.arrows >> (char)PlayerProp::BOMBS >> (char)account.character.bombs);
+	sendPacket(CString() >> (char)PLO_PLAYERPROPS >> (char)PlayerProp::GRALATS >> (int)account.character.gralats >> (char)PlayerProp::ARROWS >> (char)account.character.arrows >> (char)PlayerProp::BOMBS >> (char)account.character.bombs >> (char)PlayerProp::GRALATS2 >> (long long)account.character.gralats);
 
 	// Check which gralats we can drop.
 	const bool canDropGold = std::ranges::contains(allowedDeathDrops, LevelItemType::GOLDRUPEE);
@@ -2289,7 +2313,7 @@ props::SetResults PlayerClient::addItem(const LevelItemType itemType, const prop
 		case LevelItemType::BLUERUPEE:
 		case LevelItemType::REDRUPEE:
 		case LevelItemType::GOLDRUPEE:
-			return setPropWith<PlayerProp::GRALATS>(setBy, account.character.gralats + LevelItem::GetRupeeCount(itemType));
+			return setPropWith<PlayerProp::GRALATS2>(setBy, account.character.gralats + LevelItem::GetRupeeCount(itemType));
 
 		case LevelItemType::BOMBS:
 			return setPropWith<PlayerProp::BOMBS>(setBy, std::min(99_ui8, static_cast<uint8_t>(account.character.bombs + 5)));
@@ -2476,7 +2500,7 @@ bool PlayerClient::isFileRequest(const uint8_t packetId) noexcept
 		case PLI_UPDATEFILE:
 		case PLI_VERIFYWANTSEND:
 		case PLI_UPDATEGANI:
-		case PLI_UPDATESCRIPT:
+		case PLI_UPDATEWEAPON:
 		case PLI_UPDATECLASS:
 		case PLI_UPDATEPACKAGEREQUESTFILE:
 			return true;

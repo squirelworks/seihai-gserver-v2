@@ -269,9 +269,9 @@ bool ServerList::connectServer()
 	m_fileQueue.clearBuffers();
 
 	// Use the new protocol for communicating with the listserver
-	m_fileQueue.setCodec(ENCRYPT_GEN_1, 0);
+	m_fileQueue.setCodec(EncryptionGeneration::GEN_1, 0);
 	sendPacket(CString() >> (char)SVO_REGISTERV3 << version, true);
-	m_fileQueue.setCodec(ENCRYPT_GEN_2, 0);
+	m_fileQueue.setCodec(EncryptionGeneration::GEN_2, 0);
 
 	// Send before SVO_NEWSERVER or else we will get an incorrect name.
 	const auto& adminsettings = m_server->getAdminSettings();
@@ -630,7 +630,7 @@ void ServerList::msgSVI_PROFILE(CString& pPacket)
 		val = CString(p2->getProp<PlayerProp::ALIGNMENT>().value);
 		profile >> (char)val.length() << val;
 
-		val = CString(static_cast<int>(p2->getProp<PlayerProp::GRALATS>().value));
+		val = CString(static_cast<int>(p2->getProp<PlayerProp::GRALATS2>().value));
 		profile >> (char)val.length() << val;
 
 		val = CString(p2->getProp<PlayerProp::SWORDIMAGE>().power.value_or(1));
@@ -686,7 +686,7 @@ void ServerList::msgSVI_PROFILE(CString& pPacket)
 				if (val == "playerap")
 					return string::to_string(p2->getProp<PlayerProp::ALIGNMENT>().value);
 				if (val == "playerrupees")
-					return string::to_string(p2->getProp<PlayerProp::GRALATS>().value);
+					return string::to_string(p2->getProp<PlayerProp::GRALATS2>().value);
 				if (val == "playerswordpower")
 					return string::to_string(p2->getProp<PlayerProp::SWORDIMAGE>().power.value_or(1));
 				if (val == "canspin")
@@ -792,7 +792,13 @@ void ServerList::msgSVI_VERIACC2(CString& pPacket)
 	if (player == nullptr) return;
 
 	// Overwrite the player's account name with the one from the listserver.
-	player->account.name = account.toString();
+	if (account != "guest" || player->getDeviceId() == 0)
+		player->account.name = account.toString();
+
+	// Set the community name to the account name.
+	if (account == "guest" || account.left(3) == "pc:")
+		player->account.communityName = "guest";
+	else player->account.communityName = account.toString();
 
 	// If we did not get the success message, inform the client of his failure.
 	if (message != "SUCCESS")
@@ -1139,6 +1145,7 @@ void ServerList::msgSVI_ASSIGNPCID(CString& pPacket)
 		return;
 
 	player->setDeviceId(std::stoll(pcId.text()));
+	player->account.name = std::format("pc:{}", pcId.toStringView());
 }
 
 ///////////////////////////////////////////////////////////////////////////////

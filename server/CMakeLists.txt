@@ -332,19 +332,20 @@ endif()
 # ----------------------------
 # Dependency: gs2lib.
 FetchContent_Declare(gs2lib
-	# Seihai: our mirror, branch seihai (upstream 6dd10ff, the commit GServer-v2
-	# beta4 bc54973 pins, + the 3.153 token + the 5.12 gen-5 step rule
-	# + the 2026-11-06 packet names, with upstream's own 2026-11-06 names kept
-	# as aliases of ours, + the 5.007 label for 5.00r7, + the Mac PowerPC
-	# 4.04r2, 4.20r6 and 5.12 version ids, + the 5.24 version id G3D15010,
-	# seihai-gs2lib #18, + version ids for the 13 catalogue game tokens it
-	# lacked and G3D27076 renamed CLVER_4_102_MAC, seihai-gs2lib #19, + the
-	# bounds and socket fixes of seihai-gs2lib #22 to #26 and #30, + the gen-5
-	# compressed-step round-down for every client, seihai-gs2lib #38, + the
-	# 6.1.1.3 version id GNP1905C, seihai-gs2lib #40). Upstream 6dd10ff took our
+	# Seihai: our mirror, branch seihai (upstream 9bc1a0f, the commit GServer-v2
+	# beta4 f98c1d5 pins, + the 3.153 token + the 5.12 gen-5 step rule
+	# + the 2026-11-06 packet names, with upstream's own 2026-11-06 and
+	# 2026-11-20 names kept as aliases of ours, + the 5.007 label for 5.00r7,
+	# + the Mac PowerPC 4.04r2, 4.20r6 and 5.12 version ids, + the 5.24 version
+	# id G3D15010, seihai-gs2lib #18, + version ids for the 13 catalogue game
+	# tokens it lacked and G3D27076 renamed CLVER_4_102_MAC, seihai-gs2lib #19,
+	# + the bounds and socket fixes of seihai-gs2lib #22 to #26 and #30, + the
+	# gen-5 compressed-step round-down for every client, seihai-gs2lib #38, + the
+	# 6.1.1.3 version id GNP1905C, seihai-gs2lib #40, + the pre-2026-11-20
+	# CEncryption names over upstream's new interface). Upstream 6dd10ff took our
 	# poll-based socket wait itself.
 	GIT_REPOSITORY https://github.com/squirelworks/seihai-gs2lib.git
-	GIT_TAG        efaabb30b3b2744db9a4d8fdbb72ff1fa8644c19
+	GIT_TAG        2a05291243c38502ddd62a1ff7ca16a290a296ec
 )
 FetchContent_MakeAvailable(gs2lib)
 add_dependencies(${TARGET_NAME} gs2lib)

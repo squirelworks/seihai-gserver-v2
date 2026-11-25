@@ -54,7 +54,6 @@ namespace preagonal
 HandlePacketResult PlayerClient::msgPLI_LEVELWARP(CString& pPacket)
 {
 	std::optional<time_t> modTime;
-
 	if (pPacket[0] - 32 == PLI_LEVELWARPMOD)
 		modTime = static_cast<time_t>(pPacket.readGUInt5());
 
@@ -64,29 +63,41 @@ HandlePacketResult PlayerClient::msgPLI_LEVELWARP(CString& pPacket)
 
 	bool success = false;
 
-	// If this is a gmap, in order to prevent the client from glitching out, forcefully warp them to the gmap.
-	if (newLevel.ends_with(".gmap"))
+	// Only allow the client to change their own level if we don't have an NPC server, or if we are allowing clientside links.
+	// Seihai: held back from upstream f98c1d5 for now. Bigmap links are always sent to the client
+	// (PlayerClient::sendStaticLevelData) and a clientside setlevel2 arrives here too, so refusing these
+	// would strand players on bigmaps and break clientside warps on servers with an NPC-server.
+	constexpr bool refuseClientLevelChanges = false;
+	if (refuseClientLevelChanges && m_server->hasNPCServer() && m_server->cached.forceClientsideLinks.getValue() == false)
 	{
-		success = warp(newLevel, toPixelPosition({0, 0}, pos), modTime);
+		sendPacket(CString() >> (char)PLO_WARPFAILED << newLevel);
 	}
 	else
 	{
-		if (const auto level = m_server->getLoadedLevel(newLevel, shared_from_this()); level != nullptr)
+		// If this is a gmap, in order to prevent the client from glitching out, forcefully warp them to the gmap.
+		if (newLevel.ends_with(".gmap"))
 		{
-			// If this level is part of a gmap, send the static data first, then warp second (so the appear on the correct level).
-			if (level->isGmap() && level->levelName != newLevel)
+			success = warp(newLevel, toPixelPosition({0, 0}, pos), modTime);
+		}
+		else
+		{
+			if (const auto level = m_server->getLoadedLevel(newLevel, shared_from_this()); level != nullptr)
 			{
-				// Send the static data first.
-				const auto subLevel = level->getSubLevelByName(newLevel);
-				success = sendStaticLevelData(subLevel->staticData.lock(), subLevel, modTime);
+				// If this level is part of a gmap, send the static data first, then warp second (so the appear on the correct level).
+				if (level->isGmap() && level->levelName != newLevel)
+				{
+					// Send the static data first.
+					const auto subLevel = level->getSubLevelByName(newLevel);
+					success = sendStaticLevelData(subLevel->staticData.lock(), subLevel, modTime);
 
-				// Now warp.
-				success = success && warp(level, toPixelPosition(Level::getSubLevelOrigin(subLevel).value_or(PixelPosition{}), pos), modTime);
-			}
-			// Otherwise, just enter the level.
-			else
-			{
-				success = enterLevel(level, toPixelPosition({0, 0}, pos), modTime);
+					// Now warp.
+					success = success && warp(level, toPixelPosition(Level::getSubLevelOrigin(subLevel).value_or(PixelPosition{}), pos), modTime);
+				}
+				// Otherwise, just enter the level.
+				else
+				{
+					success = enterLevel(level, toPixelPosition({0, 0}, pos), modTime);
+				}
 			}
 		}
 	}
@@ -571,7 +582,7 @@ std::optional<PlayerClient::BaddyAddRequest> PlayerClient::readBaddyAdd(CString&
 HandlePacketResult PlayerClient::msgPLI_BADDYADD(CString& pPacket)
 {
 	// Don't add a baddy if we aren't in a level!
-	if (m_currentLevel.expired())
+	if (m_currentLevel.expired() || pPacket.bytesLeft() < 4)
 		return HandlePacketResult::Handled;
 
 	const auto req = readBaddyAdd(pPacket);
@@ -1037,8 +1048,11 @@ HandlePacketResult PlayerClient::msgPLI_ADJACENTLEVEL(CString& pPacket)
 	{
 		if (const auto subLevel = currentLevel->getSubLevelByName(levelName); subLevel != nullptr)
 		{
-			sendStaticLevelData(subLevel->staticData.lock(), subLevel, modTime);
-			sendPacket(CString() >> (char)PLO_SETACTIVELEVEL << currentLevel->levelName);
+			if (const auto staticData = subLevel->staticData.lock(); staticData != nullptr)
+			{
+				sendStaticLevelData(staticData, subLevel, modTime);
+				cacheStaticLevelAsSeen(staticData);
+			}
 			return HandlePacketResult::Handled;
 		}
 	}
@@ -1047,7 +1061,7 @@ HandlePacketResult PlayerClient::msgPLI_ADJACENTLEVEL(CString& pPacket)
 	if (const auto cachedData = m_server->getCachedLevelData(levelName); cachedData != nullptr)
 	{
 		sendStaticLevelData(cachedData, nullptr, modTime);
-		sendPacket(CString() >> (char)PLO_SETACTIVELEVEL << levelName);
+		cacheStaticLevelAsSeen(cachedData);
 	}
 
 	return HandlePacketResult::Handled;
@@ -1507,26 +1521,34 @@ HandlePacketResult PlayerClient::msgPLI_SHOOT2(CString& pPacket)
 	if (const auto level = getLevel(); level != nullptr)
 	{
 		PropertyPixelCoordinate x, y, z, gravity;
+
 		x.deserialize(pPacket);
 		y.deserialize(pPacket);
 		z.deserialize(pPacket);
-
-		ShootPacketWrapper newPacket{};
-		newPacket.position.x() = x.pixelCoordinate;
-		newPacket.position.y() = y.pixelCoordinate;
-		newPacket.position.z() = z.pixelCoordinate;
-		newPacket.gmapx = pPacket.readGChar();  // gmap x
-		newPacket.gmapy = pPacket.readGChar();  // gmap y
-		newPacket.sangle = pPacket.readGUChar();  // 0 to 2*pi  = 0-220
-		newPacket.sanglez = pPacket.readGUChar(); // -pi to pi  = 0-220
-		newPacket.power = pPacket.readGUChar();   // power = 44 parts of a tile, up to 5 whole tiles (220)
-
+		const int16_t mapX = pPacket.readGUChar();
+		const int16_t mapY = pPacket.readGUChar();
+		const uint8_t sangle = pPacket.readGUChar();
+		const uint8_t sanglez = pPacket.readGUChar();
+		const uint8_t power = pPacket.readGUChar();
 		gravity.deserialize(pPacket);
-		newPacket.gravityInTiles = gravity.pixelCoordinate / 256.0f;
+		std::string gani = pPacket.readChars(pPacket.readGUShort()).toString();
+		pPacket.readGUChar(); // shootParams length
+		std::string shootParams = pPacket.readString("").toString();
 
-		newPacket.gani = pPacket.readChars(pPacket.readGUShort());
-		[[maybe_unused]] unsigned char someParam = pPacket.readGUChar(); // This seems to be the length of shootparams, but the client doesn't limit itself and sends the overflow anyway
-		newPacket.shootParams = pPacket.readString("").toString();
+		// Convert from local coordinates to global.
+		const auto position = toPixelPosition(toPixelPosition(MapPosition{mapX, mapY}), LocalPixelPosition{x.pixelCoordinate, y.pixelCoordinate, z.pixelCoordinate});
+
+		// Construct the shoot wrapper.
+		ShootPacketWrapper newPacket{};
+		newPacket.position = position;
+		newPacket.gmapx = mapX;
+		newPacket.gmapy = mapY;
+		newPacket.sangle = sangle;		// 0 to 2*pi  = 0-220
+		newPacket.sanglez = sanglez;	// -pi to pi  = 0-220
+		newPacket.power = power;		// power = 44 parts of a tile, up to 5 whole tiles (220)
+		newPacket.gravityInTiles = gravity.pixelCoordinate / 256.0f;
+		newPacket.gani = std::move(gani);
+		newPacket.shootParams = std::move(shootParams);
 
 		const CString oldPacketBuf = CString() >> (char)PLO_SHOOT >> (short)m_id << newPacket.constructShootV1();
 		const CString newPacketBuf = CString() >> (char)PLO_SHOOT2 >> (short)m_id << newPacket.constructShootV2();
@@ -1556,6 +1578,13 @@ HandlePacketResult PlayerClient::msgPLI_SERVERWARP(CString& pPacket)
 	return HandlePacketResult::Handled;
 }
 
+HandlePacketResult PlayerClient::msgPLI_MUTEPLAYER(CString& pPacket)
+{
+	//const PlayerID playerId = pPacket.readGUShort();
+	//const uint8_t toggle = pPacket.readGUChar();
+	return HandlePacketResult::Handled;
+}
+
 HandlePacketResult PlayerClient::msgPLI_PROCESSLIST(CString& pPacket)
 {
 	std::vector<CString> processes = pPacket.readString("").guntokenize().tokenize("\n");
@@ -1564,17 +1593,43 @@ HandlePacketResult PlayerClient::msgPLI_PROCESSLIST(CString& pPacket)
 
 HandlePacketResult PlayerClient::msgPLI_ENTERLEVEL(CString& pPacket)
 {
+	if (const auto subLevel = getSubLevel(); subLevel != nullptr)
+	{
+		std::optional<time_t> lastEnteredTime = std::nullopt;
+		if (const auto staticData = subLevel->staticData.lock(); staticData != nullptr)
+			lastEnteredTime = getLevelLastEnteredTimeForWarping(staticData.get());
+
+		enterSubLevel(subLevel, lastEnteredTime);
+		cacheDynamicLevelAsSeen(subLevel);
+
+		if (subLevel->isOnGmap)
+		{
+			if (const auto level = subLevel->parentLevel.lock(); level != nullptr)
+			{
+				for (int j = -1; j <= 1; ++j)
+				{
+					for (int k = -1; k <= 1; ++k)
+					{
+						if (j == 0 && k == 0) continue;
+						const auto pos = getMapPosition().translate(j, k);
+						if (const auto adjacentSubLevel = level->getSubLevelAtPosition(pos); adjacentSubLevel != nullptr)
+						{
+							adjacentSubLevel->updateTimeSinceLastUsed();
+							cacheDynamicLevelAsSeen(adjacentSubLevel);
+						}
+					}
+				}
+			}
+		}
+	}
+
 	return HandlePacketResult::Handled;
 }
 
 // Seihai: 43 and 45 are sent by real clients (the player list's mute, and the answer to
 // PLO_ISPROCESSRUNNING). They were unhandled, so three of them disconnected the client
-// for "sending invalid packets" (#103). Accept them and do nothing.
-HandlePacketResult PlayerClient::msgPLI_MUTEPLAYER(CString& pPacket)
-{
-	return HandlePacketResult::Handled;
-}
-
+// for "sending invalid packets" (#103). Accept them and do nothing. Upstream added its own
+// 43 handler (msgPLI_MUTEPLAYER above, 2ed2c53), which also does nothing.
 HandlePacketResult PlayerClient::msgPLI_PROCESSRUNNING(CString& pPacket)
 {
 	return HandlePacketResult::Handled;
@@ -1633,27 +1688,35 @@ HandlePacketResult PlayerClient::msgPLI_UPDATEGANI(CString& pPacket)
 	// Read packet data
 	const uint32_t checksum = pPacket.readGUInt5();
 	const std::string gani = pPacket.readString("").toString();
-	const std::string ganiFile = gani + ".gani";
+	const std::string ganiFile = string::toLower(gani) + ".gani";
 
-	// Try to find the animation in memory or on disk
-	const auto findAni = m_server->getAnimationManager().findOrAddResource(ganiFile);
-	if (!findAni)
+	// If the gani is in the defaults, just tell the client to load it.
+	if (std::ranges::contains(DefaultGanis, ganiFile))
 	{
-		//printf("Client requested gani %s, but was not found\n", ganiFile.c_str());
+		sendPacket(CString() >> (char)PLO_LOADGANI >> (char)gani.length() << gani);
 		return HandlePacketResult::Handled;
 	}
 
-	// Compare the bytecode checksum from the client with the one for the
-	// current script, if it doesn't match send the updated bytecode
-	if (calculateCrc32Checksum(findAni->getByteCode()) != checksum)
-		sendPacket(findAni->getBytecodePacket());
+	// Try to find the animation in memory or on disk.
+	const auto findAni = m_server->getAnimationManager().findOrAddResource(ganiFile);
+	if (!findAni)
+	{
+		// Server doesn't have the gani so just tell the client to load what it has.
+		sendPacket(CString() >> (char)PLO_LOADGANI >> (char)gani.length() << gani);
+		return HandlePacketResult::Handled;
+	}
 
-	// Tell the client to load the gani.
-	sendPacket(CString() >> (char)PLO_LOADGANI >> (char)gani.length() << gani << "\"SETBACKTO " << findAni->getSetBackTo() << "\"");
+	// Compare the bytecode checksum from the client with the one for the current script.
+	// If it doesn't match send the updated bytecode.
+	if (!findAni->hasChecksum(checksum))
+		findAni->sendByteCodeToPlayer(shared_from_this());
+
+	// Finally, tell the client to load the gani.
+	sendPacket(CString() >> (char)PLO_LOADGANI >> (char)gani.length() << gani << string::toCSV(std::format("SETBACKTO {}", findAni->getSetBackTo()), "\n"sv, true));
 	return HandlePacketResult::Handled;
 }
 
-HandlePacketResult PlayerClient::msgPLI_UPDATESCRIPT(CString& pPacket)
+HandlePacketResult PlayerClient::msgPLI_UPDATEWEAPON(CString& pPacket)
 {
 	const CString weaponName = pPacket.readString("");
 
@@ -1695,7 +1758,7 @@ HandlePacketResult PlayerClient::msgPLI_UPDATECLASS(CString& pPacket)
 			// GRESCR01 file for it).
 			const auto header = string::toCSVFromPack("class"sv, std::string_view{className}, "0"sv, des, crc);
 
-			sendPacket(CString() >> (char)PLO_WEAPONBYTECODE2 >> (short)header.length() << header);
+			sendPacket(CString() >> (char)PLO_HEADEREDBYTECODE >> (short)header.length() << header);
 		}
 		// Classic (through 5.12): empty class as name-only 133. Never 140/197 to pure 4.x.
 		else
@@ -1725,7 +1788,7 @@ HandlePacketResult PlayerClient::msgPLI_UPDATEPACKAGEREQUESTFILE(CString& pPacke
 	std::vector<std::string> missingFiles;
 
 	{
-		const auto updatePackage = m_server->getPackageManager().findOrAddResource(packageName.toString());
+		const auto updatePackage = m_server->getPackageManager().findOrAddResource(std::filesystem::path{packageName.toString()});
 		if (updatePackage)
 		{
 			for (const auto& [fileName, entry] : updatePackage->getFileList())
