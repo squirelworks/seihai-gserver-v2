@@ -1,6 +1,8 @@
+// Modified by the Seihai project, 2026-11-25: see CHANGES-SEIHAI.md.
 #ifndef SCRIPT_H
 #define SCRIPT_H
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <string_view>
@@ -89,6 +91,37 @@ private:
 	ScriptType m_type = ScriptType::SERVER;
 
 	void split(std::string& source) noexcept;
+
+	// Seihai: where each source view sits in m_modified_source, so a copy or move can rebuild them in its own string.
+	struct ViewOffset
+	{
+		size_t pos = 0;
+		size_t len = 0;
+		bool set = false;
+	};
+	using ViewOffsets = std::array<ViewOffset, 3>; // clientside source, serverside source, clientside script
+
+	[[nodiscard]] ViewOffsets viewOffsets() const noexcept
+	{
+		const auto offset = [this](std::string_view v) -> ViewOffset {
+			const auto base = reinterpret_cast<std::uintptr_t>(m_modified_source.data());
+			const auto at = reinterpret_cast<std::uintptr_t>(v.data());
+			if (v.data() == nullptr || at < base || at - base > m_modified_source.size() || v.size() > m_modified_source.size() - (at - base))
+				return {};
+			return {static_cast<size_t>(at - base), v.size(), true};
+		};
+		return {offset(m_clientside_source), offset(m_serverside_source), offset(m_clientside_script)};
+	}
+
+	void setViews(const ViewOffsets& views) noexcept
+	{
+		const auto view = [this](const ViewOffset& v) -> std::string_view {
+			return v.set ? std::string_view{m_modified_source}.substr(v.pos, v.len) : std::string_view{};
+		};
+		m_clientside_source = view(views[0]);
+		m_serverside_source = view(views[1]);
+		m_clientside_script = view(views[2]);
+	}
 	void compileScript() noexcept;
 };
 
@@ -109,11 +142,13 @@ inline Script& Script::operator=(const Script& o) noexcept
 	if (this == &o)
 		return *this;
 
+	// Seihai: the three views point into o.m_modified_source. Take their offsets there and point them into our
+	// own copy; copying the views themselves left them pointing into o, which dangles once o goes away.
+	const auto views = o.viewOffsets();
 	m_who = o.m_who;
 	m_original_source = o.m_original_source;
 	m_modified_source = o.m_modified_source;
-	split(m_modified_source);
-	m_clientside_script = o.m_clientside_script;
+	setViews(views);
 	m_client_compiled = o.m_client_compiled;
 	m_server_compiled = o.m_server_compiled;
 	m_hash = o.m_hash;
@@ -125,12 +160,13 @@ inline Script& Script::operator=(Script&& o) noexcept
 	if (this == &o)
 		return *this;
 
+	// Seihai: take the views' offsets before the move. A short source lives inside the std::string itself (the
+	// small-string buffer), so after the move o's views point into o, not into our m_modified_source.
+	const auto views = o.viewOffsets();
 	m_who = std::move(o.m_who);
 	m_original_source = std::move(o.m_original_source);
 	m_modified_source = std::move(o.m_modified_source);
-	m_clientside_source = o.m_clientside_source;
-	m_serverside_source = o.m_serverside_source;
-	m_clientside_script = o.m_clientside_script;
+	setViews(views);
 	m_client_compiled = std::move(o.m_client_compiled);
 	m_server_compiled = std::move(o.m_server_compiled);
 	m_hash = o.m_hash;

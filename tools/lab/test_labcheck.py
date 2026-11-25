@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
+# Seihai project, 2026-11-12, 2026-11-25: see CHANGES-SEIHAI.md.
 """Tests for labcheck.py: python3 -m unittest tools/lab/test_labcheck.py
 
 fixtures/modern-3clients is a real capture (2026-11-12, loopback): this fork
@@ -177,10 +177,19 @@ class SyntheticTests(unittest.TestCase):
         self.assertNotIn("pc:281445 (5.12)", report)
         self.assertIn("PASS", row(report, "pc:6679871 (5.12) is never sent 108"))
 
-    def test_512_weapon_goes_out_as_197(self):
+    def test_512_weapon_goes_out_as_193(self):
+        # 5.x is on the classic side of the script-packet cut (ScriptPacketGuards.h): 193 + 132, as a real 5.12 got.
+        t = "2026-11-25 23:03:14"
+        dump = out_packet(t, "pc:1", 2, 193, gchar(193) + b"     -L153g1")
+        log = f"[{t}] :: New login: guest [New Client (2.22+)] [G3D14097 (5.12)]\n"
+        self.write(dump, log)
+        code, report = run("weaponcache", self.dir)
+        self.assertIn("PASS", row(report, "weapons go out as 193"))
+
+    def test_603_weapon_goes_out_as_197(self):
         t = "2026-11-13 07:37:00"
         dump = out_packet(t, "pc:1", 2, 197, gchar(197) + b"header")
-        log = f"[{t}] :: New login: guest [New Client (2.22+)] [G3D14097 (5.12)]\n"
+        log = f"[{t}] :: New login: guest [New Client (2.22+)] [G3D0511C (6.037 (Linux))]\n"
         self.write(dump, log)
         code, report = run("weaponcache", self.dir)
         self.assertIn("PASS", row(report, "weapons go out as 197, not 193"))

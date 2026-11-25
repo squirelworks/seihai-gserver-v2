@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch_all.hpp>
 
@@ -188,4 +188,52 @@ TEST_CASE_METHOD(ServerFixture, "Script joins", "[Scripting][IScriptEngine][GS1]
 		REQUIRE_FALSE(npc->getScript().getClientSideScript().empty());
 		CHECK(npc->getScript().getClientSideScript() == "//#CLIENTSIDE\xA7say2 join TestClass#b\xA7join TestClass;\xA7if (created) { say2 join TestClass; }"s);
 	}
+}
+
+// Seihai, 2026-11-25: a copied or moved Script kept views into the other Script's source. A short source sits in the
+// std::string's own small-string buffer, so after a move the views pointed into the moved-from object: the lab saw a
+// level NPC whose whole script is "sparringzone" go out to a real 2.22 client as 12 bytes of stack memory, and the
+// sparring zone was never recognised.
+TEST_CASE("Script copies and moves keep views into their own source", "[Scripting][Script]")
+{
+	BabyDI_RELEASE(Server);
+	BabyDI_PROVIDE(Server, new Server("test")); // no NPC-server: the whole script is clientside
+
+	const auto inside = [](const Script& s, std::string_view v) {
+		const auto& src = s.getModifiedSource();
+		return !v.empty() && v.data() >= src.data() && v.data() + v.size() <= src.data() + src.size();
+	};
+
+	SECTION("short source, move-assigned from a temporary")
+	{
+		Script s;
+		s = Script{"lab", ScriptType::NPC, "sparringzone"s};
+		CHECK(s.getClientSideScript() == "sparringzone");
+		CHECK(inside(s, s.getClientSideScript()));
+		CHECK(inside(s, s.getClientSideSource()));
+	}
+
+	SECTION("short source, copy-assigned from a Script that is then destroyed")
+	{
+		Script s;
+		{
+			const Script src{"lab", ScriptType::NPC, "sparringzone"s};
+			s = src;
+		}
+		CHECK(s.getClientSideScript() == "sparringzone");
+		CHECK(inside(s, s.getClientSideScript()));
+	}
+
+	SECTION("copy and move construction")
+	{
+		const Script src{"lab", ScriptType::NPC, "//#CLIENTSIDE\nsetlevel2 a.nw,30,30;"s};
+		Script copied{src};
+		CHECK(copied.getClientSideScript() == src.getClientSideScript());
+		CHECK(inside(copied, copied.getClientSideScript()));
+		Script moved{std::move(copied)};
+		CHECK(moved.getClientSideScript() == src.getClientSideScript());
+		CHECK(inside(moved, moved.getClientSideScript()));
+	}
+
+	BabyDI_RELEASE(Server);
 }
