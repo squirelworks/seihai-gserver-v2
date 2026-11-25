@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-01, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-16: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-01, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-25: see CHANGES-SEIHAI.md.
 #ifndef PLAYER_H
 #define PLAYER_H
 
@@ -40,6 +40,10 @@ using namespace preagonal::props;
 ///////////////////////////////////////////////////////////////////////////////
 namespace preagonal
 {
+	namespace fs
+	{
+		struct FileData;
+	}
 ///////////////////////////////////////////////////////////////////////////////
 
 class Level;
@@ -370,6 +374,10 @@ public:
 	// PLO_FILESENDFAILED rather than no answer, and its "Connecting..." window
 	// closes only on PLO_SERVERLISTCONNECTED.
 	bool isGraal3DClient() const;
+	// The file a client's request or update check names: a case-insensitive
+	// lookup, and for a Graal 3D client a bare (extension-less) texture name also
+	// finds <name>.<image extension>. Null if there is none.
+	fs::FileData* findClientFile(const std::filesystem::path& file) const;
 	// For an encrypted package (.gpake), sends its key (PLO_FILEDECRYPTKEY) from
 	// config/gpakkeys.txt. raw puts it in the file queue, so it goes out before a file
 	// queued after it. Returns false when the package has no key; true for other files.
