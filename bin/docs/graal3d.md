@@ -437,7 +437,10 @@ theirs.
 
 `graal3dterrainall` on 4.20r8 ran 110 s with a high spawn, and crashed about 1 s in
 with a spawn just above the ground (z 17.5 on a native terrain): the same
-near-terrain crash as before, under GDI GL.
+near-terrain crash as before, under GDI GL. A TerrainBlock alone is enough, with no
+chunks. A height sweep on the lab VM's software GL found the line: 4.20r8 crashes
+when its camera starts 150 units or less above the ground, and survives from 180 up,
+on a hilly and on a flat block. So 4.20r8 gets no terrain by default.
 
 Clients ask for `heights.info` by its bare name, so only one file of that name may be
 in the file folders. Another one (a stray `world/global/heights.info` in that lab)
