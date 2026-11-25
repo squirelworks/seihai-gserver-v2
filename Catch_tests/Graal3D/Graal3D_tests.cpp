@@ -1226,6 +1226,57 @@ SCENARIO("Raw fields read files, zlib-compressed on request")
 	}
 }
 
+SCENARIO("A replicator line ghosts ground cover in the 5.12 layout")
+{
+	const auto world = parseWorld("replicator DynamicGrass 10 -20 1.5 4 1 3 grass.dts 7\n"
+								  "replicator DynamicGrass 10 -20 1.5 65 1 3 grass.dts\n"  // radius past 64
+								  "replicator DynamicGrass 10 -20 1.5 4 5 3 grass.dts\n"   // min above max
+								  "replicator Sky 10 -20 1.5 4 1 3 grass.dts\n");          // not a replicator
+	REQUIRE(world.objects.size() == 1);
+	REQUIRE(world.errors.size() == 3);
+	const auto& object = world.objects[0];
+	REQUIRE(object.className() == "DynamicGrass");
+	REQUIRE(object.layout512);
+
+	BitWriter w;
+	writeRawFields(w, object.raw);
+	const auto bytes = w.toString();
+	BitReader r(bytes);
+	for (int i = 0; i < 13; ++i)
+		REQUIRE_FALSE(r.readFlag()); // empty GameObject update
+	REQUIRE(r.readFlag());
+	REQUIRE(r.readF32() == 10.0f);
+	REQUIRE(r.readF32() == -20.0f);
+	REQUIRE(r.readF32() == 1.5f);
+	for (int i = 0; i < 3; ++i)
+		REQUIRE(r.readF32() == 0.0f);
+	REQUIRE_FALSE(r.readFlag());
+	REQUIRE(r.readU32() == 7);
+	REQUIRE(r.readString() == "grass.dts");
+	REQUIRE(r.readInt(8) == 4);
+	REQUIRE(r.readInt(8) == 1);
+	REQUIRE(r.readInt(8) == 3);
+	const auto signedInt = [&](int bits) {
+		const bool negative = r.readFlag();
+		const int v = static_cast<int>(r.readInt(bits - 1));
+		return negative ? -v : v;
+	};
+	for (const int v : {-1, -1, 0, 1, 1, 2})
+		REQUIRE(signedInt(16) == v);
+	for (const float v : {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 360.0f, 0.0f})
+		REQUIRE(r.readF32() == v);
+	for (const bool v : {true, false, false, false, false})
+		REQUIRE(r.readFlag() == v);
+	REQUIRE(signedInt(8) == 90);
+	REQUIRE_FALSE(r.readFlag());
+	for (const float v : {0.0f, 0.0f, 1.0f})
+		REQUIRE(r.readF32() == v);
+	REQUIRE_FALSE(r.readFlag());
+	REQUIRE(signedInt(8) == 0);
+	REQUIRE_FALSE(r.readFlag());
+	REQUIRE(rawFieldBits(object.raw) == w.bitPosition());
+}
+
 SCENARIO("The world file takes rawobject and rawevent lines")
 {
 	const auto world = parseWorld(

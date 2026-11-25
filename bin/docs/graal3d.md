@@ -297,6 +297,22 @@ world/3d/                        any folder the file folders cover
 `seihai-servertools gen terrain DIR --world NAME --stream --playerworld` writes a whole
 world in this layout from a generated height field.
 
+## Lab: ground cover (`replicator`)
+
+```
+# replicator <class> <x> <y> <z> <radius> <min> <max> <shapes> [<seed>]
+replicator DynamicGrass 10 -20 1.5 4 1 3 grass.dts
+```
+
+Ghosts a `DynamicShapeReplicator`, `DynamicGrass` or `DynamicGrassReplicator`: ground
+cover scattered around the point on a grid of 8-unit cells. `<radius>` is in cells
+(1 to 64), `<min>` and `<max>` are objects per cell (0 to 20), and `<shapes>` is the
+shape list as one string. The layout is from a static read of the real 5.12 client
+(Graal_analysis `torque/replicators-512.md`) and has not been seen live yet. The other
+fields are fixed: a box of -1..1 x -1..1 x 0..2, scale 1, any rotation about z, terrain
+only, slopes up to 90 degrees, no alignment, shown. Only clients that take streamed
+terrain get it.
+
 ## Terrain (4.20r6 and 5.x)
 
 ```
