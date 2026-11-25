@@ -699,6 +699,15 @@ namespace graal3d
 			return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 		};
 
+		// A texture cannot be left out the way an object can, so a bad one is
+		// only logged (lab, 2026-11-25: a PNG claiming 30000x30000 crashed 5.12).
+		const auto checkImage = [&](const preagonal::fs::FileData& info) {
+			if (m_shapeCheck == ShapeCheck::Off)
+				return;
+			if (const auto why = unsafeImage(readAll(info.file)))
+				log::printLine(log::server, "** [Error] Graal3D: {} would crash a client ({}); replace it.", info.file.filename().string(), *why);
+		};
+
 		size_t found = 0, missing = 0, dropped = 0;
 		std::erase_if(m_world.objects, [&](const GhostObject& object) {
 			if (object.kind == GhostObject::Kind::Sky)
@@ -720,7 +729,10 @@ namespace graal3d
 						log::printLine(log::server, "** [Warning] Graal3D: the Sky's texture {} is not in the file folders.", name);
 					}
 					else
+					{
 						++found;
+						checkImage(*info);
+					}
 				}
 				return false;
 			}
@@ -740,9 +752,9 @@ namespace graal3d
 			auto ext = info->file.extension().string();
 			for (auto& ch : ext)
 				ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-			if (ext != ".3ds" || m_shapeCheck == ShapeCheck::Off)
+			if ((ext != ".3ds" && ext != ".dts") || m_shapeCheck == ShapeCheck::Off)
 				return false;
-			const auto why = unsafe3ds(readAll(info->file));
+			const auto why = unsafeAsset(ext, readAll(info->file));
 			if (!why)
 				return false;
 			if (m_shapeCheck == ShapeCheck::Warn)
@@ -788,7 +800,7 @@ namespace graal3d
 						line.pop_back();
 					if (line.empty())
 						continue;
-					if (find(line) == nullptr)
+					if (const auto texture = find(line); texture == nullptr)
 					{
 						++missing;
 						log::printLine(log::server, "** [Warning] Graal3D: terrain texture {} (heights.info) is not in the file folders.", line);
@@ -796,13 +808,14 @@ namespace graal3d
 					else
 					{
 						++found;
+						checkImage(*texture);
 						m_terrainFiles.push_back(line);
 					}
 				}
 			}
 		}
 		log::printLine(log::server, "Graal3D: the world names {} files the folders have, {} they do not{}.", found, missing,
-					   dropped ? std::format(", and {} unsafe .3ds objects were left out", dropped) : std::string{});
+					   dropped ? std::format(", and {} objects with unsafe shapes were left out", dropped) : std::string{});
 	}
 
 	void Service::setWorld(World world, bool packetStrings)

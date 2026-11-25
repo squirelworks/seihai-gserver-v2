@@ -973,7 +973,54 @@ namespace graal3d
 					body = nul + 1;
 				}
 				if (id == 0x4100)
+				{
 					meshes = true;
+					// The mesh's vertex and face lists (lab, 2026-11-25, 5.12
+					// content fuzzing: a face count past the faces present, or a
+					// face index past the vertex count, crashed the client).
+					std::optional<uint32_t> vertices;
+					std::vector<std::pair<size_t, size_t>> faceLists;
+					for (size_t sub = body; sub + 6 <= at + length;)
+					{
+						const uint32_t subId = u16(sub), subLength = u32(sub + 2);
+						if (subLength < 6 || subLength > at + length - sub)
+							break; // the walk below reports it
+						const size_t subBody = sub + 6, subEnd = sub + subLength;
+						if ((subId == 0x4110 || subId == 0x4120) && subEnd - subBody < 2)
+						{
+							problem = std::format("chunk 0x{:04X} at byte {} has no count", subId, sub);
+							return;
+						}
+						if (subId == 0x4110)
+						{
+							vertices = u16(subBody);
+							if (2 + static_cast<size_t>(*vertices) * 12 > subEnd - subBody)
+							{
+								problem = std::format("a vertex list at byte {} claims {} vertices, more than it holds", sub, *vertices);
+								return;
+							}
+						}
+						if (subId == 0x4120)
+						{
+							const size_t faces = u16(subBody);
+							if (2 + faces * 8 > subEnd - subBody)
+							{
+								problem = std::format("a face list at byte {} claims {} faces, more than it holds", sub, faces);
+								return;
+							}
+							faceLists.emplace_back(subBody + 2, faces);
+						}
+						sub = subEnd;
+					}
+					for (const auto& [first, faces] : faceLists)
+						for (size_t face = 0; face < faces; ++face)
+							for (size_t corner = 0; corner < 3; ++corner)
+								if (const auto index = u16(first + face * 8 + corner * 2); index >= vertices.value_or(0))
+								{
+									problem = std::format("a face uses vertex {}, but the mesh has {}", index, vertices.value_or(0));
+									return;
+								}
+				}
 				if (id == 0xAFFF)
 					materials = true;
 				if (id == 0x4D4D || id == 0x3D3D || id == 0x4000 || id == 0x4100 || id == 0xAFFF)
@@ -987,6 +1034,64 @@ namespace graal3d
 		if (meshes && !materials)
 			return "it has meshes but no materials";
 		return std::nullopt;
+	}
+
+	std::optional<std::string> unsafeDts(std::string_view data)
+	{
+		// Torque's shape header: a version word, then the sizes of the shape's
+		// memory buffer and where its 16-bit and 8-bit parts start, all in
+		// 32-bit words. The buffer must fit the file (lab, 2026-11-25: a .dts cut
+		// to 30% or 70%, or with a huge size word, crashed 5.12).
+		const auto u32 = [&](size_t at) {
+			uint32_t v = 0;
+			for (size_t i = 0; i < 4; ++i)
+				v |= static_cast<uint32_t>(static_cast<uint8_t>(data[at + i])) << (8 * i);
+			return v;
+		};
+		if (data.size() < 16)
+			return "too short for a shape header";
+		// Versions before 19 use an older layout this does not check.
+		if ((u32(0) & 0xFFFF) < 19)
+			return std::nullopt;
+		const uint64_t words = u32(4), start16 = u32(8), start8 = u32(12);
+		if (16 + words * 4 > data.size())
+			return std::format("its buffer is {} bytes, more than the {} the file has", words * 4, data.size() - 16);
+		if (start16 > start8 || start8 > words)
+			return "its buffer's parts are out of order";
+		return std::nullopt;
+	}
+
+	std::optional<std::string> unsafeImage(std::string_view data)
+	{
+		// Only PNG is checked: a header claiming 30000x30000 crashed 5.12 (lab,
+		// 2026-11-25). Other formats pass.
+		static constexpr std::string_view signature{"\x89PNG\r\n\x1a\n", 8};
+		if (!data.starts_with(signature))
+			return std::nullopt;
+		if (data.size() < 24 || data.substr(12, 4) != "IHDR")
+			return "a PNG without its header";
+		const auto u32be = [&](size_t at) {
+			uint32_t v = 0;
+			for (size_t i = 0; i < 4; ++i)
+				v = v << 8 | static_cast<uint8_t>(data[at + i]);
+			return v;
+		};
+		const uint32_t width = u32be(16), height = u32be(20);
+		if (width == 0 || height == 0 || width > kMaxImageSide || height > kMaxImageSide)
+			return std::format("a PNG of {}x{} (at most {} a side)", width, height, kMaxImageSide);
+		return std::nullopt;
+	}
+
+	std::optional<std::string> unsafeAsset(std::string_view extension, std::string_view data)
+	{
+		std::string ext(extension);
+		for (auto& ch : ext)
+			ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+		if (ext == ".3ds")
+			return unsafe3ds(data);
+		if (ext == ".dts")
+			return unsafeDts(data);
+		return unsafeImage(data);
 	}
 
 	std::vector<RawField> waterBlockFields(const WaterSettings& water)

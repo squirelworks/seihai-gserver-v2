@@ -1514,6 +1514,59 @@ SCENARIO("A .3ds the real client crashes on is found before it is served")
 	REQUIRE(unsafe3ds("not a 3ds") == "not a 3D Studio file");
 }
 
+SCENARIO("A .3ds mesh whose faces do not fit its lists is found before it is served")
+{
+	const auto material = chunk3ds(0xAFFF, chunk3ds(0xA000, std::string("m\0", 2)));
+	const auto le16 = [](uint16_t v) { return std::string{static_cast<char>(v & 0xFF), static_cast<char>(v >> 8)}; };
+	const auto vertices = chunk3ds(0x4110, le16(3) + std::string(3 * 12, '\0'));
+	const auto faces = [&](uint16_t count, uint16_t index, size_t present) {
+		std::string body = le16(count);
+		for (size_t i = 0; i < present; ++i)
+			body += le16(0) + le16(1) + le16(index) + le16(0);
+		return chunk3ds(0x4120, body);
+	};
+	const auto file = [&](const std::string& lists) {
+		const auto mesh = chunk3ds(0x4000, std::string("box\0", 4) + chunk3ds(0x4100, lists));
+		return chunk3ds(0x4D4D, chunk3ds(0x3D3D, material + mesh));
+	};
+	REQUIRE_FALSE(unsafe3ds(file(vertices + faces(1, 2, 1))));
+	REQUIRE(unsafe3ds(file(vertices + faces(5, 2, 1))));                // more faces claimed than present
+	REQUIRE(unsafe3ds(file(vertices + faces(1, 3, 1))));                // vertex 3 of 3
+	REQUIRE(unsafe3ds(file(chunk3ds(0x4110, le16(9) + std::string(12, '\0')))));  // more vertices claimed
+	REQUIRE(unsafe3ds(file(faces(1, 0, 1))));                           // faces with no vertices
+}
+
+SCENARIO("A .dts or PNG the real 5.12 crashes on is found before it is served")
+{
+	const auto le32 = [](uint32_t v) {
+		std::string out;
+		for (int i = 0; i < 4; ++i)
+			out.push_back(static_cast<char>((v >> (8 * i)) & 0xFF));
+		return out;
+	};
+	const std::string dts = le32(24) + le32(4) + le32(2) + le32(3) + std::string(16, '\0') + std::string(8, 'x');
+	REQUIRE_FALSE(unsafeDts(dts));
+	REQUIRE(unsafeDts(dts.substr(0, dts.size() * 3 / 10)));
+	REQUIRE(unsafeDts(dts.substr(0, 20)));                              // cut inside the buffer
+	REQUIRE(unsafeDts(le32(24) + le32(0x40000000) + le32(0) + le32(0) + std::string(16, '\0')));
+	REQUIRE(unsafeDts(le32(24) + le32(4) + le32(3) + le32(2) + std::string(16, '\0')));  // parts out of order
+	REQUIRE(unsafeAsset(".DTS", dts.substr(0, 10)));
+
+	const auto be32 = [](uint32_t v) {
+		std::string out;
+		for (int i = 3; i >= 0; --i)
+			out.push_back(static_cast<char>((v >> (8 * i)) & 0xFF));
+		return out;
+	};
+	const auto png = [&](uint32_t w, uint32_t h) { return std::string("\x89PNG\r\n\x1a\n", 8) + be32(13) + "IHDR" + be32(w) + be32(h) + std::string(5, '\0'); };
+	REQUIRE_FALSE(unsafeImage(png(256, 256)));
+	REQUIRE(unsafeImage(png(30000, 30000)));
+	REQUIRE(unsafeImage(png(0, 16)));
+	REQUIRE(unsafeImage(png(256, 256).substr(0, 20)));
+	REQUIRE_FALSE(unsafeImage("GIF89a"));                               // only PNG is checked
+	REQUIRE(unsafeAsset(".png", png(30000, 30000)));
+}
+
 SCENARIO("A Sky's textures may be named with their extensions")
 {
 	REQUIRE(skyTextureNames("sky_fr.png,sky_rt.JPG,sky_bk,clouds.v2.gif") == "sky_fr,sky_rt,sky_bk,clouds.v2");
