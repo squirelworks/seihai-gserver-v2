@@ -45,6 +45,7 @@ namespace graal3d
 		TorqueScript,
 		ServerScripts,
 		Terraformer,
+		GreyscaleRgba32Only,
 		TerrainEditor,
 		DtsMin,
 		DtsMax,
@@ -70,7 +71,8 @@ namespace graal3d
 		return m;
 	}
 
-	inline constexpr uint32_t kAllCapFields = (1u << static_cast<uint8_t>(CapField::Count)) - 1;
+	static_assert(static_cast<uint8_t>(CapField::Count) <= 32, "the assumed mask is 32 bits");
+	inline constexpr uint32_t kAllCapFields = 0xFFFFFFFFu >> (32 - static_cast<uint8_t>(CapField::Count));
 
 	enum class GameLayer : uint8_t
 	{
@@ -110,6 +112,7 @@ namespace graal3d
 		bool torqueScript; // compiles and runs .cs / .dso (its own shipped scripts)
 		bool serverScripts; // a server can make it run new TorqueScript: no read build can
 		Terraformer terraformer;
+		bool greyscaleRgba32Only; // loadGreyscale is only safe with a 32-bit RGBA PNG (5.12 lab)
 		bool terrainEditor;
 		uint8_t dtsMin; // DTS versions dtsMin..dtsMax (low byte of the version word)
 		uint8_t dtsMax;
