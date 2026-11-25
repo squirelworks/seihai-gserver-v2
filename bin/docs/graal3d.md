@@ -253,7 +253,7 @@ world/3d/                        any folder the file folders cover
   grass.png   sky_fr.png ...       textures: 8-bit PNG, JPEG or GIF
   island_terrain/                  streamed terrain (see Terrain)
     heights0-0.dat ... heights15-15.dat
-    heights.info                   one texture name a line, no extensions
+    heights.info                   one texture name a line, with .png
     g3d_grass.png ...
 ```
 
@@ -288,8 +288,11 @@ client keeps in its own cache (`levels3d/heights/<server>/`). A missing file lea
 that chunk out, and a file over 1023 bytes or one that does not inflate is logged
 at start-up. Put `heights.info` (one texture name a line, in material order, each
 256 x 256 24-bit) and its textures in the file folders: the client asks for
-`heights.info` over TCP when it has none, then fetches each texture by its bare
-name.
+`heights.info` over TCP when it has none, then fetches each texture. Write the
+names with their extension (`g3d_grass.png`): the Linux 4.206 client given bare
+names drew the terrain white, then saved the textures without an extension, could
+not load them and drew no terrain at all; with `.png` names it drew them textured
+(lab, 2026-11-25).
 
 `heights.info` is newline-separated. A script that sets terrain materials through
 `setmaterials` instead must separate the names with commas, because the 5.12 client

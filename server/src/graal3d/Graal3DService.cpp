@@ -997,6 +997,9 @@ namespace graal3d
 				CString text;
 				if (text.load(CString() << weapon.file.c_str()))
 					script.assign(text.text(), static_cast<size_t>(text.length()));
+				// LF only: 5.12 ran nothing from a weapon3d saved with CRLF line ends
+				// (lab, 2026-11-25).
+				std::erase(script, '\r');
 				// The 5.12 client runs only compiled GS2 here (lab: source text was
 				// taken but never ran), so compile it when the NPC-server can.
 				if (!script.empty())
