@@ -1050,15 +1050,30 @@ namespace graal3d
 		};
 		if (data.size() < 16)
 			return "too short for a shape header";
-		// Versions before 19 use an older layout this does not check.
-		if ((u32(0) & 0xFFFF) < 19)
-			return std::nullopt;
+		// The real 5.12 trusts the version word and drew only version 24: 16 and
+		// 25 were refused with a message, 17 and 18 hung on a black view, 19 and
+		// 22 crashed, 23 drew nothing (version swap on a v24 body, lab, 2026-11-25).
+		if (const auto version = u32(0) & 0xFFFF; version != kDtsVersion)
+			return std::format("it is version {}; only version {} is drawn", version, kDtsVersion);
 		const uint64_t words = u32(4), start16 = u32(8), start8 = u32(12);
 		if (16 + words * 4 > data.size())
 			return std::format("its buffer is {} bytes, more than the {} the file has", words * 4, data.size() - 16);
 		if (start16 > start8 || start8 > words)
 			return "its buffer's parts are out of order";
 		return std::nullopt;
+	}
+
+	std::optional<std::pair<uint32_t, uint32_t>> pngSize(std::string_view data)
+	{
+		if (data.size() < 24 || !data.starts_with(std::string_view{"\x89PNG\r\n\x1a\n", 8}) || data.substr(12, 4) != "IHDR")
+			return std::nullopt;
+		const auto u32be = [&](size_t at) {
+			uint32_t v = 0;
+			for (size_t i = 0; i < 4; ++i)
+				v = v << 8 | static_cast<uint8_t>(data[at + i]);
+			return v;
+		};
+		return std::pair{u32be(16), u32be(20)};
 	}
 
 	std::optional<std::string> unsafeImage(std::string_view data)
@@ -1068,15 +1083,9 @@ namespace graal3d
 		static constexpr std::string_view signature{"\x89PNG\r\n\x1a\n", 8};
 		if (!data.starts_with(signature))
 			return std::nullopt;
-		if (data.size() < 24 || data.substr(12, 4) != "IHDR")
+		if (!pngSize(data))
 			return "a PNG without its header";
-		const auto u32be = [&](size_t at) {
-			uint32_t v = 0;
-			for (size_t i = 0; i < 4; ++i)
-				v = v << 8 | static_cast<uint8_t>(data[at + i]);
-			return v;
-		};
-		const uint32_t width = u32be(16), height = u32be(20);
+		const auto [width, height] = *pngSize(data);
 		if (width == 0 || height == 0 || width > kMaxImageSide || height > kMaxImageSide)
 			return std::format("a PNG of {}x{} (at most {} a side)", width, height, kMaxImageSide);
 		return std::nullopt;

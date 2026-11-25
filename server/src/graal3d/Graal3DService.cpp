@@ -809,6 +809,11 @@ namespace graal3d
 					{
 						++found;
 						checkImage(*texture);
+						// Anything else and the client draws its default texture
+						// instead (lab, 2026-11-25).
+						if (const auto size = pngSize(readAll(texture->file)); size && (size->first != 256 || size->second != 256))
+							log::printLine(log::server, "** [Warning] Graal3D: terrain texture {} is {}x{}; clients draw only 256x256 ones.",
+										   texture->file.filename().string(), size->first, size->second);
 						m_terrainFiles.push_back(line);
 					}
 				}

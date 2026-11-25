@@ -259,8 +259,13 @@ namespace graal3d
 	// parent. Returns why the file is unsafe, or nothing.
 	std::optional<std::string> unsafe3ds(std::string_view data);
 
-	// Checks a .dts shape's header: the memory buffer it claims must fit the file.
+	// Checks a .dts shape's header: it must be version 24, the only one the real
+	// 5.12 draws, and the memory buffer it claims must fit the file.
+	inline constexpr uint32_t kDtsVersion = 24;
 	std::optional<std::string> unsafeDts(std::string_view data);
+
+	// A PNG's width and height from its header, or nothing if it is not a PNG.
+	std::optional<std::pair<uint32_t, uint32_t>> pngSize(std::string_view data);
 
 	// Checks a PNG's header for a sane width and height; other images pass.
 	inline constexpr uint32_t kMaxImageSide = 8192;

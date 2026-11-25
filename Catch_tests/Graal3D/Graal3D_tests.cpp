@@ -1550,6 +1550,8 @@ SCENARIO("A .dts or PNG the real 5.12 crashes on is found before it is served")
 	REQUIRE(unsafeDts(dts.substr(0, 20)));                              // cut inside the buffer
 	REQUIRE(unsafeDts(le32(24) + le32(0x40000000) + le32(0) + le32(0) + std::string(16, '\0')));
 	REQUIRE(unsafeDts(le32(24) + le32(4) + le32(3) + le32(2) + std::string(16, '\0')));  // parts out of order
+	for (const uint32_t version : {16u, 17u, 19u, 22u, 23u, 25u})                // only 24 draws on 5.12
+		REQUIRE(unsafeDts(le32(version) + dts.substr(4)));
 	REQUIRE(unsafeAsset(".DTS", dts.substr(0, 10)));
 
 	const auto be32 = [](uint32_t v) {
@@ -1563,7 +1565,9 @@ SCENARIO("A .dts or PNG the real 5.12 crashes on is found before it is served")
 	REQUIRE(unsafeImage(png(30000, 30000)));
 	REQUIRE(unsafeImage(png(0, 16)));
 	REQUIRE(unsafeImage(png(256, 256).substr(0, 20)));
-	REQUIRE_FALSE(unsafeImage("GIF89a"));                               // only PNG is checked
+	REQUIRE_FALSE(unsafeImage("GIF89a"));
+	REQUIRE(pngSize(png(256, 128)) == std::pair<uint32_t, uint32_t>{256, 128});
+	REQUIRE_FALSE(pngSize("GIF89a"));                               // only PNG is checked
 	REQUIRE(unsafeAsset(".png", png(30000, 30000)));
 }
 
