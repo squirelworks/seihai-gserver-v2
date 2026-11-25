@@ -101,21 +101,43 @@ namespace graal3d
 								F::ChunkCache }),
 		};
 
+		// Windows 4.20r8: 4.20r6's values except what was read. A lab run
+		// (Graal_analysis PR #854) linked it as protocol 24; it takes the 5.12
+		// TerrainBlock and chunk layout, then crashes soon after the TerrainBlock
+		// is added, so it is offered no streamed terrain.
+		constexpr Capabilities k4208 = []
+		{
+			Capabilities c = with(k420, "4.20r8", "G3D20126",
+								  allBut({ F::Protocol, F::Game, F::GameLayer, F::MissionPhases, F::TorqueScript,
+										   F::ServerScripts, F::TerrainChunks, F::ChunkCache }));
+			c.protocol = 24;
+			c.terrainChunks = false;
+			return c;
+		}();
+
+		// Linux 4.20r6 and 4.20r8: protocol 24, 5.12's row except what the
+		// 2026-11-25 world lab read. Its loader takes DTS 17, but a version-17
+		// shape froze it: serve DTS 24. No streamed terrain, as Windows 4.20r8.
+		constexpr Capabilities k420Linux = []
+		{
+			Capabilities c = with(k500, "4.20 Linux", "G3D22126",
+								  allBut({ F::Protocol, F::Game, F::GameLayer, F::MissionPhases, F::ThreeDs, F::DtsMin,
+										   F::DtsMax, F::DifVersion }));
+			c.terrainChunks = false;
+			return c;
+		}();
+
 		constexpr std::array<Capabilities, 10> kRows{
 			k304,
 			k3153,
 			k404,
 			with(k404, "4.04r2 Mac", "G3D18026", kAllCapFields),
 			k420,
-			with(k420, "4.20r8", "G3D20126", allBut({ F::GameLayer, F::MissionPhases, F::TorqueScript, F::ServerScripts, F::TerrainChunks })),
+			k4208,
 			k500,
 			with(k500, "5.12", "G3D14097", 0),
 			with(k500, "5.12 Mac", "G3D15097", kAllCapFields),
-			// Linux 4.20r6 and 4.20r8: protocol 24, 5.12's row except what the
-			// 2026-11-25 world lab read. Its loader takes DTS 17, but a version-17
-			// shape froze it: serve DTS 24.
-			with(k500, "4.20 Linux", "G3D22126",
-				 allBut({ F::Protocol, F::Game, F::GameLayer, F::MissionPhases, F::ThreeDs, F::DtsMin, F::DtsMax, F::DifVersion })),
+			k420Linux,
 		};
 
 		bool endsWithNoCase(std::string_view s, std::string_view suffix)
