@@ -1296,6 +1296,59 @@ SCENARIO("A raw object is ghosted with its fields, and a raw event is posted")
 	}
 }
 
+SCENARIO("Every event says its exact length")
+{
+	// 5.12 trusts an event's int14 length: one that claimed a bit more than it
+	// carried ran garbled and crashed the client (fuzz tier 1, 2026-11-25).
+	Harness h;
+	std::string error;
+
+	THEN("an event too long for its int14 length is not sent")
+	{
+		std::vector<std::string_view> words(520, "u32:7"); // 16640 bits
+		REQUIRE_FALSE(h.conn.postRawEvent("TerrainChunkEvent", *parseRawFields(words, error)));
+		REQUIRE(h.logs.back().find("longer than an event can say") != std::string::npos);
+	}
+
+	WHEN("the mission start command and a raw event go out")
+	{
+		REQUIRE(h.conn.postRawEvent("TerrainChunkEvent", *parseRawFields({"i4:5", "i4:6", "u32:99"}, error)));
+		h.conn.receive(kFirstData, h.now);
+		h.tick(60);
+		const auto pkt = readServerPacket(h.sent.back());
+
+		THEN("each one's length is what its reader takes")
+		{
+			REQUIRE(pkt.events.size() >= 2);
+			const auto command = *eventClassId(h.profile, "RemoteCommandEvent");
+			const auto chunk = *eventClassId(h.profile, "TerrainChunkEvent");
+			bool sawCommand = false, sawChunk = false;
+			for (const auto& ev : pkt.events)
+			{
+				PayloadReader p(ev.payload);
+				if (ev.classId == command)
+				{
+					const auto args = p.r.readInt(CommandArgsBits);
+					for (uint32_t i = 0; i < args; ++i)
+						unpackCommandArg(p.r);
+					REQUIRE(p.r.bitPosition() == ev.bits);
+					sawCommand = true;
+				}
+				else if (ev.classId == chunk)
+				{
+					p.r.readInt(4);
+					p.r.readInt(4);
+					p.r.readU32();
+					REQUIRE(p.r.bitPosition() == ev.bits);
+					sawChunk = true;
+				}
+			}
+			REQUIRE(sawCommand);
+			REQUIRE(sawChunk);
+		}
+	}
+}
+
 SCENARIO("A TerrainRequestUpdatesEvent from the client is logged with its stamps")
 {
 	Harness h;

@@ -573,6 +573,9 @@ namespace graal3d
 		avatar.object.nickname = player->account.character.nickName;
 		avatar.object.flags = GameObjectFlags::Shadow;
 		m_avatars[playerId] = avatar;
+		// The TCP side starts where the 3D object does: a 3D spawn at (20, -20)
+		// left the account at the server's start position (lab, 2026-11-25).
+		syncTcpPosition(playerId, avatar.object.transform.position);
 		ghostWorld(playerId, account, connection);
 		forEachOtherConnection(playerId, [&](Connection& other) { ghostAvatar(other, avatarKey(playerId), avatar); });
 

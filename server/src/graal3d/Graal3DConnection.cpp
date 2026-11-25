@@ -10,6 +10,7 @@
 #include <graal3d/Graal3DTge.h>
 
 #include <algorithm>
+#include <cassert>
 #include <format>
 #include <random>
 #include <string>
@@ -153,14 +154,37 @@ namespace graal3d
 		return m_mutation != Mutation::None && !isAcceptMutation(m_mutation) && !m_mutationDone && m_mutationAt != 0 && nowMs >= m_mutationAt;
 	}
 
-	void Connection::postEvent(std::string_view className, BitWriter payload)
+	void Connection::writeSized(BitWriter& w, uint32_t classId, const BitWriter& body)
+	{
+		// Class id, int14 length, body: the length must be the body's exact bit
+		// count, never less (see postEvent). Callers keep bodies under 16384 bits.
+		const size_t bits = body.bitPosition();
+		assert(bits <= MaxEventBits);
+		[[maybe_unused]] const size_t start = w.bitPosition();
+		w.writeInt(classId, 12);
+		w.writeInt(static_cast<uint32_t>(bits), 14);
+		w.writeBits(body);
+		assert(w.bitPosition() - start == 12 + 14 + bits);
+	}
+
+	bool Connection::postEvent(std::string_view className, BitWriter payload)
 	{
 		const auto id = eventClassId(m_profile, className);
 		if (!id)
-			return;
+			return false;
+		// An event's length goes out as int14, so a payload of 16384 bits or more
+		// would be under-counted, and 5.12 runs what an under-counted event leaves
+		// and then crashes (fuzz tier 1, Graal_analysis
+		// torque/3d-fuzz-net-tier1-2026-11-25.md). Such an event is not sent.
+		if (payload.bitPosition() > MaxEventBits)
+		{
+			log(std::format("{} of {} bits is longer than an event can say (at most {}), not sent", className, payload.bitPosition(), MaxEventBits));
+			return false;
+		}
 		const int32_t seq = m_nextSendEventSeq++;
 		m_events.emplace(seq, OutEvent{*id, std::move(payload)});
 		m_sendQueue.push_back(seq);
+		return true;
 	}
 
 	namespace
@@ -189,8 +213,7 @@ namespace graal3d
 		BitWriter payload;
 		payload.setPacketStrings(m_packetStrings);
 		writeRawFields(payload, fields);
-		postEvent(className, std::move(payload));
-		return true;
+		return postEvent(className, std::move(payload));
 	}
 
 	bool Connection::postTerrainChunk(uint32_t x, uint32_t y, uint32_t stamp, std::string_view packed)
@@ -464,9 +487,7 @@ namespace graal3d
 			if (!w.writeFlag(seq == prevSeq + 1))
 				w.writeInt(static_cast<uint32_t>(seq) & 0x7Fu, 7);
 			prevSeq = seq;
-			w.writeInt(ev.classId, 12);
-			w.writeInt(static_cast<uint32_t>(ev.payload.bitPosition()), 14);
-			w.writeBits(ev.payload);
+			writeSized(w, ev.classId, ev.payload);
 			note.events.push_back(seq);
 			m_sendQueue.pop_front();
 		}
@@ -876,9 +897,7 @@ namespace graal3d
 			w.writeInt(g.index, static_cast<int>(idBits));
 			if (!w.writeFlag(g.kill))
 			{
-				w.writeInt(g.classId, 12);
-				w.writeInt(static_cast<uint32_t>(payload.bitPosition()), 14);
-				w.writeBits(payload);
+				writeSized(w, g.classId, payload);
 			}
 
 			note.ghosts.push_back({c.key, mask, create, g.kill});
@@ -910,9 +929,7 @@ namespace graal3d
 		payload.setPacketStrings(m_packetStrings);
 		payload.writeInt(g.index, 12);
 		payload.writeFlag(true);
-		payload.writeInt(g.classId, 12);
-		payload.writeInt(static_cast<uint32_t>(update.bitPosition()), 14);
-		payload.writeBits(update);
+		writeSized(payload, g.classId, update);
 		const int32_t seq = m_nextSendEventSeq;
 		postEvent("GhostAlwaysObjectEvent", std::move(payload));
 		if (m_nextSendEventSeq == seq)

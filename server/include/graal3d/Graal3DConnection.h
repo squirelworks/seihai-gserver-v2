@@ -89,6 +89,7 @@ namespace graal3d
 		static constexpr uint64_t KeepAliveMs = 1000;
 		static constexpr uint64_t SendIntervalMs = 50;
 		static constexpr size_t MaxPacketBytes = 400; // the clients accept up to 450
+		static constexpr size_t MaxEventBits = (1u << 14) - 1; // an event's or ghost update's int14 length
 		static constexpr uint32_t MaxGhosts = 4096;   // the client's ghost table
 
 		Connection(const Profile& profile, uint32_t connectSequence, uint64_t nowMs, Callbacks callbacks);
@@ -215,7 +216,7 @@ namespace graal3d
 			bool controlUpdate = false; // protocol 19: a moved Player's packet data again
 		};
 
-		void postEvent(std::string_view className, BitWriter payload);
+		bool postEvent(std::string_view className, BitWriter payload); // false: no such class, or too long
 		void sendCommand(std::string_view command, const std::vector<std::string>& args = {});
 		void startTgeDatablocks();
 		void advanceTge();
@@ -230,6 +231,8 @@ namespace graal3d
 		void writeCameraSection(BitWriter& writer);
 		void writeGhostSection(BitWriter& writer, Notify& note);
 		void ghostNotify(const Notify& note, bool delivered);
+		// Class id (12 bits), the body's exact length (int14), the body.
+		static void writeSized(BitWriter& w, uint32_t classId, const BitWriter& body);
 		[[nodiscard]] bool ghostsMayGo() const;
 		[[nodiscard]] bool ghostWorkPending() const;
 		[[nodiscard]] bool controlPending() const;
