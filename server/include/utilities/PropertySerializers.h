@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
 #ifndef PROPSCONTAINER_H
 #define PROPSCONTAINER_H
 
@@ -137,6 +137,12 @@ struct Limits
 
 	/// @brief Sword, battleaxe, lizardsword, goldensword.
 	static constexpr uint8_t MaxSwordPower = 20;
+
+	/// @brief Lowest sword power the extended wire form can carry (byte 10 = power + 30).
+	static constexpr int MinWireSwordPower = -20;
+
+	/// @brief Highest shield power the extended wire form can carry (byte 223 = power + 10).
+	static constexpr int MaxWireShieldPower = 213;
 
 	/// @brief Shield, mirrorshield, lizardshield.
 	static constexpr uint8_t MaxShieldPower = 3;
