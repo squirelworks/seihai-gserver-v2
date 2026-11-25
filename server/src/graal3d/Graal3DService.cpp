@@ -730,6 +730,7 @@ namespace graal3d
 			// `tgecontrol camera` a Camera, at the spawn point as its control object.
 			ObjectKey key = 1;
 			bool sky = false;
+			const Capabilities* tgeCaps = capabilitiesOf(playerId);
 			for (const auto& object : m_world.objects)
 			{
 				if (object.kind == GhostObject::Kind::Sky)
@@ -738,6 +739,23 @@ namespace graal3d
 					padded.sky.materialList = tge::tgeSkyMaterialList(object.sky.materialList);
 					connection.setGhost(key, padded);
 					sky = true;
+					// 3.153 asks for each sky texture as <stem>.gif (lab), so the
+					// server's files need a .gif of each.
+					if (tgeCaps && tgeCaps->skyGif && !object.sky.materialList.empty())
+					{
+						std::string names;
+						std::string_view list = object.sky.materialList;
+						while (!list.empty())
+						{
+							const auto comma = list.find(',');
+							const auto name = list.substr(0, comma);
+							if (!name.empty())
+								names += (names.empty() ? "" : ", ") + tgeCaps->skyTextureRequestName(name);
+							list = comma == std::string_view::npos ? std::string_view{} : list.substr(comma + 1);
+						}
+						log::printLine(log::server, "Graal3D: {}'s build ({}) asks for the sky textures as .gif: {}.", account, tgeCaps->label,
+									   names);
+					}
 				}
 				++key;
 			}
@@ -791,12 +809,17 @@ namespace graal3d
 
 		ObjectKey key = 1;
 		const Capabilities* caps = capabilitiesOf(playerId);
+		bool sky = false;
 		for (const auto& object : m_world.objects)
 		{
 			if (offersWorldObject(caps, object))
 				connection.setGhost(key, object);
+			sky = sky || object.kind == GhostObject::Kind::Sky;
 			++key;
 		}
+		if (caps && caps->requiresSky && !sky)
+			log::printLine(log::server, "Graal3D: {}'s build ({}) crashes without a Sky, and graal3dworld.txt has no sky line.", account,
+						   caps->label);
 		for (const auto& [other, avatar] : m_avatars)
 			connection.setGhost(avatarKey(other), avatar); // its own included: the control object
 		// The Sharp3D route's control object is the client's Camera (set below).
