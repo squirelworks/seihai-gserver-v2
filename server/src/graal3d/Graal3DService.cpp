@@ -849,6 +849,20 @@ namespace graal3d
 				object.chat = state.object.chat;
 			if (state.changed & GameObjectBits::Scale)
 				object.scale = state.object.scale;
+			// Its looks too, so another client sees a change of shape, skin,
+			// attributes or nickname (and its colour). The name and flags stay the
+			// server's.
+			if (state.changed & GameObjectBits::Shape)
+				object.shape = state.object.shape;
+			if (state.changed & GameObjectBits::Skin)
+				object.skin = state.object.skin;
+			if (state.changed & GameObjectBits::Attrs)
+				object.attr = state.object.attr;
+			if (state.changed & GameObjectBits::Nickname)
+			{
+				object.nickname = state.object.nickname;
+				object.nickColor = state.object.nickColor;
+			}
 		}
 		if (object == before)
 			return;
