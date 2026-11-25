@@ -46,6 +46,7 @@ namespace graal3d
 		ServerScripts,
 		Terraformer,
 		TerrainEditor,
+		DtsMin,
 		DtsMax,
 		DifVersion,
 		ThreeDs,
@@ -110,6 +111,7 @@ namespace graal3d
 		bool serverScripts; // a server can make it run new TorqueScript: no read build can
 		Terraformer terraformer;
 		bool terrainEditor;
+		uint8_t dtsMin; // DTS versions dtsMin..dtsMax (low byte of the version word)
 		uint8_t dtsMax;
 		uint8_t difVersion;
 		bool threeDs;
@@ -130,6 +132,8 @@ namespace graal3d
 		[[nodiscard]] bool takesStreamedTerrain512() const { return terrainChunks && gameLayer == GameLayer::GameObject; }
 		// The 5.x WaterBlock layout (Graal_analysis torque/terrain-512.md section 5).
 		[[nodiscard]] bool takesWater512() const { return water && gameLayer == GameLayer::GameObject; }
+		// The client reads a DTS shape of this version.
+		[[nodiscard]] bool readsDts(uint8_t version) const { return version >= dtsMin && version <= dtsMax; }
 		// The client asks the gserver for a missing resource with this name.
 		[[nodiscard]] bool requestsDownload(std::string_view name) const;
 		// The name the client asks for when a material names `texture`.

@@ -26,10 +26,10 @@ namespace graal3d
 			.controlPlayer = true, .controlCamera = true, .controlGameObject = false,
 			.terFile = true, .terMax = 3, .terrainChunks = false, .heightsCache = false, .terrainTextureSize = 0,
 			.water = true, .torqueScript = true, .serverScripts = false, .terraformer = Terraformer::Full, .terrainEditor = true,
-			.dtsMax = 24, .difVersion = 44, .threeDs = false, .md3Version = 0, .stripPngTextures = false,
+			.dtsMin = 19, .dtsMax = 24, .difVersion = 44, .threeDs = false, .md3Version = 0, .stripPngTextures = false,
 			.downloadRefused = {}, .bigdata = false, .bigdataChunkMax = 0, .terrainChunkMax = 0, .udpPortOffset = 1,
 			.assumed = capMask({ F::MissionPhases, F::PhasesOptional, F::ClientMoves, F::ControlObjects, F::TerFile,
-								 F::TerMax, F::TerrainTexture, F::Water, F::ServerScripts, F::DtsMax, F::DifVersion, F::ThreeDs,
+								 F::TerMax, F::TerrainTexture, F::Water, F::ServerScripts, F::DtsMin, F::DtsMax, F::DifVersion, F::ThreeDs,
 								 F::Md3Version, F::TextureNames, F::DownloadRefused, F::UdpPortOffset }),
 		};
 
@@ -41,10 +41,10 @@ namespace graal3d
 			.controlPlayer = true, .controlCamera = true, .controlGameObject = false,
 			.terFile = true, .terMax = 3, .terrainChunks = true, .heightsCache = true, .terrainTextureSize = 0,
 			.water = true, .torqueScript = true, .serverScripts = false, .terraformer = Terraformer::Full, .terrainEditor = true,
-			.dtsMax = 24, .difVersion = 44, .threeDs = true, .md3Version = 15, .stripPngTextures = false,
+			.dtsMin = 19, .dtsMax = 24, .difVersion = 44, .threeDs = true, .md3Version = 15, .stripPngTextures = false,
 			.downloadRefused = {}, .bigdata = true, .bigdataChunkMax = 191, .terrainChunkMax = 1023, .udpPortOffset = 1,
 			.assumed = capMask({ F::MissionPhases, F::PhasesOptional, F::ControlObjects, F::TerMax, F::ChunkCache,
-								 F::TerrainTexture, F::Water, F::DtsMax, F::DifVersion, F::Md3Version, F::TextureNames,
+								 F::TerrainTexture, F::Water, F::DtsMin, F::DtsMax, F::DifVersion, F::Md3Version, F::TextureNames,
 								 F::DownloadRefused, F::BigdataChunkMax, F::TerrainChunkMax }),
 		};
 
@@ -56,7 +56,7 @@ namespace graal3d
 			.controlPlayer = true, .controlCamera = true, .controlGameObject = false,
 			.terFile = true, .terMax = 3, .terrainChunks = true, .heightsCache = true, .terrainTextureSize = 0,
 			.water = true, .torqueScript = false, .serverScripts = false, .terraformer = Terraformer::Greyscale, .terrainEditor = true,
-			.dtsMax = 24, .difVersion = 44, .threeDs = true, .md3Version = 15, .stripPngTextures = false,
+			.dtsMin = 19, .dtsMax = 24, .difVersion = 44, .threeDs = true, .md3Version = 15, .stripPngTextures = false,
 			.downloadRefused = kRefuseScriptsTer, .bigdata = true, .bigdataChunkMax = 191, .terrainChunkMax = 1023,
 			.udpPortOffset = 1,
 			.assumed = capMask({ F::PhasesOptional, F::ControlObjects, F::ChunkCache, F::TerrainTexture,
@@ -79,7 +79,7 @@ namespace graal3d
 			.controlPlayer = false, .controlCamera = true, .controlGameObject = true,
 			.terFile = false, .terMax = 0, .terrainChunks = true, .heightsCache = true, .terrainTextureSize = 256,
 			.water = true, .torqueScript = false, .serverScripts = false, .terraformer = Terraformer::Greyscale, .terrainEditor = true,
-			.dtsMax = 24, .difVersion = 44, .threeDs = true, .md3Version = 0, .stripPngTextures = true,
+			.dtsMin = 17, .dtsMax = 24, .difVersion = 44, .threeDs = true, .md3Version = 0, .stripPngTextures = true,
 			.downloadRefused = kRefuseScriptsTer, .bigdata = true, .bigdataChunkMax = 191, .terrainChunkMax = 1023,
 			.udpPortOffset = 1,
 			.assumed = allBut({ F::Protocol, F::Game, F::ClassTable, F::ClassIds12Bit, F::LengthPrefixes, F::GameLayer,
@@ -94,7 +94,7 @@ namespace graal3d
 			.controlPlayer = false, .controlCamera = true, .controlGameObject = true,
 			.terFile = false, .terMax = 0, .terrainChunks = true, .heightsCache = true, .terrainTextureSize = 256,
 			.water = true, .torqueScript = false, .serverScripts = false, .terraformer = Terraformer::Greyscale, .terrainEditor = true,
-			.dtsMax = 24, .difVersion = 44, .threeDs = true, .md3Version = 0, .stripPngTextures = true,
+			.dtsMin = 17, .dtsMax = 24, .difVersion = 44, .threeDs = true, .md3Version = 0, .stripPngTextures = true,
 			.downloadRefused = kRefuseScriptsTer, .bigdata = true, .bigdataChunkMax = 191, .terrainChunkMax = 1023,
 			.udpPortOffset = 1,
 			.assumed = allBut({ F::Protocol, F::Game, F::ClassTable, F::GameLayer, F::MissionPhases, F::TerrainChunks,
@@ -129,7 +129,7 @@ namespace graal3d
 			"protocol", "game", "class_table", "class_ids_12bit", "length_prefixes", "game_layer",
 			"mission_phases", "phases_optional", "client_moves", "control_objects", "ter_file", "ter_max",
 			"terrain_chunks", "chunk_cache", "terrain_texture", "water", "torque_script", "server_scripts", "terraformer",
-			"terrain_editor", "dts_max", "dif_version", "three_ds", "md3_version", "texture_names",
+			"terrain_editor", "dts_min", "dts_max", "dif_version", "three_ds", "md3_version", "texture_names",
 			"download_refused", "bigdata", "bigdata_chunk_max", "terrain_chunk_max", "udp_port_offset",
 		};
 		const auto i = static_cast<size_t>(field);
@@ -193,7 +193,7 @@ namespace graal3d
 				 b(lengthPrefixes), std::string(gameLayer == GameLayer::Tge ? "tge" : "gameobject"), n(missionPhases),
 				 b(phasesOptional), b(clientMoves), control, b(terFile), n(terMax), b(terrainChunks),
 				 std::string(heightsCache ? "heights" : "none"), texture, b(water),
-				 std::string(torqueScript ? "compiles" : "none"), b(serverScripts), std::string(former), b(terrainEditor), n(dtsMax),
+				 std::string(torqueScript ? "compiles" : "none"), b(serverScripts), std::string(former), b(terrainEditor), n(dtsMin), n(dtsMax),
 				 n(difVersion), b(threeDs), n(md3Version), std::string(stripPngTextures ? "strip_png" : "as_named"),
 				 refused.empty() ? std::string("-") : refused, b(bigdata), n(bigdataChunkMax), n(terrainChunkMax),
 				 n(udpPortOffset), assumedText.empty() ? std::string("-") : assumedText })
