@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-04, 2026-11-07, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-04, 2026-11-07, 2026-11-13, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
@@ -55,7 +55,7 @@ HandlePacketResult PlayerRC::msgPLI_RC_SERVEROPTIONSGET(CString& pPacket)
 	const auto settings = m_server->getFileSystemServer().openi(fs::FileCategory::CONFIG, "serveroptions.txt");
 	// Seihai: a world without serveroptions.txt runs on defaults; the RC then gets an
 	// empty list instead of a null dereference that ends the server.
-	if (settings == nullptr)
+	if (settings == nullptr || !settings->opened())
 	{
 		sendPacket(CString() >> (char)PLO_RC_SERVEROPTIONSGET);
 		return HandlePacketResult::Handled;
@@ -584,6 +584,10 @@ HandlePacketResult PlayerRC::msgPLI_RC_PLAYERPROPSRESET(CString& pPacket)
 	}
 
 	// Save RC stuff.
+	const std::string communityName = p->account.communityName;
+	const uint32_t onlineSeconds = p->account.onlineSeconds;
+	const std::string comments = p->account.comments;
+	const std::string email = p->account.email;
 	const auto adminip = p->account.adminIpRange;
 	const auto rights = p->account.adminRights;
 	std::vector<std::string> folders;
@@ -598,6 +602,10 @@ HandlePacketResult PlayerRC::msgPLI_RC_PLAYERPROPSRESET(CString& pPacket)
 	m_server->getAccountLoader().saveAccount(p->account);
 
 	// Add the RC stuff back in.
+	p->account.communityName = communityName;
+	p->account.onlineSeconds = onlineSeconds;
+	p->account.comments = comments;
+	p->account.email = email;
 	p->account.adminIpRange = adminip;
 	p->account.adminRights = rights;
 	p->account.folderList = folders;
@@ -1306,8 +1314,15 @@ HandlePacketResult PlayerRC::msgPLI_RC_FILEBROWSER_UP(CString& pPacket)
 
 	const std::filesystem::path file{fs::fromANSIFileName(pPacket.readChars(pPacket.readGUChar()).toString())};
 	const std::filesystem::path lastFolderAccessed{account.lastFolderAccessed};
-	const CString fileData = pPacket.subString(pPacket.readPos());
+	CString fileData = pPacket.subString(pPacket.readPos());
 	const CString checkFile = (lastFolderAccessed / file).generic_string();
+
+	// Check for bad data.
+	if (fileData.isEmpty())
+	{
+		sendPacket(CString() >> (char)PLO_RC_FILEBROWSER_MESSAGE << "No data received for " << checkFile);
+		return HandlePacketResult::Handled;
+	}
 
 	// Check if this is a protected file.
 	bool isProtected = false;
@@ -1340,6 +1355,10 @@ HandlePacketResult PlayerRC::msgPLI_RC_FILEBROWSER_UP(CString& pPacket)
 		sendPacket(CString() >> (char)PLO_RC_FILEBROWSER_MESSAGE << "Insufficent rights to upload " << checkFile);
 		return HandlePacketResult::Handled;
 	}
+
+	// Remove the newline on the file data.
+	if (fileData[fileData.length() - 1] == '\n')
+		fileData.removeI(fileData.length() - 1);
 
 	// See if we are uploading a large file or not.
 	if (!m_rcLargeFiles.contains(file))

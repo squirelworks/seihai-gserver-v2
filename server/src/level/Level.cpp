@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-13, 2026-11-22: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-13, 2026-11-22, 2026-11-25: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <bit>
 #include <cassert>
@@ -1457,14 +1457,27 @@ void Level::sendHorsesToPlayer(const std::shared_ptr<Player>& player) const
 }
 
 // TODO(refactor): Replace with a function in server that sends npc props from a list of ids.
-void Level::sendNPCsToPlayer(const std::shared_ptr<Player>& player, const std::optional<clock::time_point> time) const
+void Level::sendNPCsToPlayer(const std::shared_ptr<Player>& player, std::optional<clock::time_point> time) const
 {
 	const Level* currentLevel = nullptr;
 
+	const auto playerClient = std::dynamic_pointer_cast<PlayerClient>(player);
 	for (const auto& npcId : findNPCsInRangeForData(player->getGlobalPosition()))
 	{
 		const auto npc = m_server->getNPC(npcId);
 		if (!npc) continue;
+
+		// Check if we should actually send this NPC.
+		if (playerClient != nullptr)
+		{
+			const auto npcSubLevel = getSubLevelAtPosition(npc->getGlobalPosition());
+			if (npcSubLevel != nullptr)
+			{
+				// If the last entered time for this sub level is greater than the given time, use the last entered time.
+				if (const auto lastEntered = playerClient->getLevelLastEnteredTime(npcSubLevel.get(), player->account.groupName); lastEntered.has_value() && lastEntered.value() > time.value())
+					time = lastEntered.value();
+			}
+		}
 
 		// If this NPC belongs on a different level, tell the client to change the active level.
 		if (auto npcLevel = npc->getLevel(); currentLevel != npcLevel.get())
@@ -1472,6 +1485,10 @@ void Level::sendNPCsToPlayer(const std::shared_ptr<Player>& player, const std::o
 			player->sendPacket(CString() >> (char)PLO_SETACTIVELEVEL << npcLevel->levelName);
 			currentLevel = npcLevel.get();
 		}
+		// Else, if the NPC is a sparringzone NPC and it is not on the same map segment as the player, skip it.
+		// Sparringzones on gmaps is still mostly non-working on 2.x clients due to client limitations.
+		else if (npc->isSparringZone() && toMapPosition(npc->getGlobalPosition()) != toMapPosition(player->getGlobalPosition()))
+			continue;
 
 		sendNPCToPlayer(npc, player, time);
 	}
@@ -1491,10 +1508,10 @@ void Level::sendNPCToPlayer(const std::shared_ptr<NPC>& npc, const std::shared_p
 		if (gs1ByteCode && npc->modTime[PROPID(NPCProp::SCRIPT)].has_value() && npc->modTime[PROPID(NPCProp::SCRIPT)].value() >= time.value_or(clock::time_point::min()))
 			npc->sendGS1ByteCodeTo(*player);
 
-		if (m_server->Generation == ServerGeneration::MODERN && !npc->getScript().getClientByteCode().empty())
+		if (m_server->Generation == ServerGeneration::MODERN && !npc->getScript().getClientSideByteCode().empty())
 		{
 			CString byteCodePacket = CString() >> (char)PLO_NPCBYTECODE >> (int)npc->id;
-			byteCodePacket.write(reinterpret_cast<const char*>(npc->getScript().getClientByteCode().data()), static_cast<int>(npc->getScript().getClientByteCode().size()));
+			byteCodePacket.write(reinterpret_cast<const char*>(npc->getScript().getClientSideByteCode().data()), static_cast<int>(npc->getScript().getClientSideByteCode().size()));
 			player->sendRawPacket(byteCodePacket);
 		}
 	}
@@ -1592,9 +1609,9 @@ bool Level::addNPC(const std::shared_ptr<NPC>& npc)
 
 	if (const auto part = getSubLevelAtPosition(npc->getGlobalPosition()); part != nullptr)
 	{
-		const auto script = string::trimLeft(npc->getScript().getClientSide());
+		const auto script = string::trimLeft(npc->getScript().getClientSideScript());
 
-		if (script.starts_with("sparringzone"))
+		if (npc->isSparringZone())
 			part->isSparringZone = true;
 
 		if (script.starts_with("noplayerkilling"))

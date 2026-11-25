@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-16: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-25: see CHANGES-SEIHAI.md.
 // New file: issue #24. The CRC the server announces for a cached weapon or class must be
 // the CRC32 of the body the client caches, or the client's cache check never matches and every
 // login downloads every script again. For a weapon that body is the bytecode DES-encrypted with
@@ -155,7 +155,7 @@ TEST_CASE("the script cache DES matches the standard and a real 6.03r7 cache fil
 TEST_CASE_METHOD(ModernServer, "a weapon's PLO_LOADSCRIPT CRC is the CRC32 of the stored (encrypted) bytecode", "[issue24]")
 {
 	const Weapon weapon{"CacheTest"sv, "block.png"sv, script};
-	const auto& bytecode = weapon.getScript().getClientByteCode();
+	const auto& bytecode = weapon.getScript().getClientSideByteCode();
 	REQUIRE_FALSE(bytecode.empty());
 
 	// type,name,cacheflag,key,crc
@@ -173,7 +173,7 @@ TEST_CASE_METHOD(ModernServer, "a weapon's PLO_LOADSCRIPT CRC is the CRC32 of th
 TEST_CASE_METHOD(ModernServer, "a class checksum matches the encrypted body and the plain bytecode", "[issue24]")
 {
 	const ScriptClass scriptClass{"cachetestclass"sv, script};
-	const auto& bytecode = scriptClass.getScript().getClientByteCode();
+	const auto& bytecode = scriptClass.getScript().getClientSideByteCode();
 	REQUIRE_FALSE(bytecode.empty());
 
 	// 5.07 and later cache the DES-encrypted body and compare that CRC (PLO_LOADSCRIPT).
@@ -202,7 +202,7 @@ TEST_CASE_METHOD(ModernServer, "PLO_WEAPONHASH carries the CRC32 of the bytecode
 	// 4.04r2 to 4.20r8 write the bytes after the name in 132 to weblevels/weapons/<name>.code, and on 193 compare
 	// the zlib CRC32 of that file with the GINT5 (Graal_analysis protocol/unknown-ids-2026-11-06.md).
 	const Weapon weapon{"CacheTest"sv, "block.png"sv, script};
-	const auto& bytecode = weapon.getScript().getClientByteCode();
+	const auto& bytecode = weapon.getScript().getClientSideByteCode();
 	REQUIRE_FALSE(bytecode.empty());
 
 	auto packet = weapon.getWeaponHashPacket();
@@ -232,12 +232,12 @@ TEST_CASE("GS1 weapon text carries no raw line breaks", "[weapon][gs1]")
 TEST_CASE_METHOD(NewmainServer, "a GS1 weapon has bytecode for 5.12 and later clients without an NPC-server", "[weapon][gs1]")
 {
 	const Weapon weapon{"GS1Weapon"sv, "block.png"sv, "//#CLIENTSIDE\nif (playerchats && strequals(#c,hi)) {\n  setplayerprop #c,hello;\n}\n"sv};
-	REQUIRE(weapon.getScript().getClientByteCode().empty());
-	REQUIRE_FALSE(weapon.getScript().getClientSide().empty());
+	REQUIRE(weapon.getScript().getClientSideByteCode().empty());
+	REQUIRE_FALSE(weapon.getScript().getClientSideScript().empty());
 
 	const auto& bytecode = weapon.getClientByteCode();
 	REQUIRE_FALSE(bytecode.empty());
-	const auto expected = gs1::compileClientScript(weapon.getScript().getClientSide());
+	const auto expected = gs1::compileClientScript(weapon.getScript().getClientSideScript());
 	REQUIRE(expected.ok());
 	CHECK(bytecode == expected.bytecode);
 

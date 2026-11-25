@@ -34,6 +34,7 @@ public:
 	[[a::inline]] Script& getScript();
 	[[a::inline]] const Script& getScript() const;
 	ScriptClass& setScript(std::string_view classScript);
+	void generateScriptHeader();
 
 	// The cache header without its CRC, and the same header with the encrypted-bytecode CRC.
 	[[nodiscard]] const std::string& getHeader() const { return m_header; }

@@ -163,7 +163,7 @@ What the server does when more than one 3D client is on at once:
 |---|---|---|
 | Joining | Each client gets its own 3D link, matched to its own TCP login by account and address, so several clients on one machine are fine. | the same |
 | Seeing the others | Every other linked player appears as a `GameObject` named `G3DPlayer_<account>`, with the world's player shape and the player's nickname. Every other linked player appears as a stock TGE `Player` on the world's `tgeplayershape`, at that player's position and facing. This needs `tgecontrol player` and a `tgeplayershape`; with a Camera as the control object, these clients get no other players. |
-| What is passed on | The position, rotation, scale and `chat` that each client reports for its own object. Nick colour, move type, velocity and attachment are not sent yet. On the Sharp3D route, a player moves only through `g3dpos`. | The position and facing of the client's Player, as the server runs its moves. The other builds see this as that player's `GameObject`. |
+| What is passed on | What each client reports for its own object: position, rotation, scale, `chat`, shape, skin, attributes, and nickname with its colour. Move type, velocity and attachment are not sent yet. On the Sharp3D route, a player moves only through `g3dpos`. | The position and facing of the client's Player, as the server runs its moves. The other builds see this as that player's `GameObject`. |
 | TCP side | Every 3D client is also an ordinary TCP player, so the gserver sends the usual other-player props, chat and PMs, as it would to 2D clients in the same level. | the same |
 
 **Accounts:** with `localhost = true` (the lab default) the gserver accepts any account
@@ -269,7 +269,7 @@ world/3d/                        any folder the file folders cover
   grass.png   sky_fr.png ...       textures: 8-bit PNG, JPEG or GIF
   island_terrain/                  streamed terrain (see Terrain)
     heights0-0.dat ... heights15-15.dat
-    heights.info                   one texture name a line, no extensions
+    heights.info                   one texture name a line, with .png
     g3d_grass.png ...
 ```
 
@@ -304,8 +304,11 @@ client keeps in its own cache (`levels3d/heights/<server>/`). A missing file lea
 that chunk out, and a file over 1023 bytes or one that does not inflate is logged
 at start-up. Put `heights.info` (one texture name a line, in material order, each
 256 x 256 24-bit) and its textures in the file folders: the client asks for
-`heights.info` over TCP when it has none, then fetches each texture by its bare
-name.
+`heights.info` over TCP when it has none, then fetches each texture. Write the
+names with their extension (`g3d_grass.png`): the Linux 4.206 client given bare
+names drew the terrain white, then saved the textures without an extension, could
+not load them and drew no terrain at all; with `.png` names it drew them textured
+(lab, 2026-11-25).
 
 `heights.info` is newline-separated. A script that sets terrain materials through
 `setmaterials` instead must separate the names with commas, because the 5.12 client
@@ -319,7 +322,9 @@ Torque's CRC of the inflated bytes. The client stamps its own re-encoding of eac
 chunk (mode 2, the material ids it uses in ascending order, its own deltas), so
 write chunks in that form, or every chunk is sent again on every visit.
 `seihai-servertools gen terrain --stream` writes them that way. A damaged zlib
-stream is saved by the client as a flat chunk. Protocol 19 clients do not get the block,
+stream is saved by the client as a flat chunk. The 5.12 client does not clamp heights: keep the first
+height and every running sum in 0 to 16383, or they wrap. It ignores trailing
+bytes, and a second copy of a chunk overwrites the first (lab, 2026-11-25). Protocol 19 clients do not get the block,
 because their stock TGE terrain is a different layout.
 
 ### Water

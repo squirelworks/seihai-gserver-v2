@@ -884,6 +884,20 @@ namespace graal3d
 				object.chat = state.object.chat;
 			if (state.changed & GameObjectBits::Scale)
 				object.scale = state.object.scale;
+			// Its looks too, so another client sees a change of shape, skin,
+			// attributes or nickname (and its colour). The name and flags stay the
+			// server's.
+			if (state.changed & GameObjectBits::Shape)
+				object.shape = state.object.shape;
+			if (state.changed & GameObjectBits::Skin)
+				object.skin = state.object.skin;
+			if (state.changed & GameObjectBits::Attrs)
+				object.attr = state.object.attr;
+			if (state.changed & GameObjectBits::Nickname)
+			{
+				object.nickname = state.object.nickname;
+				object.nickColor = state.object.nickColor;
+			}
 		}
 		if (object == before)
 			return;
@@ -1018,6 +1032,9 @@ namespace graal3d
 				CString text;
 				if (text.load(CString() << weapon.file.c_str()))
 					script.assign(text.text(), static_cast<size_t>(text.length()));
+				// LF only: 5.12 ran nothing from a weapon3d saved with CRLF line ends
+				// (lab, 2026-11-25).
+				std::erase(script, '\r');
 				// The 5.12 client runs only compiled GS2 here (lab: source text was
 				// taken but never ran), so compile it when the NPC-server can.
 				if (!script.empty())
@@ -1030,10 +1047,10 @@ namespace graal3d
 			}
 			else if (const auto w = m_server.getWeapon(weapon.name); w != nullptr)
 			{
-				if (const auto& bytecode = w->getScript().getClientByteCode(); !bytecode.empty())
+				if (const auto& bytecode = w->getScript().getClientSideByteCode(); !bytecode.empty())
 					script.assign(reinterpret_cast<const char*>(bytecode.data()), bytecode.size());
 				else
-					script = std::string(w->getScript().getClientSide());
+					script = std::string(w->getScript().getClientSideScript());
 			}
 			if (script.empty())
 			{
