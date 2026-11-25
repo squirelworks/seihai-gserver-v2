@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-20, 2026-11-25: see CHANGES-SEIHAI.md.
 // New file: the ghosted objects of a Graal 3D world in the GameObject era (4.20r6
 // and 5.x): GameObject, the Graal class every 3D thing is, and Sun. Their update
 // layouts come from a static read of the 5.00r7 Graal3DEngine.dll (protocol 24,
@@ -29,6 +29,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -153,6 +154,61 @@ namespace graal3d
 	void writeSkyUpdate(BitWriter& writer, const SkyState& sky);
 	SkyState readSkyUpdate(BitReader& reader);
 
+	// A lab field list for `rawobject` and `rawevent` world lines: the bits of a
+	// ghost update or an event payload, written in order, for classes whose
+	// layout is not read yet (TerrainBlock, WaterBlock, TerrainChunkEvent and the
+	// like). The client skips what it does not read, since each update and event
+	// carries its length. Tokens (see bin/docs/graal3d.md):
+	//
+	//   f0 f1                 a flag
+	//   i<N>:<v>              an N-bit int (1..32), decimal, 0x hex or negative
+	//   u8:<v> u16:<v> u32:<v> the same as i8, i16, i32
+	//   f32:<v>               a raw 32-bit float
+	//   str:<text>            a string (in the packet's string mode); %20 for a
+	//                         space, %25 for %, - for the empty string
+	//   hex:<bytes>           bytes, as hex
+	//   file:<path>           a file's bytes
+	//   zfile:<path>          a file's bytes, zlib-compressed (with the header)
+	//
+	// hex, file and zfile take an optional length prefix: `file@10:<path>` writes
+	// the byte count as an int10 first.
+	struct RawField
+	{
+		enum class Type
+		{
+			Flag,
+			Int,
+			F32,
+			String,
+			Bytes,
+		};
+		Type type = Type::Flag;
+		int bits = 0;          // Int: its width; Bytes: the width of its length prefix (0: none)
+		uint32_t value = 0;    // Flag, Int
+		float f32 = 0.0f;
+		std::string data;      // String: the text; Bytes: the bytes (after loadRawFiles)
+		std::string file;      // Bytes from a file, read by loadRawFiles
+		bool compress = false; // zlib the file's bytes
+
+		bool operator==(const RawField&) const = default;
+	};
+
+	// Parses tokens; on a bad one returns nothing and says why in `error`.
+	std::optional<std::vector<RawField>> parseRawFields(const std::vector<std::string_view>& tokens, std::string& error);
+
+	// Writes the fields. A Bytes field whose file was not loaded writes nothing
+	// but its length prefix (0).
+	void writeRawFields(BitWriter& writer, const std::vector<RawField>& fields);
+
+	// The payload's length in bits (strings as plain ones).
+	size_t rawFieldBits(const std::vector<RawField>& fields);
+
+	// Reads the file of every file and zfile field with `read` (empty optional:
+	// cannot read it). Returns one error per file that could not be read or is
+	// too long for its length prefix.
+	std::vector<std::string> loadRawFiles(std::vector<RawField>& fields,
+										  const std::function<std::optional<std::string>(const std::string&)>& read);
+
 	// One object the server ghosts: its class and state.
 	struct GhostObject
 	{
@@ -164,6 +220,7 @@ namespace graal3d
 			Sky,
 			TgeCamera, // protocol 19: a stock TGE Camera, `tgeCamera` and `datablockId`
 			TgePlayer, // protocol 19: a stock TGE Player, `tgePlayer` and `datablockId`
+			Raw,       // a lab object: `rawClass`, with `raw` as its update (rawobject)
 		};
 
 		Kind kind = Kind::GameObject;
@@ -173,6 +230,8 @@ namespace graal3d
 		tge::CameraState tgeCamera;
 		tge::PlayerState tgePlayer;
 		std::string tgeShape; // TgePlayer: its PlayerData's shape file
+		std::string rawClass;
+		std::vector<RawField> raw;
 		uint32_t datablockId = tge::FirstDatablockId;
 
 		// TgeCamera and TgePlayer masks: 1 = position and rotation, 2 = the
@@ -189,13 +248,15 @@ namespace graal3d
 				case Kind::TgeCamera: return "Camera";
 				case Kind::TgePlayer: return "Player";
 				case Kind::Sky: return "Sky";
+				case Kind::Raw: return rawClass;
 				default: return "GameObject";
 			}
 		}
 		// The protocol 19 kinds; the GameObject era ghosts every other one.
 		[[nodiscard]] bool isTge() const { return kind == Kind::TgeCamera || kind == Kind::TgePlayer; }
-		// Whether a client of that era takes this kind: a Sky goes to both.
-		[[nodiscard]] bool sentTo(bool tgeEra) const { return kind == Kind::Sky || isTge() == tgeEra; }
+		// Whether a client of that era takes this kind: a Sky goes to both, and a
+		// raw object to any client whose class table has its class.
+		[[nodiscard]] bool sentTo(bool tgeEra) const { return kind == Kind::Sky || kind == Kind::Raw || isTge() == tgeEra; }
 		// The update for `mask` (ignored for Sun and Sky, which are always sent whole).
 		// `controlled`: the receiving client controls this object (a TgePlayer then
 		// leaves its move section out of updates after the first).
@@ -204,7 +265,7 @@ namespace graal3d
 		{
 			if (isTge())
 				return TgeMove | TgeDatablock;
-			return kind == Kind::Sun || kind == Kind::Sky ? 1u : gameObjectFullMask(object);
+			return kind == Kind::Sun || kind == Kind::Sky || kind == Kind::Raw ? 1u : gameObjectFullMask(object);
 		}
 		[[nodiscard]] uint32_t changesFrom(const GhostObject& before) const;
 	};
@@ -240,6 +301,16 @@ namespace graal3d
 	//                             bindings call moveForward2, moveBackward2,
 	//                             moveLeft2, moveRight2 and jump, which only a
 	//                             script like this defines.
+	//   rawobject <class> <fields...>
+	//                             lab: ghost an object of <class> (TerrainBlock,
+	//                             WaterBlock, ...) whose update is the raw fields
+	//                             (see RawField), to every client whose class
+	//                             table has the class
+	//   rawevent [late] <class> <fields...>
+	//                             lab: post one guaranteed event of <class>
+	//                             (TerrainChunkEvent, ...) with the raw fields as
+	//                             its payload, when the world is ghosted, or with
+	//                             `late` once the client has its control object
 	struct World
 	{
 		std::vector<GhostObject> objects; // the sun, if any, is one of them
@@ -260,6 +331,13 @@ namespace graal3d
 			std::string file; // empty: the server's weapon of that name
 		};
 		std::vector<Weapon3D> weapons;
+		struct RawEvent
+		{
+			std::string className;
+			std::vector<RawField> fields;
+			bool late = false;
+		};
+		std::vector<RawEvent> rawEvents;
 		std::vector<std::string> errors;  // one per line that was not understood
 	};
 

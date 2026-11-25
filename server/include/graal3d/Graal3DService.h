@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
 // New file: the gserver's Graal 3D side. A Graal 3D server is two servers on one
 // host: this gserver on TCP port P, and a Torque UDP server on port P + 1, which the
 // 3.153 to 5.x clients open when the server's listed name starts with "3 ". This
@@ -116,6 +116,10 @@ namespace graal3d
 		static ObjectKey cameraKey(PlayerID player) { return 0x20000u + player; }
 		static ObjectKey skyKey() { return 0x30000u; } // protocol 19's plain Sky, when the world has none
 		void sendInitialFlags(PlayerID player, Connection& connection);
+		// Lab: the world's rawevent lines (`late`: the ones for after the mission
+		// start) and, for protocol 19, its rawobject lines.
+		void sendRawEvents(const std::string& account, Connection& connection, bool late);
+		void ghostRawObjects(const std::string& account, Connection& connection, ObjectKey firstKey);
 		void sendWorldWeapons(Connection& connection);
 		std::string compileClientScript(const std::string& name, std::string_view source);
 		void sendTo(const Endpoint& to, std::string_view data);

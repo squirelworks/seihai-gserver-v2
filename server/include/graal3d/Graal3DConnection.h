@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
 // New file: one accepted Graal 3D (Torque) UDP connection, server side. It keeps
 // Torque's notify protocol (sequence numbers, acks, pings), resends guaranteed
 // events that were lost, drives the mission start phases and carries Graal's
@@ -95,6 +95,11 @@ namespace graal3d
 		// Ignored for profiles whose game packets are not implemented.
 		void sendText(const TextMessage& message);
 
+		// Lab: queues one guaranteed event of `className` whose payload is the raw
+		// fields (a `rawevent` world line). False if the client's class table has
+		// no such event class.
+		bool postRawEvent(std::string_view className, const std::vector<RawField>& fields);
+
 		// Strings inside game packets carry the packet string flag (default on;
 		// see TorqueBitStream.h). Set before anything is sent.
 		void setPacketStrings(bool on) { m_packetStrings = on; }
@@ -155,6 +160,8 @@ namespace graal3d
 			BigDataMode mode = BigDataMode::Raw;
 			uint32_t sequence = 0;
 			uint32_t count = 0;
+			std::string payload;     // an event this server does not decode: its bits, for the log
+			size_t payloadBits = 0;
 		};
 
 		struct Ghost

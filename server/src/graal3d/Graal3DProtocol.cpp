@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
 // New file: wire format of the Graal 3D (Torque) UDP connection. See Graal3DProtocol.h.
 
 #include <graal3d/Graal3DProtocol.h>
@@ -33,8 +33,9 @@ namespace graal3d
 		};
 		// 3.153 and 4.04r2: the server ghosts a Sky and one Player or Camera per
 		// client (its control object) with a PlayerData or CameraData datablock;
-		// see Graal3DTge.h.
-		const std::vector<std::string_view> kObjects404{"Camera", "Player", "Sky"};
+		// see Graal3DTge.h. TerrainBlock and WaterBlock (stock TGE in 4.04r2) are
+		// listed after them, keeping the earlier ids, for the lab's rawobject lines.
+		const std::vector<std::string_view> kObjects404{"Camera", "Player", "Sky", "TerrainBlock", "WaterBlock"};
 		const std::vector<std::string_view> kDatablocks404{"CameraData", "PlayerData"};
 		const std::vector<std::string_view> kEvents404{
 			"BigDataChunkEvent", "BigDataStartEvent", "ConnectionMessageEvent", "GhostAlwaysObjectEvent",

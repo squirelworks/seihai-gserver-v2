@@ -1,10 +1,15 @@
-// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
-// New file: GameObject and Sun updates for the Graal 3D world. See Graal3DObjects.h.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-20, 2026-11-25: see CHANGES-SEIHAI.md.
+// New file: GameObject and Sun updates for the Graal 3D world, and the lab's raw
+// objects and events. See Graal3DObjects.h.
 
 #include <graal3d/Graal3DObjects.h>
 
 #include <cmath>
 #include <cstdlib>
+#include <cctype>
+#include <cstring>
+
+#include <zlib.h>
 
 namespace graal3d
 {
@@ -357,6 +362,11 @@ namespace graal3d
 			tge::writePlayerUpdate(w, tgePlayer, datablockId, (mask & TgeDatablock) != 0, controlled);
 			return;
 		}
+		if (kind == Kind::Raw)
+		{
+			writeRawFields(w, raw);
+			return;
+		}
 		writeGameObjectUpdate(w, object, mask);
 		if (kind == Kind::Camera)
 		{
@@ -381,7 +391,247 @@ namespace graal3d
 		}
 		if (kind == Kind::TgePlayer)
 			return tgePlayer == before.tgePlayer ? 0u : TgeMove;
+		if (kind == Kind::Raw)
+			return rawClass == before.rawClass && raw == before.raw ? 0u : 1u;
 		return gameObjectChanges(before.object, object);
+	}
+
+	// --- Raw lab fields ---------------------------------------------------------
+
+	namespace
+	{
+		std::optional<uint32_t> parseInt(std::string_view text, int bits)
+		{
+			if (text.empty())
+				return std::nullopt;
+			const std::string word{text};
+			char* end = nullptr;
+			const bool negative = word[0] == '-';
+			const long long v = negative ? std::strtoll(word.c_str(), &end, 0) : static_cast<long long>(std::strtoull(word.c_str(), &end, 0));
+			if (end != word.c_str() + word.size())
+				return std::nullopt;
+			const unsigned long long limit = bits >= 32 ? 0xFFFFFFFFull : ((1ull << bits) - 1);
+			if (negative)
+			{
+				// Two's complement in `bits` bits.
+				if (-v > static_cast<long long>(limit / 2 + 1))
+					return std::nullopt;
+				return static_cast<uint32_t>(static_cast<unsigned long long>(v) & limit);
+			}
+			if (static_cast<unsigned long long>(v) > limit)
+				return std::nullopt;
+			return static_cast<uint32_t>(v);
+		}
+
+		std::optional<std::string> hexDecode(std::string_view text)
+		{
+			if (text.size() % 2 != 0)
+				return std::nullopt;
+			std::string out;
+			for (size_t i = 0; i < text.size(); i += 2)
+			{
+				const auto b = parseInt(std::string("0x") + std::string(text.substr(i, 2)), 8);
+				if (!b || !std::isxdigit(static_cast<unsigned char>(text[i])) || !std::isxdigit(static_cast<unsigned char>(text[i + 1])))
+					return std::nullopt;
+				out.push_back(static_cast<char>(*b));
+			}
+			return out;
+		}
+
+		std::optional<std::string> percentDecode(std::string_view text)
+		{
+			if (text == "-")
+				return std::string{};
+			std::string out;
+			for (size_t i = 0; i < text.size(); ++i)
+			{
+				if (text[i] != '%')
+				{
+					out.push_back(text[i]);
+					continue;
+				}
+				if (i + 2 >= text.size())
+					return std::nullopt;
+				auto hex = hexDecode(text.substr(i + 1, 2));
+				if (!hex)
+					return std::nullopt;
+				out += *hex;
+				i += 2;
+			}
+			return out;
+		}
+
+	} // namespace
+
+	std::optional<std::vector<RawField>> parseRawFields(const std::vector<std::string_view>& tokens, std::string& error)
+	{
+		std::vector<RawField> out;
+		for (const auto token : tokens)
+		{
+			RawField f;
+			const auto colon = token.find(':');
+			if (token == "f0" || token == "f1")
+			{
+				f.type = RawField::Type::Flag;
+				f.value = token == "f1" ? 1 : 0;
+				out.push_back(std::move(f));
+				continue;
+			}
+			if (colon == std::string_view::npos)
+			{
+				error = "no ':' in raw field " + std::string(token);
+				return std::nullopt;
+			}
+			auto kind = token.substr(0, colon);
+			const auto value = token.substr(colon + 1);
+
+			// Bytes fields may carry a length prefix: name@bits.
+			int prefix = 0;
+			if (const auto at = kind.find('@'); at != std::string_view::npos)
+			{
+				const auto width = parseInt(kind.substr(at + 1), 8);
+				if (!width || *width < 1 || *width > 32)
+				{
+					error = "bad length width in raw field " + std::string(token);
+					return std::nullopt;
+				}
+				prefix = static_cast<int>(*width);
+				kind = kind.substr(0, at);
+			}
+
+			bool ok = true;
+			if (kind == "hex" || kind == "file" || kind == "zfile")
+			{
+				f.type = RawField::Type::Bytes;
+				f.bits = prefix;
+				if (kind == "hex")
+				{
+					auto bytes = hexDecode(value);
+					ok = bytes.has_value();
+					if (ok)
+						f.data = std::move(*bytes);
+				}
+				else
+				{
+					f.file = value;
+					f.compress = kind == "zfile";
+					ok = !value.empty();
+				}
+			}
+			else if (prefix != 0)
+				ok = false;
+			else if (kind == "f32")
+			{
+				f.type = RawField::Type::F32;
+				const std::string word{value};
+				char* end = nullptr;
+				f.f32 = std::strtof(word.c_str(), &end);
+				ok = !word.empty() && end == word.c_str() + word.size();
+			}
+			else if (kind == "str")
+			{
+				f.type = RawField::Type::String;
+				auto text = percentDecode(value);
+				ok = text.has_value() && text->size() <= 255;
+				if (ok)
+					f.data = std::move(*text);
+			}
+			else
+			{
+				int bits = 0;
+				if (kind == "u8")
+					bits = 8;
+				else if (kind == "u16")
+					bits = 16;
+				else if (kind == "u32")
+					bits = 32;
+				else if (kind.size() > 1 && kind[0] == 'i')
+				{
+					const auto width = parseInt(kind.substr(1), 8);
+					bits = width ? static_cast<int>(*width) : 0;
+				}
+				ok = bits >= 1 && bits <= 32;
+				if (ok)
+				{
+					const auto v = parseInt(value, bits);
+					ok = v.has_value();
+					f.type = RawField::Type::Int;
+					f.bits = bits;
+					f.value = v.value_or(0);
+				}
+			}
+			if (!ok)
+			{
+				error = "bad raw field " + std::string(token);
+				return std::nullopt;
+			}
+			out.push_back(std::move(f));
+		}
+		return out;
+	}
+
+	void writeRawFields(BitWriter& w, const std::vector<RawField>& fields)
+	{
+		for (const auto& f : fields)
+		{
+			switch (f.type)
+			{
+				case RawField::Type::Flag: w.writeFlag(f.value != 0); break;
+				case RawField::Type::Int: w.writeInt(f.value, f.bits); break;
+				case RawField::Type::F32: w.writeF32(f.f32); break;
+				case RawField::Type::String: w.writeString(f.data); break;
+				case RawField::Type::Bytes:
+					if (f.bits > 0)
+						w.writeInt(static_cast<uint32_t>(f.data.size()), f.bits);
+					w.writeBytes(std::string_view(f.data));
+					break;
+			}
+		}
+	}
+
+	size_t rawFieldBits(const std::vector<RawField>& fields)
+	{
+		BitWriter w;
+		writeRawFields(w, fields);
+		return w.bitPosition();
+	}
+
+	std::vector<std::string> loadRawFiles(std::vector<RawField>& fields,
+										  const std::function<std::optional<std::string>(const std::string&)>& read)
+	{
+		std::vector<std::string> errors;
+		for (auto& f : fields)
+		{
+			if (f.type != RawField::Type::Bytes || f.file.empty())
+				continue;
+			auto bytes = read(f.file);
+			if (!bytes)
+			{
+				errors.push_back("cannot read " + f.file);
+				continue;
+			}
+			if (f.compress)
+			{
+				uLongf size = compressBound(static_cast<uLong>(bytes->size()));
+				std::string packed(size, '\0');
+				if (compress2(reinterpret_cast<Bytef*>(packed.data()), &size, reinterpret_cast<const Bytef*>(bytes->data()),
+							  static_cast<uLong>(bytes->size()), Z_BEST_COMPRESSION) != Z_OK)
+				{
+					errors.push_back("cannot compress " + f.file);
+					continue;
+				}
+				packed.resize(size);
+				bytes = std::move(packed);
+			}
+			if (f.bits > 0 && f.bits < 32 && bytes->size() >= (size_t{1} << f.bits))
+			{
+				errors.push_back(f.file + " is " + std::to_string(bytes->size()) + " bytes, too long for an int" + std::to_string(f.bits) +
+								 " length");
+				continue;
+			}
+			f.data = std::move(*bytes);
+		}
+		return errors;
 	}
 
 	namespace
@@ -511,6 +761,38 @@ namespace graal3d
 			else if (w[0] == "tgeplayershape" && w.size() == 2)
 			{
 				world.tgePlayerShape = w[1];
+				ok = true;
+			}
+			else if (w[0] == "rawobject" && w.size() >= 2)
+			{
+				std::string why;
+				auto fields = parseRawFields({w.begin() + 2, w.end()}, why);
+				if (!fields)
+				{
+					world.errors.push_back("line " + std::to_string(lineNo) + ": " + why);
+					continue;
+				}
+				GhostObject raw;
+				raw.kind = GhostObject::Kind::Raw;
+				raw.rawClass = w[1];
+				raw.raw = std::move(*fields);
+				world.objects.push_back(std::move(raw));
+				ok = true;
+			}
+			else if (w[0] == "rawevent" && w.size() >= 2)
+			{
+				const bool late = w[1] == "late";
+				const size_t cls = late ? 2 : 1;
+				std::string why = "no event class";
+				std::optional<std::vector<RawField>> fields;
+				if (w.size() > cls)
+					fields = parseRawFields({w.begin() + static_cast<std::ptrdiff_t>(cls) + 1, w.end()}, why);
+				if (!fields)
+				{
+					world.errors.push_back("line " + std::to_string(lineNo) + ": " + why);
+					continue;
+				}
+				world.rawEvents.push_back({std::string(w[cls]), std::move(*fields), late});
 				ok = true;
 			}
 			else if (w[0] == "camera" && (w.size() == 4 || w.size() == 8))

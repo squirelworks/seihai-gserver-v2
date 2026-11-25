@@ -1,6 +1,6 @@
 # Graal 3D (Seihai)
 
-<!-- Modified by the Seihai project, 2026-11-14: reconcile recorded lab coverage; 2026-11-19: protocol 19 Sky and Player; 2026-11-20: default Camera facing the spawn. -->
+<!-- Modified by the Seihai project, 2026-11-14: reconcile recorded lab coverage; 2026-11-19: protocol 19 Sky and Player; 2026-11-20: default Camera facing the spawn; 2026-11-25: lab raw objects and events. -->
 
 This file is part of the Seihai fork (GPL-3.0, see `LICENSE.md` and `CHANGES-SEIHAI.md`).
 
@@ -165,8 +165,48 @@ too. The server never sends a player's position back to that player.
 | `Sky` | with a `sky` line: init and material list, the later sections (storm, wind, fog changes) left clear. Layout from the 5.12 client; a real 5.12 client drew the sky box in the lab (see "The world"). |
 | Scripts in 3D mode | with `weapon3d` lines: `addweapon` and `weaponscript` over the 3D text channel. A 5.12 lab client compiled and ran one, and its `keydown2` saw the arrow keys. |
 | Walking | a script's `triggerserver(..., "g3dpos", x, y, z)` and the gserver moves the player's object. Lab 15 showed the trigger reaching the gserver; the move is not yet run with a real client. |
-| `TerrainBlock`, `movetype` | **not sent.** |
+| `TerrainBlock`, `WaterBlock` | **no layout yet.** The lab's `rawobject` and `rawevent` lines (see "Lab: raw objects and events") send them with hand-written fields. |
+| `movetype` | **not sent.** |
+| From the client: `TerrainRequestUpdatesEvent` | logged: its length, how many of its 256 stamps are set, the first eight `(x,y)=stamp`, and the payload as hex. Other events the server does not decode are logged with their length and first 64 bytes. |
 | 3.15x and 4.04r2 game packets | done up to a walking `Player` control object and a `Sky`. A real 4.04r2 runs a `Camera` session with the `Sky`, and a `Player` session once `tgeplayershape` names a loadable TGE `.dts` (lab 2026-11-19). See "Protocol 19" below. |
+
+## Lab: raw objects and events
+
+For classes whose update layout has not been read (`TerrainBlock`, `WaterBlock`,
+the replicators) and events such as `TerrainChunkEvent`, the world file can
+describe the bits by hand, so a lab can try a layout by editing the file and
+restarting, without a new build:
+
+```
+# rawobject <class> <fields...>: a ghost of <class> whose update is the fields
+rawobject TerrainBlock f1 str:lab.ter u32:256 f32:8.0
+# rawevent [late] <class> <fields...>: one guaranteed event; `late` waits until
+# the client has finished the mission start
+rawevent late TerrainChunkEvent i4:0 i4:0 u32:1 zfile@10:world3d/chunk_0_0.bin
+```
+
+| Field | Writes |
+|---|---|
+| `f0`, `f1` | a flag |
+| `i<N>:<v>` | an N-bit int (1 to 32); decimal, `0x` hex, or negative (two's complement) |
+| `u8:`, `u16:`, `u32:` | `i8`, `i16`, `i32` |
+| `f32:<v>` | a raw 32-bit float |
+| `str:<text>` | a string, in the packet's string mode (`graal3dstringprefix`); `%20` for a space, `%23` for `#`, `-` for an empty string |
+| `hex:<bytes>` | bytes given as hex |
+| `file:<path>` | a file's bytes (the path from the server folder) |
+| `zfile:<path>` | a file's bytes, zlib-compressed with the zlib header |
+
+`hex`, `file` and `zfile` take a length prefix: `file@10:x.bin` writes the byte
+count as an int10 first. A file too long for its prefix, a missing file, or an
+update or payload over 16383 bits (an int14 length) is logged at start-up.
+
+The client reads every update and event with its length, so a wrong guess is
+skipped rather than misreading the rest of the packet. A raw object goes to every
+client whose class table has its class: 4.20r6 and 5.x list `TerrainBlock` and
+`WaterBlock`, and protocol 19 (3.153, 4.04r2) now lists them too, after `Camera`,
+`Player` and `Sky` so those keep their ids. Raw objects on protocol 19 go out with
+the other ghosts, after the datablocks. Nothing here has been run with a real
+client yet; the 2026-11-25 terrain lab is the first user.
 
 ## Protocol 19 (3.151 Linux, 3.153, 4.04r2)
 

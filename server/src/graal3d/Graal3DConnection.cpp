@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
 // New file: one Graal 3D (Torque) UDP connection, server side. See Graal3DConnection.h.
 // The notify protocol follows Torque's ConnectionProtocol::processRawPacket and
 // NetConnection's event code (MIT-licensed Torque3D source), with Graal's 12-bit
@@ -137,6 +137,36 @@ namespace graal3d
 		const int32_t seq = m_nextSendEventSeq++;
 		m_events.emplace(seq, OutEvent{*id, std::move(payload)});
 		m_sendQueue.push_back(seq);
+	}
+
+	namespace
+	{
+		// The first `limit` bytes as hex, for the lab logs.
+		std::string hexPreview(std::string_view bytes, size_t limit)
+		{
+			static constexpr char digits[] = "0123456789abcdef";
+			std::string out;
+			for (size_t i = 0; i < bytes.size() && i < limit; ++i)
+			{
+				const auto b = static_cast<uint8_t>(bytes[i]);
+				out.push_back(digits[b >> 4]);
+				out.push_back(digits[b & 15]);
+			}
+			if (bytes.size() > limit)
+				out += "...";
+			return out;
+		}
+	} // namespace
+
+	bool Connection::postRawEvent(std::string_view className, const std::vector<RawField>& fields)
+	{
+		if (!eventClassId(m_profile, className))
+			return false;
+		BitWriter payload;
+		payload.setPacketStrings(m_packetStrings);
+		writeRawFields(payload, fields);
+		postEvent(className, std::move(payload));
+		return true;
 	}
 
 	void Connection::sendCommand(std::string_view command, const std::vector<std::string>& args)
@@ -888,7 +918,13 @@ namespace graal3d
 				out.count = r.readInt(11);
 			}
 			else
-				return std::pair{std::move(out), true}; // not decoded: nothing to check
+			{
+				// Not decoded: kept whole for the log (TerrainRequestUpdatesEvent and
+				// the other events whose layouts are not read yet).
+				out.payload = payload;
+				out.payloadBits = bits;
+				return std::pair{std::move(out), true};
+			}
 			return std::pair{std::move(out), !r.overrun() && r.bitPosition() == bits};
 		};
 
@@ -1024,7 +1060,32 @@ namespace graal3d
 			return;
 		}
 
-		log("event ignored: " + std::string(ev.name.empty() ? std::string_view{"(unknown class)"} : ev.name));
+		if (ev.name == "TerrainRequestUpdatesEvent")
+		{
+			// Graal_analysis graal3d/torque-engine-4x.md: 256 x u32, one stamp per
+			// 16 x 16 terrain chunk, what the client already holds. Logged for the
+			// terrain labs; the server streams no terrain of its own.
+			BitReader r(ev.payload);
+			std::string held;
+			size_t nonZero = 0;
+			for (int i = 0; i < 256 && r.bitsLeft() >= 32; ++i)
+			{
+				const auto stamp = r.readU32();
+				if (stamp == 0)
+					continue;
+				if (++nonZero <= 8)
+					held += " (" + std::to_string(i % 16) + "," + std::to_string(i / 16) + ")=" + std::to_string(stamp);
+			}
+			log("TerrainRequestUpdatesEvent: " + std::to_string(ev.payloadBits) + " bits, " + std::to_string(nonZero) +
+				" chunks with a stamp" + held + (nonZero > 8 ? " ..." : ""));
+			log("  payload " + hexPreview(ev.payload, 1024));
+			return;
+		}
+
+		std::string what = "event ignored: " + std::string(ev.name.empty() ? std::string_view{"(unknown class)"} : ev.name);
+		if (ev.payloadBits > 0)
+			what += ", " + std::to_string(ev.payloadBits) + " bits: " + hexPreview(ev.payload, 64);
+		log(what);
 	}
 
 } // namespace graal3d

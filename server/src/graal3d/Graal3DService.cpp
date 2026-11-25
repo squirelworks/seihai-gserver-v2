@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-14, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-14, 2026-11-19, 2026-11-20, 2026-11-25: see CHANGES-SEIHAI.md.
 // New file: the gserver's Graal 3D UDP side. See Graal3DService.h.
 
 #include <graal3d/Graal3DService.h>
@@ -7,6 +7,8 @@
 #include <cmath>
 #include <cstring>
 #include <format>
+#include <fstream>
+#include <iterator>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -313,6 +315,7 @@ namespace graal3d
 								s->second.connection->resendGhost(key);
 							++key;
 						}
+						sendRawEvents(account, *s->second.connection, true);
 					}
 				}
 			}
@@ -400,6 +403,79 @@ namespace graal3d
 	{
 		m_world = std::move(world);
 		m_packetStrings = packetStrings;
+
+		// The lab's raw fields may name files (file:, zfile:), relative to the
+		// server folder like the weapon3d files.
+		const auto read = [](const std::string& path) -> std::optional<std::string> {
+			std::ifstream in(path, std::ios::binary);
+			if (!in)
+				return std::nullopt;
+			return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+		};
+		std::vector<std::string> errors;
+		for (auto& object : m_world.objects)
+		{
+			if (object.kind != GhostObject::Kind::Raw)
+				continue;
+			for (auto& e : loadRawFiles(object.raw, read))
+				errors.push_back("rawobject " + object.rawClass + ": " + e);
+			const auto bits = rawFieldBits(object.raw);
+			if (bits >= (1u << 14))
+				errors.push_back("rawobject " + object.rawClass + ": the update is " + std::to_string(bits) +
+								 " bits, more than an int14 length holds");
+		}
+		size_t raw = 0;
+		for (auto& event : m_world.rawEvents)
+		{
+			for (auto& e : loadRawFiles(event.fields, read))
+				errors.push_back("rawevent " + event.className + ": " + e);
+			if (const auto bits = rawFieldBits(event.fields); bits >= (1u << 14))
+				errors.push_back("rawevent " + event.className + ": the payload is " + std::to_string(bits) +
+								 " bits, more than an int14 length holds");
+			++raw;
+		}
+		for (const auto& e : errors)
+			log::printLine(log::server, "** [Error] Graal3D: graal3dworld.txt {}", e);
+		if (raw > 0)
+			log::printLine(log::server, "Graal3D: the world has {} lab raw events.", raw);
+	}
+
+	void Service::sendRawEvents(const std::string& account, Connection& connection, bool late)
+	{
+		size_t sent = 0;
+		std::set<std::string> missing;
+		for (const auto& event : m_world.rawEvents)
+		{
+			if (event.late != late)
+				continue;
+			if (connection.postRawEvent(event.className, event.fields))
+				++sent;
+			else
+				missing.insert(event.className);
+		}
+		if (sent > 0)
+			log::printLine(log::server, "Graal3D: {} gets {} raw events{}.", account, sent, late ? " after the mission start" : "");
+		for (const auto& name : missing)
+			log::printLine(log::server, "Graal3D: {}'s client has no event class {}: its raw events are not sent.", account, name);
+	}
+
+	void Service::ghostRawObjects(const std::string& account, Connection& connection, ObjectKey firstKey)
+	{
+		// Every raw object goes to every client; Connection::setGhost logs the ones
+		// whose class the client's table does not have.
+		ObjectKey key = firstKey;
+		size_t count = 0;
+		for (const auto& object : m_world.objects)
+		{
+			if (object.kind == GhostObject::Kind::Raw)
+			{
+				connection.setGhost(key, object);
+				++count;
+			}
+			++key;
+		}
+		if (count > 0)
+			log::printLine(log::server, "Graal3D: {} gets {} raw objects.", account, count);
 	}
 
 	void Service::ghostWorld(PlayerID playerId, const std::string& account, Connection& connection)
@@ -453,6 +529,8 @@ namespace graal3d
 			}
 			connection.setGhost(cameraKey(playerId), control);
 			connection.setControlObject(cameraKey(playerId));
+			ghostRawObjects(account, connection, 1);
+			sendRawEvents(account, connection, false);
 			log::printLine(log::server, "Graal3D: {} (protocol 19) gets a Sky and a {} at the spawn point as its control object.", account,
 						   control.className());
 			return;
@@ -477,6 +555,7 @@ namespace graal3d
 		connection.setGhost(cameraKey(playerId), camera);
 		connection.setCameraObject(cameraKey(playerId));
 		log::printLine(log::server, "Graal3D: {} gets {} world objects and {} players.", account, m_world.objects.size(), m_avatars.size());
+		sendRawEvents(account, connection, false);
 	}
 
 	void Service::forEachOtherConnection(PlayerID playerId, const std::function<void(Connection&)>& fn)
