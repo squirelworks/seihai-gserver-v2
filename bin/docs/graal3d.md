@@ -313,7 +313,10 @@ shape list as one string; 5.12 splits it at commas, so write several shapes as
 grows an 8-unit cell only if its corner lies in `[x0, x1)` and `[y0, y1)`. Without one,
 cover may grow anywhere. The grid follows the client's control object, not the
 replicator's position, and cover is placed by casting rays, so it needs real ground
-(streamed terrain or solid objects). The layout is from a static read of the real 5.12 client
+(streamed terrain or solid objects). On the real 5.12 a replicator over streamed terrain
+grew a carpet of scaled, randomly rotated shapes on the slopes around the player (lab,
+2026-11-25). The start-up check looks up each replicator shape and checks it like a
+world object's. The layout is from a static read of the real 5.12 client
 (Graal_analysis `torque/replicators-512.md`) and has not been seen live yet. The other
 fields are fixed: scale 1, any rotation about z, terrain only, slopes up to 90 degrees,
 no alignment, shown. Only clients that take streamed

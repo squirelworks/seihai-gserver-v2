@@ -821,6 +821,26 @@ namespace graal3d
 			shape->clear();
 		}
 
+		// Ground cover: every replicator shape is fetched by the client and drawn
+		// many times over, so a bad one is as dangerous as a world object's.
+		for (const auto& shape : m_world.replicatorShapes)
+		{
+			const auto info = find(shape);
+			if (info == nullptr)
+			{
+				++missing;
+				log::printLine(log::server, "** [Warning] Graal3D: the replicator shape {} is not in the file folders.", shape);
+				continue;
+			}
+			++found;
+			auto ext = info->file.extension().string();
+			for (auto& ch : ext)
+				ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+			if ((ext == ".3ds" || ext == ".dts") && m_shapeCheck != ShapeCheck::Off)
+				if (const auto why = unsafeAsset(ext, readAll(info->file)))
+					log::printLine(log::server, "** [Error] Graal3D: the replicator shape {} would crash a client ({}); replace it.", shape, *why);
+		}
+
 		// Streamed terrain: the client asks for heights.info over TCP, then for
 		// each texture it names. If the file folders do not cover the terrain
 		// folder, 5.12 draws the terrain white and fetches nothing (lab,

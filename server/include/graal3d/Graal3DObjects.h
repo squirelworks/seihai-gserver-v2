@@ -454,6 +454,7 @@ namespace graal3d
 		};
 		TgeControl tgeControl = TgeControl::Player;
 		std::string tgePlayerShape;
+		std::vector<std::string> replicatorShapes; // every shape a replicator line names, for the start-up check
 		struct Weapon3D
 		{
 			std::string name;

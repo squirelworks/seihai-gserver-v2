@@ -842,6 +842,16 @@ namespace graal3d
 				}
 				if (ok)
 				{
+					// 5.12 splits the list at commas.
+					for (size_t start = 0; start <= rep.shapeFiles.size();)
+					{
+						auto end = rep.shapeFiles.find(',', start);
+						if (end == std::string::npos)
+							end = rep.shapeFiles.size();
+						if (end > start)
+							world.replicatorShapes.push_back(rep.shapeFiles.substr(start, end - start));
+						start = end + 1;
+					}
 					GhostObject object;
 					object.kind = GhostObject::Kind::Raw;
 					object.rawClass = rep.cls;

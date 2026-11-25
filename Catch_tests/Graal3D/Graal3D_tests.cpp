@@ -1234,6 +1234,8 @@ SCENARIO("A replicator line ghosts ground cover in the 5.12 layout")
 								  "replicator Sky 10 -20 1.5 4 1 3 grass.dts\n");          // not a replicator
 	REQUIRE(world.objects.size() == 1);
 	REQUIRE(world.errors.size() == 3);
+	REQUIRE(world.replicatorShapes == std::vector<std::string>{"grass.dts"});
+	REQUIRE(parseWorld("replicator DynamicGrass 0 0 0 4 1 3 a.dts,b.3ds,\n").replicatorShapes == std::vector<std::string>{"a.dts", "b.3ds"});
 	const auto& object = world.objects[0];
 	REQUIRE(object.className() == "DynamicGrass");
 	REQUIRE(object.layout512);
