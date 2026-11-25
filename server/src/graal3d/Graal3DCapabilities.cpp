@@ -109,7 +109,7 @@ namespace graal3d
 			k420,
 			with(k420, "4.20r8", "G3D20126", allBut({ F::GameLayer, F::MissionPhases, F::TorqueScript, F::ServerScripts, F::TerrainChunks })),
 			k500,
-			with(k500, "5.12", "G3D14097", capMask({ F::DtsMax, F::DifVersion })),
+			with(k500, "5.12", "G3D14097", 0),
 			with(k500, "5.12 Mac", "G3D15097", kAllCapFields),
 		};
 
