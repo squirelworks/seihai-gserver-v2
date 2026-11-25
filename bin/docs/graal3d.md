@@ -214,13 +214,15 @@ When a 3D connect request is accepted, the server picks the client's capability 
 
 | Build | Game layer | Streamed terrain and water lines | TorqueScript | Notes |
 |---|---|---|---|---|
-| 3.153 | TGE | not sent (its TerrainBlock and WaterBlock are stock TGE) | runs | not run against this server |
-| 4.04r2 (Win, Mac) | TGE | not sent | none | never downloads `.dso`, `.cs`, `.ter`; Mac row all assumed |
+| 3.153 | TGE | not sent (its TerrainBlock and WaterBlock are stock TGE) | runs its own only | crashes without a Sky (the protocol 19 path always sends one); asks for sky textures as `<stem>.gif`, so keep a `.gif` of each; never asks for `.cs`, `.dso` or `.ter`; drew nothing past its loading picture yet (lab 2026-11-25) |
+| 4.04r2 (Win, Mac) | TGE | not sent | none | never downloads `.dso`, `.cs`, `.ter`; under Wine drew only the Sky gradient (lab 2026-11-25); Mac row all assumed |
 | 4.20r6 Mac | GameObject | sent | none | protocol 21 |
 | 4.20r8 Win | GameObject | not sent: it takes the 5.12 layout, then crashes soon after the TerrainBlock is added (lab) | none | links as protocol 24 (lab) |
 | 5.00r7 | GameObject | sent | none | class set and file rules assumed from 5.12 |
 | 5.12 (Win, Mac) | GameObject | sent | none | strips `.png` from texture names: serve textures under their bare name too; Mac row all assumed |
 | 4.20 Linux (`G3D22126`) | GameObject | not sent (assumed as 4.20r8 Win) | none | links as protocol 24; 5.12's row except what a 2026-11-25 lab read. A DTS 17 shape froze it: serve DTS 24. It crashes on a broken `.3ds`. |
+
+2D and 3D clients in one level (lab pair H1, 2026-11-25): no read build moves its 2D player when it walks in 3D, and 5.12 draws no 2D players, though 2D chat reaches it as `onRemotePlayerChats`. So a 2D client sees a 3D player only if the server moves that player's 2D position itself, and the reverse needs a server-made ghost. The rows carry this as `mirrors2dPosition` (`needs2dPositionRelay()`), `sees2dPlayers` and `takes2dChat`; `drawn` records what each build has drawn here so far.
 
 Only the objects the `terrain` and `water` lines build are gated; lab `rawobject` lines still go to every client. A `TerrainRequestUpdatesEvent` from a build without the 5.x terrain layout is logged and not answered.
 
