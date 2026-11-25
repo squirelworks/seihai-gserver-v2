@@ -224,8 +224,8 @@ When a 3D connect request is accepted, the server picks the client's capability 
 
 | Build | Game layer | Streamed terrain and water lines | TorqueScript | Notes |
 |---|---|---|---|---|
-| 3.153 | TGE | not sent (its TerrainBlock and WaterBlock are stock TGE) | runs its own only | crashes without a Sky (the protocol 19 path always sends one); asks for sky textures as `<stem>.gif`, so keep a `.gif` of each; never asks for `.cs`, `.dso` or `.ter`; drew nothing past its loading picture yet (lab 2026-11-25) |
-| 4.04r2 (Win, Mac) | TGE | not sent | none | never downloads `.dso`, `.cs`, `.ter`; under Wine drew only the Sky gradient (lab 2026-11-25); Mac row all assumed |
+| 3.153 | TGE | not sent (its TerrainBlock and WaterBlock are stock TGE) | runs its own only | crashes without a Sky (the protocol 19 path always sends one); asks for sky textures as `<stem>.gif`, so keep a `.gif` of each; never asks for `.cs`, `.dso` or `.ter`; reaches its sky view once the `.gif` requests are answered with the PNGs (lab M3, 2026-11-25) |
+| 4.04r2 (Win, Mac) | TGE | not sent | none | never downloads `.dso`, `.cs`, `.ter`; under Wine drew only the Sky gradient (lab 2026-11-25); crashes on an update to a ghost that was never created (fuzz tier 1), so the server must only update created ghosts; Mac row all assumed |
 | 4.20r6 Mac | GameObject | sent | none | protocol 21 |
 | 4.20r8 Win | GameObject | not sent: it takes the 5.12 layout, then crashes drawing terrain near the camera (from about 60 units up; never from 200 up). The lab VM has only GDI Generic OpenGL 1.1, so this is a crash under GDI GL, untested on Mesa or a GPU (lab) | none | links as protocol 24 (lab) |
 | 5.00r7 | GameObject | sent | none | class set and file rules assumed from 5.12 |

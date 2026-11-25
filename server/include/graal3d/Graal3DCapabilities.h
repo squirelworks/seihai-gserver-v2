@@ -64,6 +64,7 @@ namespace graal3d
 		Mirrors2dPosition,
 		Sees2dPlayers,
 		Takes2dChat,
+		DropsUnknownGhost,
 		Count,
 	};
 
@@ -146,6 +147,7 @@ namespace graal3d
 		bool mirrors2dPosition; // its 3D walk moves its 2D player (no read build does)
 		bool sees2dPlayers;     // draws 2D players in its level (5.12 does not, lab)
 		bool takes2dChat;       // gets 2D players' chat as onRemotePlayerChats (5.12 lab)
+		bool dropsUnknownGhost; // logs and drops an update to an uncreated ghost; 4.04r2 crashes (fuzz tier 1)
 		uint64_t assumed; // capMask of the fields that are assumed, not read
 
 		[[nodiscard]] bool confirmed(CapField f) const { return (assumed & capMask({ f })) == 0; }
