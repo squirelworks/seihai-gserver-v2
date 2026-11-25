@@ -860,6 +860,9 @@ namespace graal3d
 					if (skip)
 						refuse(info->file);
 				}
+			// The grass classes take a texture (lab, 5.12).
+			if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp")
+				checkImage(*info);
 		}
 
 		// Streamed terrain: the client asks for heights.info over TCP, then for

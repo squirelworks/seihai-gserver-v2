@@ -303,6 +303,7 @@ world in this layout from a generated height field.
 # replicator <class> <x> <y> <z> <radius> <min> <max> <shapes> [<seed> [<x0> <y0> <x1> <y1>]] [scale=<min>[,<max>]]
 replicator DynamicShapeReplicator 10 -20 1.5 4 5 5 labcube.3ds scale=3
 replicator DynamicShapeReplicator 0 0 0 8 2 6 a.dts,b.dts 1 -512 -512 512 512 scale=1,3
+replicator DynamicGrass 0 0 0 8 30 50 lp_white.png
 ```
 
 Ghosts a `DynamicShapeReplicator`, `DynamicGrass` or `DynamicGrassReplicator`: ground
@@ -312,15 +313,24 @@ classes), `scale=` sets the random scale range of each copy (default 1), and `<s
 shape list as one string; 5.12 splits it at commas, so write several shapes as
 `a.dts,b.dts` with no spaces. The box is the world x/y region cover may grow in: 5.12
 grows an 8-unit cell only if its corner lies in `[x0, x1)` and `[y0, y1)`. Without one,
-cover may grow anywhere. The grid follows the client's control object, not the
+cover may grow anywhere. The box's z range is always -32767 to 32767: 5.12 places each
+copy by a ray cast down from z 2000 to -2000 and keeps it only if the hit height lies
+in the box's z range and the surface is no steeper than the allowed slope (90 degrees
+here). The grid follows the client's control object, not the
 replicator's position, and cover is placed by casting rays, so it needs real ground
 (streamed terrain or solid objects). On the real 5.12 a replicator over streamed terrain
 grew a carpet of scaled, randomly rotated shapes on the slopes around the player (lab,
-2026-11-25). The start-up check looks up each replicator shape and checks it like a
-world object's. Live results so far (lab, 2026-11-25): two shapes in the list are both
+2026-11-25). The start-up check looks up each replicator shape or texture and checks
+it like a world object's or a terrain texture's. Live results so far (lab, 2026-11-25): two shapes in the list are both
 used, picked per copy; two 5.12 clients see identical cover for the same seed;
-`DynamicGrass` and `DynamicGrassReplicator` create the ghost but draw nothing with
-shapes (they likely expect textures); 4.20r8 takes the ghost without a crash. The layout is from a static read of the real 5.12 client
+`DynamicGrass` and `DynamicGrassReplicator` draw nothing with shapes, but with a texture
+(e.g. `lp_white.png`) as `<shapes>` they draw many small flat pieces on the ground,
+denser at 50 a cell, so the server refuses a grass line whose list is not all images
+(`.png`, `.jpg`, `.jpeg`, `.bmp`) and a `DynamicShapeReplicator` line whose list is
+not all `.3ds`/`.dts`; a nearly transparent texture showed nothing under GDI. 4.20r8
+takes the ghost without a crash but grew no cover under GDI, even with the camera
+pitched down over the cells (GDI on 4.20r8 draws no textures either, so this is not yet
+settled for Mesa). The layout is from a static read of the real 5.12 client
 (Graal_analysis `torque/replicators-512.md`) and has not been seen live yet. The other
 fields are fixed: any rotation about z, terrain only, slopes up to 90 degrees,
 no alignment, shown. Only clients that take streamed
