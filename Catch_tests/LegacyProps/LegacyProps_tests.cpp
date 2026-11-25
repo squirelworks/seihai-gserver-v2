@@ -1,4 +1,4 @@
-// Seihai project, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
+// Seihai project, 2026-11-13, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
 //
 // This file is part of the Seihai fork of GServer-v2 and is released under the
 // GNU General Public License version 3 (see LICENSE.md).
@@ -139,6 +139,20 @@ TEST_CASE("1.x clients get player props in the pre-2.1 forms", "[legacy]")
 		const CString out = legacy::rewritePropsForPre21(custom, CLVER_1_39, true);
 		REQUIRE(out.find("blade.gif") >= 0);
 		REQUIRE(out.find("mine1.gif") >= 0);
+	}
+
+	SECTION("a healing sword keeps its image and the props after it")
+	{
+		// Power -3 goes as byte 27 (power + 30) with an image; bytes 10..29 are not bare powers.
+		CString healing;
+		healing >> (char)PROPID(PlayerProp::SWORDIMAGE) >> (char)(-3 + 30) << str("heal.png");
+		healing >> (char)PROPID(PlayerProp::HEADIMAGE) >> (char)(100 + 9) << "mine1.png";
+		CString out = legacy::rewritePropsForPre21(healing, CLVER_1_39, true);
+		out.setRead(0);
+		REQUIRE(out.readGUChar() == PROPID(PlayerProp::SWORDIMAGE));
+		REQUIRE(out.readGUChar() == 27);
+		REQUIRE(out.readChars(out.readGUChar()).toString() == "heal.gif");
+		REQUIRE(out.readGUChar() == PROPID(PlayerProp::HEADIMAGE));
 	}
 
 	SECTION("1.33 drops the account name and the extra flags")
