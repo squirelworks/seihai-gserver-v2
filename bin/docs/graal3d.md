@@ -313,7 +313,10 @@ classes), `scale=` sets the random scale range of each copy (default 1), and `<s
 shape list as one string; 5.12 splits it at commas, so write several shapes as
 `a.dts,b.dts` with no spaces. The box is the world x/y region cover may grow in: 5.12
 grows an 8-unit cell only if its corner lies in `[x0, x1)` and `[y0, y1)`. Without one,
-cover may grow anywhere. The grid follows the client's control object, not the
+cover may grow anywhere. The box's z range is always -32767 to 32767: 5.12 places each
+copy by a ray cast down from z 2000 to -2000 and keeps it only if the hit height lies
+in the box's z range and the surface is no steeper than the allowed slope (90 degrees
+here). The grid follows the client's control object, not the
 replicator's position, and cover is placed by casting rays, so it needs real ground
 (streamed terrain or solid objects). On the real 5.12 a replicator over streamed terrain
 grew a carpet of scaled, randomly rotated shapes on the slopes around the player (lab,
