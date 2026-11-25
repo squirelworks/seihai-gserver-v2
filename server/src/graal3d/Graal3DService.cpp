@@ -498,7 +498,7 @@ namespace graal3d
 		const Capabilities* caps = capabilitiesFor(player->getVersionStr(), profile->protocol);
 		if (caps)
 		{
-			const char* terrain = caps->takesStreamedTerrain512() ? "streamed"
+			const char* terrain = caps->takesStreamedTerrain512() ? (caps->terrainTextures ? "streamed" : "streamed, drawn untextured")
 								  : takesTerrain(caps, static_cast<int>(profile->protocol)) ? "streamed (graal3dterrainall)"
 								  : caps->terrainChunks ? "stock TGE only (not served)"
 														: "none";
@@ -565,8 +565,13 @@ namespace graal3d
 		m_byPlayer[playerId] = from;
 		player->setAddonLinked(true);
 		// Once per account per server run: a client keeps what it was sent, so
-		// pushing again on every link only repeats the same transfers.
-		if (m_pushTerrainFiles && m_world.terrain && takesTerrain(caps, static_cast<int>(profile->protocol)) && m_terrainPushedTo.insert(account).second)
+		// pushing again on every link only repeats the same transfers. A build
+		// that never reads terrain textures or heights.info (4.20r8, lab
+		// T3D-117) gets no push.
+		const bool readsTerrainFiles = !caps || caps->terrainTextures;
+		if (m_pushTerrainFiles && m_world.terrain && takesTerrain(caps, static_cast<int>(profile->protocol)) && !readsTerrainFiles)
+			trace(account, profile->protocol, "no terrain file push: this build never fetches terrain textures or heights.info");
+		else if (m_pushTerrainFiles && m_world.terrain && takesTerrain(caps, static_cast<int>(profile->protocol)) && m_terrainPushedTo.insert(account).second)
 		{
 			for (const auto& name : m_terrainFiles)
 				player->sendFile(name);

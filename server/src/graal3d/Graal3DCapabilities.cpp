@@ -28,10 +28,10 @@ namespace graal3d
 			.water = true, .torqueScript = true, .serverScripts = false, .terraformer = Terraformer::Full, .greyscaleRgba32Only = false, .terrainEditor = true,
 			.dtsMin = 0, .dtsMax = 24, .difVersion = 44, .threeDs = false, .md3Version = 0, .stripPngTextures = false,
 			.downloadRefused = {}, .bigdata = false, .bigdataChunkMax = 0, .terrainChunkMax = 0, .udpPortOffset = 1,
-			.requiresSky = false, .skyGif = false, .drawn = Drawn::World, .mirrors2dPosition = false, .sees2dPlayers = false, .takes2dChat = false, .dropsUnknownGhost = false,
+			.requiresSky = false, .skyGif = false, .drawn = Drawn::World, .mirrors2dPosition = false, .sees2dPlayers = false, .takes2dChat = false, .terrainTextures = false, .dropsUnknownGhost = false,
 			.assumed = allBut({ F::Protocol, F::Game, F::ClassTable, F::ClassIds12Bit, F::LengthPrefixes, F::GameLayer,
 								 F::TerrainChunks, F::ChunkCache, F::TorqueScript, F::Terraformer, F::TerrainEditor, F::Bigdata,
-								 F::BigdataChunkMax, F::TerrainChunkMax }),
+								 F::BigdataChunkMax, F::TerrainChunkMax, F::TerrainTextures }),
 		};
 
 		// 3.153 Mac: Graal's net changes, the TGE game layer, TorqueScript, both terrain paths.
@@ -44,7 +44,7 @@ namespace graal3d
 			.water = true, .torqueScript = true, .serverScripts = false, .terraformer = Terraformer::Full, .greyscaleRgba32Only = false, .terrainEditor = true,
 			.dtsMin = 0, .dtsMax = 24, .difVersion = 44, .threeDs = true, .md3Version = 15, .stripPngTextures = false,
 			.downloadRefused = kRefuseScriptsTer, .bigdata = true, .bigdataChunkMax = 191, .terrainChunkMax = 1023, .udpPortOffset = 1,
-			.requiresSky = true, .skyGif = true, .drawn = Drawn::SkyOnly, .mirrors2dPosition = false, .sees2dPlayers = false, .takes2dChat = false, .dropsUnknownGhost = false,
+			.requiresSky = true, .skyGif = true, .drawn = Drawn::SkyOnly, .mirrors2dPosition = false, .sees2dPlayers = false, .takes2dChat = false, .terrainTextures = true, .dropsUnknownGhost = false,
 			.assumed = capMask({ F::PhasesOptional, F::TerMax, F::TerrainTexture, F::Water, F::GreyscaleRgba32Only, F::DtsMin,
 								 F::DtsMax, F::DifVersion, F::Md3Version, F::TextureNames, F::BigdataChunkMax, F::TerrainChunkMax,
 								 F::Mirrors2dPosition, F::Sees2dPlayers, F::Takes2dChat, F::DropsUnknownGhost }),
@@ -61,9 +61,9 @@ namespace graal3d
 			.dtsMin = 0, .dtsMax = 24, .difVersion = 44, .threeDs = true, .md3Version = 15, .stripPngTextures = false,
 			.downloadRefused = kRefuseScriptsTer, .bigdata = true, .bigdataChunkMax = 191, .terrainChunkMax = 1023,
 			.udpPortOffset = 1,
-			.requiresSky = false, .skyGif = false, .drawn = Drawn::SkyOnly, .mirrors2dPosition = false, .sees2dPlayers = false, .takes2dChat = false, .dropsUnknownGhost = false,
+			.requiresSky = false, .skyGif = false, .drawn = Drawn::SkyOnly, .mirrors2dPosition = false, .sees2dPlayers = false, .takes2dChat = false, .terrainTextures = true, .dropsUnknownGhost = false,
 			.assumed = capMask({ F::PhasesOptional, F::ChunkCache, F::TerrainTexture, F::GreyscaleRgba32Only, F::TextureNames,
-								 F::TerrainChunkMax, F::RequiresSky, F::SkyGif, F::Sees2dPlayers, F::Takes2dChat }),
+								 F::TerrainChunkMax, F::RequiresSky, F::SkyGif, F::Sees2dPlayers, F::Takes2dChat, F::TerrainTextures }),
 		};
 
 		constexpr Capabilities with(Capabilities c, std::string_view label, std::string_view token, uint64_t assumed)
@@ -85,7 +85,7 @@ namespace graal3d
 			.dtsMin = 17, .dtsMax = 24, .difVersion = 44, .threeDs = true, .md3Version = 0, .stripPngTextures = true,
 			.downloadRefused = kRefuseScriptsTer, .bigdata = true, .bigdataChunkMax = 191, .terrainChunkMax = 1023,
 			.udpPortOffset = 1,
-			.requiresSky = false, .skyGif = false, .drawn = Drawn::World, .mirrors2dPosition = false, .sees2dPlayers = false, .takes2dChat = true, .dropsUnknownGhost = true,
+			.requiresSky = false, .skyGif = false, .drawn = Drawn::World, .mirrors2dPosition = false, .sees2dPlayers = false, .takes2dChat = true, .terrainTextures = true, .dropsUnknownGhost = true,
 			.assumed = allBut({ F::Protocol, F::Game, F::ClassTable, F::ClassIds12Bit, F::LengthPrefixes, F::GameLayer,
 								 F::ClientMoves, F::TerrainChunks, F::Water, F::Bigdata }),
 		};
@@ -101,35 +101,34 @@ namespace graal3d
 			.dtsMin = 17, .dtsMax = 24, .difVersion = 44, .threeDs = true, .md3Version = 0, .stripPngTextures = true,
 			.downloadRefused = kRefuseScriptsTer, .bigdata = true, .bigdataChunkMax = 191, .terrainChunkMax = 1023,
 			.udpPortOffset = 1,
-			.requiresSky = false, .skyGif = false, .drawn = Drawn::World, .mirrors2dPosition = false, .sees2dPlayers = false, .takes2dChat = true, .dropsUnknownGhost = true,
+			.requiresSky = false, .skyGif = false, .drawn = Drawn::World, .mirrors2dPosition = false, .sees2dPlayers = false, .takes2dChat = true, .terrainTextures = true, .dropsUnknownGhost = true,
 			.assumed = allBut({ F::Protocol, F::Game, F::ClassTable, F::GameLayer, F::MissionPhases, F::TerrainChunks, F::ChunkCache,
 								 F::TerrainTexture, F::TorqueScript, F::ServerScripts, F::ThreeDs }),
 		};
 
 		// Windows 4.20r8: 4.20r6's values except what was read. A lab run
 		// (Graal_analysis PR #854) linked it as protocol 24; it takes the 5.12
-		// TerrainBlock and chunk layout, then crashes drawing terrain near the
-		// camera under the lab's GDI Generic OpenGL 1.1 (untested on Mesa or a
-		// GPU), so it is offered no streamed terrain.
+		// TerrainBlock and chunk layout. Under Mesa (T3D-117) it draws streamed
+		// terrain, but never fetches heights.info or terrain textures, so the
+		// ground is untextured. (Its GDI Generic OpenGL 1.1 crash was the driver.)
 		constexpr Capabilities k4208 = []
 		{
 			Capabilities c = with(k420, "4.20r8", "G3D20126",
 								  allBut({ F::Protocol, F::Game, F::GameLayer, F::MissionPhases, F::TerrainChunks, F::ChunkCache,
-									  F::TorqueScript, F::ServerScripts, F::Drawn, F::DropsUnknownGhost }));
+									  F::TorqueScript, F::ServerScripts, F::Drawn, F::TerrainTextures, F::DropsUnknownGhost }));
 			c.protocol = 24;
-			c.terrainChunks = false;
+			c.terrainTextures = false;
 			return c;
 		}();
 
 		// Linux 4.20r6 and 4.20r8: protocol 24, 5.12's row except what the
 		// 2026-11-25 world lab read. Its loader takes DTS 17, but a version-17
-		// shape froze it: serve DTS 24. No streamed terrain, as Windows 4.20r8.
+		// shape froze it: serve DTS 24. Streamed terrain is drawn (lab).
 		constexpr Capabilities k420Linux = []
 		{
 			Capabilities c = with(k500, "4.20 Linux", "G3D22126",
-								  allBut({ F::Protocol, F::Game, F::GameLayer, F::MissionPhases, F::DtsMin, F::DtsMax, F::DifVersion,
-									  F::ThreeDs, F::Drawn }));
-			c.terrainChunks = false;
+								  allBut({ F::Protocol, F::Game, F::GameLayer, F::MissionPhases, F::TerrainChunks, F::DtsMin, F::DtsMax,
+									  F::DifVersion, F::ThreeDs, F::Drawn, F::TerrainTextures }));
 			return c;
 		}();
 
@@ -164,7 +163,7 @@ namespace graal3d
 			"terrain_chunks", "chunk_cache", "terrain_texture", "water", "torque_script", "server_scripts", "terraformer",
 			"greyscale_rgba32_only", "terrain_editor", "dts_min", "dts_max", "dif_version", "three_ds", "md3_version", "texture_names",
 			"download_refused", "bigdata", "bigdata_chunk_max", "terrain_chunk_max", "udp_port_offset",
-			"requires_sky", "sky_gif", "drawn", "mirrors_2d_position", "sees_2d_players", "takes_2d_chat", "drops_unknown_ghost",
+			"requires_sky", "sky_gif", "drawn", "mirrors_2d_position", "sees_2d_players", "takes_2d_chat", "terrain_textures", "drops_unknown_ghost",
 		};
 		const auto i = static_cast<size_t>(field);
 		return i < kKeys.size() ? kKeys[i] : std::string_view{};
@@ -243,7 +242,7 @@ namespace graal3d
 				 refused.empty() ? std::string("-") : refused, b(bigdata), n(bigdataChunkMax), n(terrainChunkMax),
 				 n(udpPortOffset), b(requiresSky), b(skyGif),
 				 std::string(drawn == Drawn::World ? "world" : drawn == Drawn::SkyOnly ? "sky_only" : "nothing"),
-				 b(mirrors2dPosition), b(sees2dPlayers), b(takes2dChat), b(dropsUnknownGhost), assumedText.empty() ? std::string("-") : assumedText })
+				 b(mirrors2dPosition), b(sees2dPlayers), b(takes2dChat), b(terrainTextures), b(dropsUnknownGhost), assumedText.empty() ? std::string("-") : assumedText })
 		{
 			if (!row.empty())
 				row += '\t';
