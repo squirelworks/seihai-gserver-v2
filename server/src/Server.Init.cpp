@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-13: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-13, 2026-11-25: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <format>
 #include <memory>
@@ -412,6 +412,14 @@ void Server::initFilesystemCallbacks()
 		{
 			const auto fileName = fs::getANSIFileName(file.file);
 			const auto newWeapon = Weapon::loadWeapon(fileName);
+			// Seihai: an editor that truncates the file before writing it (most do on Windows) fires a modify event
+			// while the file is empty or half written. loadWeapon then returns nothing, and using it crashed the
+			// server (lab, 2026-11-25). The event that follows the finished write loads it.
+			if (newWeapon == nullptr)
+			{
+				log::printLine(log::server, "Weapon file {} could not be read (still being written?); kept the loaded version.", fileName);
+				return;
+			}
 			if (const auto weapon = getWeapon(newWeapon->name); weapon)
 			{
 				if (weapon->name != newWeapon->name)
