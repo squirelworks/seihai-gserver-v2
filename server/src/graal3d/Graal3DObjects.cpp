@@ -801,6 +801,7 @@ namespace graal3d
 					block.kind = GhostObject::Kind::Raw;
 					block.rawClass = "WaterBlock";
 					block.raw = waterBlockFields(water);
+					block.layout512 = true;
 					world.objects.push_back(std::move(block));
 				}
 			}
@@ -828,6 +829,7 @@ namespace graal3d
 					block.kind = GhostObject::Kind::Raw;
 					block.rawClass = "TerrainBlock";
 					block.raw = terrainBlockFields(terrain);
+					block.layout512 = true;
 					world.objects.push_back(std::move(block));
 					world.terrain = std::move(terrain);
 				}

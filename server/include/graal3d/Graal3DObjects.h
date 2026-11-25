@@ -297,6 +297,10 @@ namespace graal3d
 		std::string tgeShape; // TgePlayer: its PlayerData's shape file
 		std::string rawClass;
 		std::vector<RawField> raw;
+		// Raw objects built by the `terrain` and `water` world lines carry the 5.x
+		// TerrainBlock and WaterBlock layouts: the service sends them only to
+		// builds whose capabilities take those (Graal3DCapabilities.h).
+		bool layout512 = false;
 		uint32_t datablockId = tge::FirstDatablockId;
 
 		// TgeCamera and TgePlayer masks: 1 = position and rotation, 2 = the

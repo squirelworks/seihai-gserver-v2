@@ -197,6 +197,7 @@ option(GRAAL3D "Build the Graal 3D add-on (the Torque UDP side for 3.151 to 5.x 
 if(GRAAL3D)
 	list(APPEND SOURCES
 		"include/graal3d/Graal3DAddon.h"
+		"include/graal3d/Graal3DCapabilities.h"
 		"include/graal3d/Graal3DConnection.h"
 		"include/graal3d/Graal3DObjects.h"
 		"include/graal3d/Graal3DProtocol.h"
@@ -204,6 +205,7 @@ if(GRAAL3D)
 		"include/graal3d/Graal3DTge.h"
 		"include/graal3d/TorqueBitStream.h"
 		"src/graal3d/Graal3DAddon.cpp"
+		"src/graal3d/Graal3DCapabilities.cpp"
 		"src/graal3d/Graal3DConnection.cpp"
 		"src/graal3d/Graal3DObjects.cpp"
 		"src/graal3d/Graal3DProtocol.cpp"
