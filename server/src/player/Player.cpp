@@ -1,5 +1,6 @@
 // Modified by the Seihai project, 2026-11-01, 2026-11-04, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-18, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
 #include <algorithm>
+#include <cctype>
 #include <array>
 #include <chrono>
 #include <cstdint>
@@ -658,12 +659,26 @@ fs::FileData* Player::findClientFile(const std::filesystem::path& file) const
 
 	// The 5.x 3D client asks for every texture (material or Sky) by its bare,
 	// lower-cased name and stores what it gets under that name (lab 2026-11-25).
-	if (info == nullptr && isGraal3DClient() && !file.has_extension())
+	// 3.153 asks for Sky textures as .gif, never .png (lab 2026-11-25), so an image
+	// name with the wrong image extension also finds the same stem with another.
+	if (info == nullptr && isGraal3DClient())
 	{
-		for (const auto* ext : graal3d::kImageExtensions)
+		auto stem = file.filename();
+		bool image = !file.has_extension();
+		if (!image)
 		{
-			if ((info = filesystem.infoi(fs::FileCategory::ALL, file.filename().string() + ext)) != nullptr)
-				break;
+			auto ext = stem.extension().string();
+			std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+			image = std::any_of(std::begin(graal3d::kImageExtensions), std::end(graal3d::kImageExtensions), [&](const char* e) { return ext == e; });
+			stem.replace_extension();
+		}
+		if (image)
+		{
+			for (const auto* ext : graal3d::kImageExtensions)
+			{
+				if ((info = filesystem.infoi(fs::FileCategory::ALL, stem.string() + ext)) != nullptr)
+					break;
+			}
 		}
 	}
 	return info;

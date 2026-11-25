@@ -141,6 +141,8 @@ namespace graal3d
 		// A protocol 19 client moves its Player itself: pass that on to the others.
 		void relayTgeMoves();
 		void relayAvatar(PlayerID playerId, const GhostObject& before);
+		// Moves the player's TCP position to follow its 3D object.
+		void syncTcpPosition(PlayerID playerId, const std::array<float, 3>& position);
 		static ObjectKey avatarKey(PlayerID player) { return 0x10000u + player; }
 		static ObjectKey cameraKey(PlayerID player) { return 0x20000u + player; }
 		static ObjectKey skyKey() { return 0x30000u; } // protocol 19's plain Sky, when the world has none

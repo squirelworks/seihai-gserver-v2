@@ -165,6 +165,9 @@ What the server does when more than one 3D client is on at once:
 | Seeing the others | Every other linked player appears as a `GameObject` named `G3DPlayer_<account>`, with the world's player shape and the player's nickname. Every other linked player appears as a stock TGE `Player` on the world's `tgeplayershape`, at that player's position and facing. This needs `tgecontrol player` and a `tgeplayershape`; with a Camera as the control object, these clients get no other players. |
 | What is passed on | What each client reports for its own object: position, rotation, scale, `chat`, shape, skin, attributes, and nickname with its colour. Move type, velocity and attachment are not sent yet. On the Sharp3D route, a player moves only through `g3dpos`. | The position and facing of the client's Player, as the server runs its moves. The other builds see this as that player's `GameObject`. |
 | TCP side | Every 3D client is also an ordinary TCP player, so the gserver sends the usual other-player props, chat and PMs, as it would to 2D clients in the same level. | the same |
+| Position on the TCP side | The player's TCP position follows its 3D object: Torque (x, y) is map tile (x, -y). Serverside scripts see where the player is; without this, the script `player` stayed at the spawn while a 4.04r2 Player walked (lab, 2026-11-25). Positions off the map are left alone. | the same, from the Player the server runs |
+
+**Texture names:** a 3D client's request for an image with the wrong image extension also finds the same name with another one. 3.153 asks for Sky textures as `.gif`, never `.png` (lab, 2026-11-25), so a `.png` texture answers it. Whether 3.153 draws a PNG sent under a `.gif` name is not tested yet; ship `.gif` copies to be sure.
 
 **Accounts:** with `localhost = true` (the lab default) the gserver accepts any account
 name and password and creates the account from `(defaultaccount)` on its first login.

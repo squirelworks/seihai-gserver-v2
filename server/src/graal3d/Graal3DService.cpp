@@ -229,6 +229,8 @@ namespace graal3d
 		const auto it = m_avatars.find(playerId);
 		if (it == m_avatars.end())
 			return;
+		if (it->second.object.transform.position != before.object.transform.position)
+			syncTcpPosition(playerId, it->second.object.transform.position);
 		size_t relayed = 0;
 		forEachOtherConnection(playerId, [&](Connection& other) {
 			ghostAvatar(other, playerId, it->second);
@@ -242,6 +244,21 @@ namespace graal3d
 							  object.transform.position[1], object.transform.position[2], object.transform.angle,
 							  object.chat != before.object.chat ? " chat=" + object.chat : std::string()));
 		}
+	}
+
+	void Service::syncTcpPosition(PlayerID playerId, const std::array<float, 3>& position)
+	{
+		// The player's TCP side follows the 3D object, so serverside scripts see
+		// where the player is: Torque (x, y) is map tile (x, -y). Without this the
+		// script `player` stayed at the spawn point while the 3D Player walked
+		// (4.04r2, lab 2026-11-25). Positions off the map (x or -y below 0) are left.
+		const auto player = m_server.getPlayer(playerId);
+		if (player == nullptr || !std::isfinite(position[0]) || !std::isfinite(position[1]) || position[0] < 0.0f || position[1] > 0.0f)
+			return;
+		auto tile = player->getTilePosition();
+		tile.x() = position[0];
+		tile.y() = -position[1];
+		player->setPosition(toPixelPosition(tile));
 	}
 
 	void Service::relayTgeMoves()
