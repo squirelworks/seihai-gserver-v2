@@ -498,10 +498,12 @@ namespace graal3d
 		const Capabilities* caps = capabilitiesFor(player->getVersionStr(), profile->protocol);
 		if (caps)
 		{
+			const char* terrain = caps->takesStreamedTerrain512() ? "streamed"
+								  : takesTerrain(caps, static_cast<int>(profile->protocol)) ? "streamed (graal3dterrainall)"
+								  : caps->terrainChunks ? "stock TGE only (not served)"
+														: "none";
 			log::printLine(log::server, "Graal3D: {} is a {} client: {}, terrain {}, TorqueScript {}{}.", account, caps->label,
-						   caps->gameLayer == GameLayer::Tge ? "TGE layer" : "GameObject layer",
-						   caps->takesStreamedTerrain512() ? "streamed" : caps->terrainChunks ? "stock TGE only (not served)" : "none",
-						   caps->torqueScript ? "yes" : "no",
+						   caps->gameLayer == GameLayer::Tge ? "TGE layer" : "GameObject layer", terrain, caps->torqueScript ? "yes" : "no",
 						   caps->allAssumed() ? " (every capability assumed)" : caps->confirmed(CapField::Protocol) ? "" : " (protocol assumed)");
 		}
 
@@ -562,7 +564,9 @@ namespace graal3d
 		m_sessions.emplace(from, std::move(session));
 		m_byPlayer[playerId] = from;
 		player->setAddonLinked(true);
-		if (m_pushTerrainFiles && m_world.terrain && takesTerrain(caps, static_cast<int>(profile->protocol)))
+		// Once per account per server run: a client keeps what it was sent, so
+		// pushing again on every link only repeats the same transfers.
+		if (m_pushTerrainFiles && m_world.terrain && takesTerrain(caps, static_cast<int>(profile->protocol)) && m_terrainPushedTo.insert(account).second)
 		{
 			for (const auto& name : m_terrainFiles)
 				player->sendFile(name);
@@ -770,9 +774,13 @@ namespace graal3d
 				m_terrainFiles.push_back("heights.info");
 				const auto expected = std::filesystem::path(m_world.terrain->folder) / "heights.info";
 				std::error_code ec;
+				// Clients ask for the bare name, so any other heights.info in the
+				// file folders can win: the terrain then asks for that file's
+				// textures (lab, 2026-11-25: a stray world/global/heights.info
+				// gave "Missing terrain texture: grass/rock").
 				if (!std::filesystem::equivalent(info->file, expected, ec))
-					log::printLine(log::server, "** [Warning] Graal3D: clients get {} as heights.info, not the one in {}.", info->file.string(),
-								   m_world.terrain->folder);
+					log::printLine(log::server, "** [Error] Graal3D: clients get {} as heights.info, not the one in {}; remove or rename the other file, or the terrain asks for the wrong textures.",
+								   info->file.string(), m_world.terrain->folder);
 				std::istringstream lines(readAll(info->file));
 				for (std::string line; std::getline(lines, line);)
 				{

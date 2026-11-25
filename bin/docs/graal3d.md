@@ -412,8 +412,21 @@ players' servers leave it off.
 `graal3dpushterrain` answers 5.12's first visit, which fetches only `heights.info`
 and draws the terrain white; its textures come on the next visit. With it on, the
 server sends `heights.info` and every texture it lists (as found at start-up) to the
-client unasked when its 3D link opens. Whether 5.12 then draws textures on the first
-visit is not yet tested.
+client unasked when its 3D link opens, once per account per server run. On a real
+5.12 (lab, 2026-11-25) the first visit then had `heights.info` and all four
+textures before the terrain loaded, with no "Missing terrain texture" line; whether
+it draws them on that visit still needs a run under Mesa. The client stores the
+textures in `levels3d/images` without their extensions; the server's copies keep
+theirs.
+
+`graal3dterrainall` on 4.20r8 ran 110 s with a high spawn, and crashed about 1 s in
+with a spawn just above the ground (z 17.5 on a native terrain): the same
+near-terrain crash as before, under GDI GL.
+
+Clients ask for `heights.info` by its bare name, so only one file of that name may be
+in the file folders. Another one (a stray `world/global/heights.info` in that lab)
+wins, and the terrain then asks for that file's textures. The server logs an error at
+start-up when the `heights.info` clients get is not the terrain folder's.
 
 ## Lab: mutations (`graal3dmutate`)
 

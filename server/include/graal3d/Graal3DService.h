@@ -209,6 +209,7 @@ namespace graal3d
 		bool m_terrainForAll = false;
 		bool m_pushTerrainFiles = false;
 		std::vector<std::string> m_terrainFiles; // heights.info, then its textures, as found at start-up
+		std::set<std::string> m_terrainPushedTo; // accounts already sent m_terrainFiles (graal3dpushterrain)
 		[[nodiscard]] bool offers(const Capabilities* caps, const GhostObject& object, int protocol) const;
 		[[nodiscard]] bool takesTerrain(const Capabilities* caps, int protocol) const;
 		void trace(std::string_view account, int protocol, std::string_view what);
