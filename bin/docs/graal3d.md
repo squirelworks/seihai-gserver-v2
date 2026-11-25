@@ -227,10 +227,10 @@ When a 3D connect request is accepted, the server picks the client's capability 
 | 3.153 | TGE | not sent (its TerrainBlock and WaterBlock are stock TGE) | runs its own only | crashes without a Sky (the protocol 19 path always sends one); asks for sky textures as `<stem>.gif`, so keep a `.gif` of each; never asks for `.cs`, `.dso` or `.ter`; reaches its sky view once the `.gif` requests are answered with the PNGs (lab M3, 2026-11-25) |
 | 4.04r2 (Win, Mac) | TGE | not sent | none | never downloads `.dso`, `.cs`, `.ter`; under Wine drew only the Sky gradient (lab 2026-11-25); crashes on an update to a ghost that was never created (fuzz tier 1), so the server must only update created ghosts; Mac row all assumed |
 | 4.20r6 Mac | GameObject | sent | none | protocol 21 |
-| 4.20r8 Win | GameObject | not sent: it takes the 5.12 layout, then crashes drawing terrain near the camera (from about 60 units up; never from 200 up). The lab VM has only GDI Generic OpenGL 1.1, so this is a crash under GDI GL, untested on Mesa or a GPU (lab) | none | links as protocol 24 (lab) |
+| 4.20r8 Win | GameObject | sent; it draws the terrain but never fetches `heights.info` or terrain textures, so the ground is untextured (lab T3D-117, Mesa). Its earlier crash near the camera was the lab VM's GDI Generic OpenGL 1.1 | none | links as protocol 24 (lab) |
 | 5.00r7 | GameObject | sent | none | class set and file rules assumed from 5.12 |
 | 5.12 (Win, Mac) | GameObject | sent | none | strips `.png` from texture names: serve textures under their bare name too; Mac row all assumed |
-| 4.20 Linux (`G3D22126`) | GameObject | not sent (assumed as 4.20r8 Win) | none | links as protocol 24; 5.12's row except what a 2026-11-25 lab read. A DTS 17 shape froze it: serve DTS 24. It crashes on a broken `.3ds`. |
+| 4.20 Linux (`G3D22126`) | GameObject | sent; it fetches terrain textures (lab) | none | links as protocol 24; 5.12's row except what a 2026-11-25 lab read. A DTS 17 shape froze it: serve DTS 24. It crashes on a broken `.3ds`. |
 
 2D and 3D clients in one level (lab pair H1, 2026-11-25): no read build moves its 2D player when it walks in 3D, and 5.12 draws no 2D players, though 2D chat reaches it as `onRemotePlayerChats`. So a 2D client sees a 3D player only if the server moves that player's 2D position itself, and the reverse needs a server-made ghost. The rows carry this as `mirrors2dPosition` (`needs2dPositionRelay()`), `sees2dPlayers` and `takes2dChat`; `drawn` records what each build has drawn here so far.
 
@@ -428,7 +428,9 @@ players' servers leave it off.
 `graal3dpushterrain` answers 5.12's first visit, which fetches only `heights.info`
 and draws the terrain white; its textures come on the next visit. With it on, the
 server sends `heights.info` and every texture it lists (as found at start-up) to the
-client unasked when its 3D link opens, once per account per server run. On a real
+client unasked when its 3D link opens, once per account per server run. A build
+whose row has `terrainTextures` false (4.20r8, which never fetches them) gets no
+push. On a real
 5.12 (lab, 2026-11-25) the first visit then had `heights.info` and all four
 textures before the terrain loaded, with no "Missing terrain texture" line; whether
 it draws them on that visit still needs a run under Mesa. The client stores the
