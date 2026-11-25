@@ -704,8 +704,13 @@ namespace graal3d
 		const auto checkImage = [&](const preagonal::fs::FileData& info) {
 			if (m_shapeCheck == ShapeCheck::Off)
 				return;
-			if (const auto why = unsafeImage(readAll(info.file)))
+			const auto data = readAll(info.file);
+			if (const auto why = unsafeImage(data))
 				log::printLine(log::server, "** [Error] Graal3D: {} would crash a client ({}); replace it.", info.file.filename().string(), *why);
+			// 8-bit PNG, JPEG and GIF draw on 5.12; a 16-bit PNG does not
+			// (texture probe, Graal_analysis, 2026-11-25).
+			else if (pngSize(data) && static_cast<uint8_t>(data[24]) == 16)
+				log::printLine(log::server, "** [Warning] Graal3D: {} is a 16-bit PNG, which 5.12 does not draw; save it as 8-bit.", info.file.filename().string());
 		};
 
 		size_t found = 0, missing = 0, dropped = 0;
