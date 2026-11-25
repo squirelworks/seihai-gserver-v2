@@ -259,6 +259,21 @@ namespace graal3d
 	// parent. Returns why the file is unsafe, or nothing.
 	std::optional<std::string> unsafe3ds(std::string_view data);
 
+	// Checks a .dts shape's header: it must be version 24, the only one the real
+	// 5.12 draws, and the memory buffer it claims must fit the file.
+	inline constexpr uint32_t kDtsVersion = 24;
+	std::optional<std::string> unsafeDts(std::string_view data);
+
+	// A PNG's width and height from its header, or nothing if it is not a PNG.
+	std::optional<std::pair<uint32_t, uint32_t>> pngSize(std::string_view data);
+
+	// Checks a PNG's header for a sane width and height; other images pass.
+	inline constexpr uint32_t kMaxImageSide = 8192;
+	std::optional<std::string> unsafeImage(std::string_view data);
+
+	// unsafe3ds, unsafeDts or unsafeImage, by the file's extension.
+	std::optional<std::string> unsafeAsset(std::string_view extension, std::string_view data);
+
 	// A WaterBlock for 4.20r6 and 5.x (Graal_analysis torque/terrain-512.md
 	// section 5, a static read of the real 5.12 client; not yet run live). The
 	// client takes the scale only when x and y are both at least 1024.
