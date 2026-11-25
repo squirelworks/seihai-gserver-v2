@@ -1360,6 +1360,28 @@ SCENARIO("A terrain line ghosts a TerrainBlock and loads the chunk files")
 	}
 }
 
+SCENARIO("An object line's last three numbers are its scale, section 2 of the update")
+{
+	const auto world = parseWorld("object Big tree.3ds 1 2 3  0 0 1 0  2 2 3\nobject Plain tree.3ds 0 0 0\n");
+	REQUIRE(world.errors.empty());
+	REQUIRE(world.objects.size() == 2);
+	REQUIRE(world.objects[0].object.scale == std::array<float, 3>{2, 2, 3});
+	REQUIRE(world.objects[1].object.scale == std::array<float, 3>{1, 1, 1});
+	REQUIRE((gameObjectFullMask(world.objects[0].object) & GameObjectBits::Scale) != 0);
+	REQUIRE((gameObjectFullMask(world.objects[1].object) & GameObjectBits::Scale) == 0);
+
+	BitWriter w;
+	writeGameObjectUpdate(w, world.objects[0].object, gameObjectFullMask(world.objects[0].object));
+	const auto bytes = w.toString();
+	BitReader r(bytes);
+	REQUIRE(r.readFlag());
+	(void)r.readString();
+	REQUIRE(r.readFlag()); // section 2
+	REQUIRE(r.readF32() == 2.0f);
+	REQUIRE(r.readF32() == 2.0f);
+	REQUIRE(r.readF32() == 3.0f);
+}
+
 SCENARIO("A water line ghosts a WaterBlock in the 5.12 layout")
 {
 	const auto world = parseWorld("water -1024 -1024 0.5 2048 2048 20 lake 1\nwater 1 2 3\n");

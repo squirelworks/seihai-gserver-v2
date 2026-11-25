@@ -649,8 +649,8 @@ namespace graal3d
 				object.transform = state.object.transform;
 			if (state.changed & GameObjectBits::Chat)
 				object.chat = state.object.chat;
-			if (state.changed & GameObjectBits::Velocity)
-				object.velocity = state.object.velocity;
+			if (state.changed & GameObjectBits::Scale)
+				object.scale = state.object.scale;
 		}
 		if (object == before)
 			return;

@@ -57,8 +57,8 @@ namespace graal3d
 		uint32_t mask = 0;
 		if (a.name != b.name)
 			mask |= Name;
-		if (a.velocity != b.velocity)
-			mask |= Velocity;
+		if (a.scale != b.scale)
+			mask |= Scale;
 		if (a.shape != b.shape)
 			mask |= Shape;
 		if (a.skin != b.skin)
@@ -83,8 +83,8 @@ namespace graal3d
 	{
 		// Name, transform and flags always; the rest when set.
 		uint32_t mask = Name | GameObjectBits::Transform | Flags;
-		if (s.velocity != std::array<float, 3>{})
-			mask |= Velocity;
+		if (s.scale != std::array<float, 3>{1.0f, 1.0f, 1.0f})
+			mask |= Scale;
 		if (!s.shape.empty())
 			mask |= Shape;
 		if (!s.skin.empty())
@@ -105,8 +105,8 @@ namespace graal3d
 	{
 		if (w.writeFlag(mask & Name))
 			w.writeString(s.name);
-		if (w.writeFlag(mask & Velocity))
-			writeFloats(w, s.velocity.data(), 3);
+		if (w.writeFlag(mask & Scale))
+			writeFloats(w, s.scale.data(), 3);
 		if (w.writeFlag(mask & Shape))
 			w.writeString(s.shape);
 		if (w.writeFlag(mask & Skin))
@@ -151,8 +151,8 @@ namespace graal3d
 		}
 		if (r.readFlag())
 		{
-			readFloats(r, s.velocity.data(), 3);
-			mask |= Velocity;
+			readFloats(r, s.scale.data(), 3);
+			mask |= Scale;
 		}
 		if (r.readFlag())
 		{
@@ -690,14 +690,16 @@ namespace graal3d
 				continue;
 
 			bool ok = false;
-			if (w[0] == "object" && (w.size() == 6 || w.size() == 10))
+			if (w[0] == "object" && (w.size() == 6 || w.size() == 10 || w.size() == 13))
 			{
 				GhostObject obj;
 				obj.object.name = w[1];
 				obj.object.shape = w[2];
 				ok = toFloats(w, 3, obj.object.transform.position.data(), 3);
-				if (ok && w.size() == 10)
+				if (ok && w.size() >= 10)
 					ok = toFloats(w, 6, obj.object.transform.axis.data(), 3) && toFloats(w, 9, &obj.object.transform.angle, 1);
+				if (ok && w.size() == 13)
+					ok = toFloats(w, 10, obj.object.scale.data(), 3);
 				if (ok)
 					world.objects.push_back(std::move(obj));
 			}

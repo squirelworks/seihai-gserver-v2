@@ -56,9 +56,10 @@ address and port, so either works.
 `#` starts a comment:
 
 ```
-# object <name> <shape> <x> <y> <z> [<axis x> <axis y> <axis z> <angle in radians>]
+# object <name> <shape> <x> <y> <z> [<axis x> <axis y> <axis z> <angle in radians> [<sx> <sy> <sz>]]
 object Ground ground.dts 0 0 0
 object Tower tower.dif 20 5 0  0 0 1 1.5708
+object BigTree tree.3ds 8 -4 0  0 0 1 0  2 2 3
 
 # sun <direction x y z> <colour r g b a> <ambient r g b a>
 sun 0.57 0.57 -0.57  0.8 0.8 0.8 1  0.3 0.3 0.35 1
@@ -164,7 +165,7 @@ too. The server never sends a player's position back to that player.
 | Mission start (`MissionStartPhase1`, `2`) | 5.x and 4.20r6. The client answers each phase and raises `onGraal3DLoginStep`. |
 | Flags | sent at link time as one `events` text (`s name=value` lines), then every flag change as `set` / `unset`. |
 | From the client: `events` text | `s name=value` sets a flag or client variable (as `PLI_FLAGSET`), `w name` gives a weapon, `t weapon,name,params` runs a serverside triggeraction on that weapon. |
-| Ghosting (4.20r6, 5.x) | done. Objects are created, updated (only what changed) and deleted in the ghost section of each packet, and what a lost packet carried is sent again. `GameObject` (name, shape, skin, position and rotation, velocity, chat, `attr[1..8]`, nickname and colour, the solid/shadow/collision flags) and `Sun`. |
+| Ghosting (4.20r6, 5.x) | done. Objects are created, updated (only what changed) and deleted in the ghost section of each packet, and what a lost packet carried is sent again. `GameObject` (name, shape, skin, position and rotation, scale, chat, `attr[1..8]`, nickname and colour, the solid/shadow/collision flags) and `Sun`. |
 | Control object (4.20r6, 5.x) | done. Once the client has its player object and has acked both mission phases, the server makes that object the control object, which is login step 5. It must come after the mission start, because `MissionStartPhase2` sets the 5.x client's login step back to 3 and step 5 is only set by the first control object. Step 6 follows once every TCP file request is answered. With `graal3d` on, a missing file gets `PLO_FILESENDFAILED` for these clients, so it does not hold the login up. |
 | From the client: its own object | read in every packet: the position, and the client's changes to the object (moves, chat, shape). Other players see them. |
 | "Connecting..." window | The 5.x client builds its 3D view itself (`GUIContainer`, `GraalControl3D`, from GS2 built into the client) and shows it at login step 6. Its "Connecting..." window stays on top until the TCP side sends `PLO_SERVERLISTCONNECTED`, so with `graal3d` on, every 3.153 to 5.x client gets that packet at login, with or without a listserver. |
@@ -370,3 +371,24 @@ are still assumed to match 5.00r7, the Walking row above still lacks a real-clie
 move check, and protocol 19 still lacks the objects listed in its section.
 The first-frame crash cause remains unknown; Windows 4.04r2 crashed before UDP
 connection. Keep those limits separate from the successful individual checks.
+
+2026-11-25, real Linux 4.206 client (it links as protocol 24, G3D22126), mission
+route, the `tools/lab/g3dlabworlds.py` round 1 worlds:
+
+- **What draws:** the control scene drew in 3 of 3 runs. Its `.3ds` models were white, without textures, on that VM's software OpenGL; the textures did download.
+- **No Sky:** the background clears to dark red (128, 0, 0).
+- **Fog:** a fog colour change shows at the horizon.
+- **Object counts:** 64 and 512 extra objects drew.
+- **GameObject section 2 is the scale.** (2, 2, 2) drew an object twice the size and (0.5, 0.5, 0.5) half, so the server now calls it scale (default 1, 1, 1). An object line can set it.
+- **Malformed `.3ds` crash the client** (segfault) rather than being skipped:
+  - materials removed;
+  - cut at half its length;
+  - the main chunk length past the end;
+  - two of three 0.5% bit-flip passes.
+
+  A point count larger than the points present, or a face index of 65535, drew.
+- **`.dts` versions:**
+  - 16 and 25 are rejected with a console error;
+  - 17 hangs the client (the link times out after about 30 s);
+  - 24 draws.
+- **`.dif` versions:** 43 and 45 are rejected, and 44 draws.

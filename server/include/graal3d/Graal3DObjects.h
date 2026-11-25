@@ -8,7 +8,7 @@
 // A GameObject update is thirteen sections, each one flag and then its payload:
 //
 //   1 name        string                       8 shape data     int14 length + data
-//   2 velocity    3 floats                     9 chat           string
+//   2 scale       3 floats                     9 chat           string
 //   3 shape       string (.dts .dif .3ds .ft) 10 script classes string
 //   4 skin        string                      11 attr[1..8]     8 x (flag -> string)
 //   5 transform   position (3 floats), then   12 nickname       string + R, G, B, A bytes
@@ -44,7 +44,7 @@ namespace graal3d
 	namespace GameObjectBits
 	{
 		inline constexpr uint32_t Name = 0x1;
-		inline constexpr uint32_t Velocity = 0x2;
+		inline constexpr uint32_t Scale = 0x2; // section 2: scale (lab 2026-11-25, real 4.206)
 		inline constexpr uint32_t Shape = 0x8;
 		inline constexpr uint32_t Skin = 0x10;
 		inline constexpr uint32_t Transform = 0x20;
@@ -82,7 +82,7 @@ namespace graal3d
 	struct GameObjectState
 	{
 		std::string name;
-		std::array<float, 3> velocity{};
+		std::array<float, 3> scale{1.0f, 1.0f, 1.0f};
 		std::string shape;
 		std::string skin;
 		Transform transform;
@@ -325,7 +325,8 @@ namespace graal3d
 	// What the server ghosts to every 3D client, from config/graal3dworld.txt.
 	// One entry per line, words separated by spaces, `#` starts a comment:
 	//
-	//   object <name> <shape> <x> <y> <z> [<axis x> <axis y> <axis z> <angle>]
+	//   object <name> <shape> <x> <y> <z> [<axis x> <axis y> <axis z> <angle> [<sx> <sy> <sz>]]
+	//                             (the scale is section 2: lab 2026-11-25)
 	//   sun <dir x> <dir y> <dir z> <r> <g> <b> <a> <ambient r> <g> <b> <a>
 	//   playershape <shape>       the shape of every player's own object
 	//   spawn <x> <y> <z>         where a player's object starts
