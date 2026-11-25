@@ -1,4 +1,4 @@
-<!-- Seihai project, 2026-11-20: see CHANGES-SEIHAI.md. -->
+<!-- Seihai project, 2026-11-20, 2026-11-25: see CHANGES-SEIHAI.md. -->
 # Lab tools
 
 Loopback-only helpers for this fork's own lab world. Never point them at a
@@ -11,6 +11,7 @@ public server or the official listserver.
 | `scan.py` | Static scan of a folder of `.graal` levels against the fork's GS1 command and function lists. |
 | `netdump2session.py` | Turns a packet-logging server's logs into `.session` files for `replay_handlers` (#87; see `fuzz/README.md`). Tests: `python3 -m unittest tools/lab/test_netdump2session.py`. |
 | `labcheck.py` | Expected-vs-actual checks for the real-client lab runs (#25, #26, #27, #34) from a packet-logging server's logs. Runbooks: `docs/lab/runbooks/`. Tests: `python3 -m unittest tools/lab/test_labcheck.py`. |
+| `g3dlabworlds.py` | Builds Graal 3D lab worlds that each change one thing from a control world (textures, sky, object count, GameObject section 2, malformed `.3ds`, `.dts`/`.dif` shapes and versions; `--round 2`: placement, name case, `.3ds` structure, 2048 objects, bare ghosts of the classes with no writer; `--levels` for `gen terrain --3d` worlds), with a run sheet, for real-client labs on both routes (`bin/docs/graal3d.md`). You pass the content folders; the output stays on the lab machines. Tests: `python3 -m unittest tools/lab/test_g3dlabworlds.py`. |
 
 The 1.x levels used for the sweep are not in this repo; keep them out.
 

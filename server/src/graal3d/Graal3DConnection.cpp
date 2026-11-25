@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
 // New file: one Graal 3D (Torque) UDP connection, server side. See Graal3DConnection.h.
 // The notify protocol follows Torque's ConnectionProtocol::processRawPacket and
 // NetConnection's event code (MIT-licensed Torque3D source), with Graal's 12-bit
@@ -10,6 +10,7 @@
 #include <graal3d/Graal3DTge.h>
 
 #include <algorithm>
+#include <format>
 #include <string>
 
 namespace graal3d
@@ -95,6 +96,20 @@ namespace graal3d
 		if (!m_profile.gamePackets())
 			return;
 
+		if (m_profile.ghostAlwaysWorld)
+		{
+			// Sharp3D route: no mission-start commands. The world's ghosts go out as
+			// GhostAlwaysObjectEvents (posted by setGhost), and the mission counts as
+			// started once the client has acked all of them; then the control
+			// object follows. Phase1Sent is still reported, since the owner sends
+			// the flags and weapons over the text channel then.
+			m_mission = MissionState::Phase1Sent;
+			if (m_cb.onMission)
+				m_cb.onMission(m_mission);
+			finishGhostAlways();
+			return;
+		}
+
 		// The 5.x and 4.04r2 clients answer these natively and raise
 		// onGraal3DLoginStep. 3.153 runs the stock TorqueScript, which takes
 		// (sequence, mission name) and sends the sequence back in its ack.
@@ -137,6 +152,50 @@ namespace graal3d
 		const int32_t seq = m_nextSendEventSeq++;
 		m_events.emplace(seq, OutEvent{*id, std::move(payload)});
 		m_sendQueue.push_back(seq);
+	}
+
+	namespace
+	{
+		// The first `limit` bytes as hex, for the lab logs.
+		std::string hexPreview(std::string_view bytes, size_t limit)
+		{
+			static constexpr char digits[] = "0123456789abcdef";
+			std::string out;
+			for (size_t i = 0; i < bytes.size() && i < limit; ++i)
+			{
+				const auto b = static_cast<uint8_t>(bytes[i]);
+				out.push_back(digits[b >> 4]);
+				out.push_back(digits[b & 15]);
+			}
+			if (bytes.size() > limit)
+				out += "...";
+			return out;
+		}
+	} // namespace
+
+	bool Connection::postRawEvent(std::string_view className, const std::vector<RawField>& fields)
+	{
+		if (!eventClassId(m_profile, className))
+			return false;
+		BitWriter payload;
+		payload.setPacketStrings(m_packetStrings);
+		writeRawFields(payload, fields);
+		postEvent(className, std::move(payload));
+		return true;
+	}
+
+	bool Connection::postTerrainChunk(uint32_t x, uint32_t y, uint32_t stamp, std::string_view packed)
+	{
+		if (!eventClassId(m_profile, "TerrainChunkEvent") || packed.size() > 1023)
+			return false;
+		BitWriter payload;
+		payload.writeInt(x & 15, 4);
+		payload.writeInt(y & 15, 4);
+		payload.writeU32(stamp);
+		payload.writeInt(static_cast<uint32_t>(packed.size()), 10);
+		payload.writeBytes(packed);
+		postEvent("TerrainChunkEvent", std::move(payload));
+		return true;
 	}
 
 	void Connection::sendCommand(std::string_view command, const std::vector<std::string>& args)
@@ -339,7 +398,19 @@ namespace graal3d
 		if (delivered)
 		{
 			for (auto seq : note.events)
+			{
 				m_events.erase(seq);
+				if (auto ga = m_ghostAlwaysEvents.find(seq); ga != m_ghostAlwaysEvents.end())
+				{
+					if (auto it = m_ghosts.find(ga->second); it != m_ghosts.end())
+					{
+						it->second.createInFlight = false;
+						it->second.created = true;
+					}
+					m_ghostAlwaysEvents.erase(ga);
+				}
+			}
+			finishGhostAlways();
 			m_lastAckedEventSeq = m_events.empty() ? m_nextSendEventSeq - 1 : m_events.begin()->first - 1;
 			return;
 		}
@@ -402,7 +473,9 @@ namespace graal3d
 			g.index = *index;
 			g.classId = *classId;
 			g.object = object;
-			m_ghosts.emplace(key, std::move(g));
+			auto& placed = m_ghosts.emplace(key, std::move(g)).first->second;
+			if (m_profile.ghostAlwaysWorld)
+				postGhostAlways(key, placed);
 			return;
 		}
 
@@ -523,15 +596,27 @@ namespace graal3d
 		// may only name a ghost the client already has, so the control object goes
 		// out once its create has been acked and the mission start is done.
 		w.writeFlag(true);
-		if (!w.writeFlag(controlPending()))
+		// The Sharp3D route names its Camera control object in every packet once
+		// the world is in, as the server the 5.12 client joined did.
+		const bool again = m_profile.ghostAlwaysWorld && m_controlDelivered && m_controlKey && m_ghosts.contains(*m_controlKey) &&
+						   m_ghosts.at(*m_controlKey).created && !m_ghosts.at(*m_controlKey).kill;
+		if (!w.writeFlag(controlPending() || again))
 			return;
 
 		const auto& g = m_ghosts.at(*m_controlKey);
+		if (again)
+		{
+			w.writeU32(static_cast<uint32_t>(nowMs));
+			w.writeInt(g.index, 12);
+			g.object.writeUpdate(w, 0);
+			return;
+		}
 		w.writeU32(static_cast<uint32_t>(nowMs)); // the client's synchronised clock (timevar3)
 		w.writeInt(g.index, 12);
 		// The packet data is a full GameObject update with no length prefix. The
 		// ghost already carries the object's state, so no section is set.
-		writeGameObjectUpdate(w, g.object.object, 0);
+		// A Camera's carries its two Camera flags too (both clear).
+		g.object.writeUpdate(w, 0);
 		note.control = true;
 		m_controlInFlight = true;
 		log("control object (ghost " + std::to_string(g.index) + ") sent in seq " + std::to_string(note.sequence));
@@ -615,6 +700,9 @@ namespace graal3d
 			}
 
 			note.ghosts.push_back({c.key, mask, create, g.kill});
+			if (m_cb.trace)
+				m_cb.trace(std::format("ghost-out {} index={} {} {} mask=0x{:x} bits={}", g.kill ? "kill" : create ? "create" : "update", g.index,
+									   g.object.className(), g.object.object.name, mask, payload.bitPosition()));
 			if (g.kill)
 				g.killInFlight = true;
 			else if (create)
@@ -622,6 +710,44 @@ namespace graal3d
 			g.pending = 0;
 		}
 		w.writeFlag(false);
+	}
+
+	void Connection::postGhostAlways(ObjectKey key, Ghost& g)
+	{
+		// GhostAlwaysObjectEvent: ghost index (12 bits), a flag (an object
+		// follows), its class (12), the update's length (14), the update.
+		BitWriter update;
+		update.setPacketStrings(m_packetStrings);
+		g.object.writeUpdate(update, g.object.fullMask(), m_controlKey == key);
+		if (update.bitPosition() >= (1u << 14))
+		{
+			log("ghost-always object too large, not sent: " + std::string(g.object.className()));
+			return;
+		}
+		BitWriter payload;
+		payload.setPacketStrings(m_packetStrings);
+		payload.writeInt(g.index, 12);
+		payload.writeFlag(true);
+		payload.writeInt(g.classId, 12);
+		payload.writeInt(static_cast<uint32_t>(update.bitPosition()), 14);
+		payload.writeBits(update);
+		const int32_t seq = m_nextSendEventSeq;
+		postEvent("GhostAlwaysObjectEvent", std::move(payload));
+		if (m_nextSendEventSeq == seq)
+			return; // no such event class
+		m_ghostAlwaysEvents[seq] = key;
+		g.createInFlight = true; // the ghost section leaves it alone; the event's ack creates it
+		g.pending = 0;
+	}
+
+	void Connection::finishGhostAlways()
+	{
+		if (!m_profile.ghostAlwaysWorld || !m_established || m_mission == MissionState::Done || !m_ghostAlwaysEvents.empty())
+			return;
+		m_mission = MissionState::Done;
+		log("every ghost-always object is on the client");
+		if (m_cb.onMission)
+			m_cb.onMission(m_mission);
 	}
 
 	void Connection::ghostNotify(const Notify& note, bool delivered)
@@ -704,12 +830,23 @@ namespace graal3d
 			state.controlling = true;
 			state.changed = readGameObjectUpdate(r, m_clientObject, m_clientMoveType);
 			state.object = m_clientObject;
+			if (m_profile.ghostAlwaysWorld)
+			{
+				// Sharp3D route: the control object is a Camera, whose update has two
+				// more sections (mode, followed object). Assumed: the client writes
+				// them as it reads them. Not yet checked against a real client.
+				if (r.readFlag())
+					r.readInt(1);
+				if (r.readFlag() && r.readFlag())
+					r.readInt(12);
+			}
 		}
 		if (r.readFlag())
 			r.readInt(8);
 		if (r.overrun())
 			return false;
 
+		traceState(state);
 		if (m_controlDelivered && m_cb.onClientState)
 			m_cb.onClientState(state);
 		return true;
@@ -822,6 +959,10 @@ namespace graal3d
 			r.setBitPosition(start + bits);
 
 			auto event = decodeEvent(classId, copy.toString(), bits, stringBuffer);
+			if (event)
+				traceEvent(*event, !unguaranteed);
+			else if (m_cb.trace)
+				m_cb.trace("event " + std::string(eventClassName(m_profile, classId)) + " (class " + std::to_string(classId) + ") not decoded, bits=" + std::to_string(bits));
 			if (unguaranteed)
 			{
 				if (event)
@@ -888,7 +1029,13 @@ namespace graal3d
 				out.count = r.readInt(11);
 			}
 			else
-				return std::pair{std::move(out), true}; // not decoded: nothing to check
+			{
+				// Not decoded: kept whole for the log (TerrainRequestUpdatesEvent and
+				// the other events whose layouts are not read yet).
+				out.payload = payload;
+				out.payloadBits = bits;
+				return std::pair{std::move(out), true};
+			}
 			return std::pair{std::move(out), !r.overrun() && r.bitPosition() == bits};
 		};
 
@@ -1024,7 +1171,75 @@ namespace graal3d
 			return;
 		}
 
-		log("event ignored: " + std::string(ev.name.empty() ? std::string_view{"(unknown class)"} : ev.name));
+		if (ev.name == "TerrainRequestUpdatesEvent")
+		{
+			// Graal_analysis torque/terrain-512.md: 256 x u32, one stamp per
+			// 16 x 16 terrain chunk, what the client already holds.
+			BitReader r(ev.payload);
+			std::string held;
+			size_t nonZero = 0;
+			std::array<uint32_t, 256> stamps{};
+			for (int i = 0; i < 256 && r.bitsLeft() >= 32; ++i)
+			{
+				const auto stamp = r.readU32();
+				stamps[static_cast<size_t>(i)] = stamp;
+				if (stamp == 0)
+					continue;
+				if (++nonZero <= 8)
+					held += " (" + std::to_string(i % 16) + "," + std::to_string(i / 16) + ")=" + std::to_string(stamp);
+			}
+			log("TerrainRequestUpdatesEvent: " + std::to_string(ev.payloadBits) + " bits, " + std::to_string(nonZero) +
+				" chunks with a stamp" + held + (nonZero > 8 ? " ..." : ""));
+			log("  payload " + hexPreview(ev.payload, 1024));
+			if (m_cb.onTerrainRequest)
+				m_cb.onTerrainRequest(stamps);
+			return;
+		}
+
+		std::string what = "event ignored: " + std::string(ev.name.empty() ? std::string_view{"(unknown class)"} : ev.name);
+		if (ev.payloadBits > 0)
+			what += ", " + std::to_string(ev.payloadBits) + " bits: " + hexPreview(ev.payload, 64);
+		log(what);
 	}
 
-} // namespace graal3d
+	void Connection::traceEvent(const InEvent& ev, bool guaranteed) const
+	{
+		if (!m_cb.trace)
+			return;
+		std::string line = std::string(guaranteed ? "event " : "event-unguaranteed ") + std::string(ev.name.empty() ? "?" : ev.name);
+		if (ev.name == "NetStringEvent")
+			line += " id=" + std::to_string(ev.id) + " text=" + ev.text;
+		else if (ev.name == "RemoteCommandEvent")
+		{
+			for (const auto& a : ev.args)
+				line += a.isTag ? " tag:" + std::to_string(a.tag) : " \"" + a.text + "\"";
+		}
+		else if (!ev.header.type.empty() || !ev.header.data.empty())
+			line += " weapon=" + ev.header.weapon + " type=" + ev.header.type + " option=" + ev.header.option + " data=" + ev.header.data.substr(0, 200);
+		if (ev.total)
+			line += " id=" + std::to_string(ev.id) + " total=" + std::to_string(ev.total) + " seq=" + std::to_string(ev.sequence);
+		if (ev.payloadBits)
+			line += " bits=" + std::to_string(ev.payloadBits) + " hex=" + hexPreview(ev.payload, 48);
+		m_cb.trace(line);
+	}
+
+	void Connection::traceState(const ClientState& state) const
+	{
+		if (!m_cb.trace)
+			return;
+		std::string line = std::format("state pos={:.3f},{:.3f},{:.3f}", state.position[0], state.position[1], state.position[2]);
+		if (state.controlling)
+		{
+			const auto& t = state.object.transform;
+			line += std::format(" changed=0x{:x} at={:.3f},{:.3f},{:.3f} axis={:.3f},{:.3f},{:.3f} angle={:.3f} scale={:.3f},{:.3f},{:.3f}", state.changed,
+								t.position[0], t.position[1], t.position[2], t.axis[0], t.axis[1], t.axis[2], t.angle, state.object.scale[0],
+								state.object.scale[1], state.object.scale[2]);
+			if (state.changed & GameObjectBits::Chat)
+				line += " chat=" + state.object.chat;
+		}
+		if (line == m_lastStateTrace)
+			return;
+		m_lastStateTrace = line;
+		m_cb.trace(line);
+	}
+}

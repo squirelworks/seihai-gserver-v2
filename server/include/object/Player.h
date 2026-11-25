@@ -41,6 +41,10 @@ using namespace preagonal::props;
 ///////////////////////////////////////////////////////////////////////////////
 namespace preagonal
 {
+	namespace fs
+	{
+		struct FileData;
+	}
 ///////////////////////////////////////////////////////////////////////////////
 
 class Level;
@@ -364,6 +368,11 @@ public:
 	// (addons/ServerAddon.h); the defaults when it is not a game client or no
 	// add-on runs.
 	AddonClientNeeds addonNeeds() const;
+	// The file a client's request or update check names: a case-insensitive
+	// lookup, and for an add-on's client a bare (extension-less) name also finds
+	// <name>.<ext> for its bareNameExtensions (a 5.x 3D client's textures). Null
+	// if there is none.
+	fs::FileData* findClientFile(const std::filesystem::path& file) const;
 	// For an encrypted package (.gpake), sends its key (PLO_FILEDECRYPTKEY) from
 	// config/gpakkeys.txt. raw puts it in the file queue, so it goes out before a file
 	// queued after it. Returns false when the package has no key; true for other files.

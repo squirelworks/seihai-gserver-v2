@@ -3,11 +3,11 @@
 
 #include <graal3d/Graal3DAddon.h>
 
-#include <array>
 #include <cstdlib>
 #include <string>
 
 #include <Server.h>
+#include <graal3d/Graal3DObjects.h>
 #include <graal3d/Graal3DService.h>
 #include <utilities/Log.h>
 
@@ -47,7 +47,24 @@ namespace graal3d
 		auto world = parseWorld(worldText);
 		for (const auto& error : world.errors)
 			log::printLine(log::server, "** [Error] Graal3D: graal3dworld.txt {}", error);
+		// graal3dshapecheck = skip (default), warn or off: what to do with a world
+		// object whose .3ds would crash a client (see bin/docs/graal3d.md).
+		const auto shapeCheck = settings.get<std::string>("graal3dshapecheck").value_or("skip"s);
+		m_service->setShapeCheck(shapeCheck == "warn" ? Service::ShapeCheck::Warn
+								 : shapeCheck == "off" ? Service::ShapeCheck::Off
+													   : Service::ShapeCheck::Skip);
+		if (shapeCheck != "skip" && shapeCheck != "warn" && shapeCheck != "off")
+			log::printLine(log::server, "** [Error] Graal3D: graal3dshapecheck {} is not skip, warn or off; using skip.", shapeCheck);
+		// graal3dtrace = <file>: a line for everything each 3D client sends (see bin/docs/graal3d.md).
+		m_service->setTrace(settings.get<std::string>("graal3dtrace").value_or(""s));
 		m_service->setWorld(std::move(world), settings.get<bool>("graal3dstringprefix").value_or(true));
+		// graal3droute = sharp3d: the route of a server real 5.12 joined (see bin/docs/graal3d.md).
+		const auto route = settings.get<std::string>("graal3droute").value_or("mission"s);
+		m_service->setSharp3DRoute(route == "sharp3d");
+		if (route != "mission" && route != "sharp3d")
+			log::printLine(log::server, "** [Error] Graal3D: graal3droute {} is not mission or sharp3d; using mission.", route);
+		else if (route == "sharp3d")
+			log::printLine(log::server, "Graal3D: Sharp3D route for protocol 24 clients.");
 
 		if (udpPort < 65536 && m_service->start(interfaceIp, static_cast<uint16_t>(udpPort)))
 		{
@@ -87,9 +104,6 @@ namespace graal3d
 
 	AddonClientNeeds Addon::clientNeeds(int versionId) const
 	{
-		// The 5.x 3D client asks for Torque textures (a Sky's, for one) without an
-		// extension, and stores what it gets under the name it asked for.
-		static constexpr std::array<const char*, 6> textureExtensions{".png", ".jpg", ".jpeg", ".bmp", ".gif", ".dds"};
 
 		if (!Service::clientHasGraal3D(versionId))
 			return {};
@@ -100,7 +114,9 @@ namespace graal3d
 		// A 5.x client joining a 3D server keeps its "Connecting..." window over
 		// the 3D view until it gets PLO_SERVERLISTCONNECTED.
 		needs.alwaysServerListConnected = true;
-		needs.bareNameExtensions = textureExtensions;
+		// The 5.x 3D client asks for every texture by its bare, lower-cased name and
+		// stores what it gets under that name.
+		needs.bareNameExtensions = kImageExtensions;
 		return needs;
 	}
 

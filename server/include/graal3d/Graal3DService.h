@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
 // New file: the gserver's Graal 3D side. A Graal 3D server is two servers on one
 // host: this gserver on TCP port P, and a Torque UDP server on port P + 1, which the
 // 3.153 to 5.x clients open when the server's listed name starts with "3 ". This
@@ -26,6 +26,7 @@
 
 #include <array>
 #include <cstdint>
+#include <fstream>
 #include <functional>
 #include <map>
 #include <memory>
@@ -66,7 +67,26 @@ namespace graal3d
 
 		// The objects every client is sent. `packetStrings`: see TorqueBitStream.h
 		// (the option graal3dstringprefix). Call before start().
+		// What to do with a world object whose .3ds fails unsafe3ds: drop it
+		// (the default), only warn, or not check. Call before setWorld().
+		enum class ShapeCheck
+		{
+			Skip,
+			Warn,
+			Off,
+		};
+		void setShapeCheck(ShapeCheck check) { m_shapeCheck = check; }
+
 		void setWorld(World world, bool packetStrings);
+		// graal3droute = sharp3d: protocol 24 clients get the Sharp3D route (the
+		// world as GhostAlwaysObjectEvents, no mission phases, a Camera as the
+		// control object). Call before start().
+		void setSharp3DRoute(bool on) { m_sharp3d = on; }
+		// graal3dtrace = <file>: append one tab-separated line for each 3D link,
+		// each event and each control-object change every 3D client sends, and each
+		// time a player's object is passed on to the others, for multi-client labs
+		// (see bin/docs/graal3d.md). Empty: off.
+		void setTrace(const std::string& path);
 		[[nodiscard]] uint16_t port() const { return m_port; }
 
 		// Reads waiting datagrams and runs every connection. Called each server frame.
@@ -112,10 +132,24 @@ namespace graal3d
 		void handleClientState(PlayerID player, const ClientState& state);
 		void ghostWorld(PlayerID player, const std::string& account, Connection& connection);
 		void forEachOtherConnection(PlayerID player, const std::function<void(Connection&)>& fn);
+		// Puts `who`'s object on `connection` in the form its build takes: the
+		// GameObject itself (protocols 21 and 24), or a stock TGE Player with the
+		// world's tgeplayershape (protocol 19, when that client's own control
+		// object is a Player too).
+		void ghostAvatar(Connection& connection, PlayerID who, const GhostObject& avatar) const;
+		[[nodiscard]] bool tgeOthers() const;
+		// A protocol 19 client moves its Player itself: pass that on to the others.
+		void relayTgeMoves();
+		void relayAvatar(PlayerID playerId, const GhostObject& before);
 		static ObjectKey avatarKey(PlayerID player) { return 0x10000u + player; }
 		static ObjectKey cameraKey(PlayerID player) { return 0x20000u + player; }
 		static ObjectKey skyKey() { return 0x30000u; } // protocol 19's plain Sky, when the world has none
 		void sendInitialFlags(PlayerID player, Connection& connection);
+		// Lab: the world's rawevent lines (`late`: the ones for after the mission
+		// start) and, for protocol 19, its rawobject lines.
+		void sendRawEvents(const std::string& account, Connection& connection, bool late);
+		void sendTerrain(const std::string& account, Connection& connection, const std::array<uint32_t, 256>& stamps);
+		void ghostRawObjects(const std::string& account, Connection& connection, ObjectKey firstKey);
 		void sendWorldWeapons(Connection& connection);
 		std::string compileClientScript(const std::string& name, std::string_view source);
 		void sendTo(const Endpoint& to, std::string_view data);
@@ -132,11 +166,16 @@ namespace graal3d
 		std::map<PlayerID, Endpoint> m_byPlayer;
 
 		World m_world;
+		ShapeCheck m_shapeCheck = ShapeCheck::Skip;
+		void checkWorldFiles();
 		bool m_packetStrings = true;
+		bool m_sharp3d = false;
 		std::map<PlayerID, GhostObject> m_avatars;
 		// Until when the client's own reports of its position are ignored, after
 		// moveAvatar: an older report would put the object back.
 		std::map<PlayerID, uint64_t> m_movedUntil;
+		std::unique_ptr<std::ofstream> m_trace;
+		void trace(std::string_view account, int protocol, std::string_view what);
 		std::set<std::string> m_unmatched; // "ip,account" already logged as unmatched
 	};
 

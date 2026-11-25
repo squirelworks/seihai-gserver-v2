@@ -651,6 +651,25 @@ AddonClientNeeds Player::addonNeeds() const
 	return m_server->getAddons().clientNeeds(m_versionId);
 }
 
+fs::FileData* Player::findClientFile(const std::filesystem::path& file) const
+{
+	const auto& filesystem = m_server->getFileSystem();
+	auto info = filesystem.infoi(fs::FileCategory::ALL, file.filename());
+
+	// An add-on's client may ask for a file by its bare name (the 5.x 3D client
+	// asks so for every texture, material or Sky, lower-cased, lab 2026-11-25)
+	// and store what it gets under that name.
+	if (info == nullptr && !file.has_extension())
+	{
+		for (const auto* ext : addonNeeds().bareNameExtensions)
+		{
+			if ((info = filesystem.infoi(fs::FileCategory::ALL, file.filename().string() + ext)) != nullptr)
+				break;
+		}
+	}
+	return info;
+}
+
 std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file, const PacketQueue channel)
 {
 	const auto& filesystem = m_server->getFileSystem();
@@ -689,18 +708,7 @@ std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file, const 
 	}
 	else
 	{
-		auto info = filesystem.infoi(fs::FileCategory::ALL, file.filename());
-
-		// An add-on's client may ask for a file with no extension (the 5.x 3D client
-		// asks so for Torque textures) and store what it gets under that name.
-		if (info == nullptr && !file.has_extension())
-		{
-			for (const auto* ext : addonNeeds().bareNameExtensions)
-			{
-				if ((info = filesystem.infoi(fs::FileCategory::ALL, file.filename().string() + ext)) != nullptr)
-					break;
-			}
-		}
+		auto info = findClientFile(file);
 
 		if (info == nullptr)
 		{
