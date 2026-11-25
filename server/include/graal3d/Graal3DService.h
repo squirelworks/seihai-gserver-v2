@@ -91,6 +91,13 @@ namespace graal3d
 		// graal3dmutate = <kind>[:<seed>]: lab only, one seeded mutation per 3D link
 		// (see bin/docs/graal3d.md, "Lab: mutations"). Empty or "off": none.
 		void setMutation(const std::string& text);
+		// Lab: graal3dterrainall = true sends the 5.x TerrainBlock, WaterBlock and
+		// chunks to every GameObject-era client, whatever its capability row says.
+		void setTerrainForAll(bool on) { m_terrainForAll = on; }
+		// graal3dpushterrain = true: right after a 3D link, heights.info and its
+		// textures go to the client over TCP unasked (5.12 fetches the textures
+		// only on its second visit, so a first visit drew the terrain white).
+		void setPushTerrainFiles(bool on) { m_pushTerrainFiles = on; }
 		[[nodiscard]] uint16_t port() const { return m_port; }
 
 		// Reads waiting datagrams and runs every connection. Called each server frame.
@@ -199,6 +206,11 @@ namespace graal3d
 		std::unique_ptr<std::ofstream> m_trace;
 		Mutation m_mutation = Mutation::None;
 		uint32_t m_mutationSeed = 1;
+		bool m_terrainForAll = false;
+		bool m_pushTerrainFiles = false;
+		std::vector<std::string> m_terrainFiles; // heights.info, then its textures, as found at start-up
+		[[nodiscard]] bool offers(const Capabilities* caps, const GhostObject& object, int protocol) const;
+		[[nodiscard]] bool takesTerrain(const Capabilities* caps, int protocol) const;
 		void trace(std::string_view account, int protocol, std::string_view what);
 		std::set<std::string> m_unmatched; // "ip,account" already logged as unmatched
 	};

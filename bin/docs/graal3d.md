@@ -307,7 +307,7 @@ terrain world/terrain
 The 5.12 client gets its terrain in two parts. A `TerrainBlock` ghost carries only
 settings, and the heights, materials and holes follow as up to 256
 `TerrainChunkEvent`s of 16 x 16 squares. The terrain is 256 x 256 squares, centred
-on the origin, 8 m a square by default. The square size may be 1 to 64; a huge one killed a live 5.12 right after "Terrain lit" (lab, 2026-11-25). The layouts come from a static read of the
+on the origin, 8 m a square by default. Send one TerrainBlock a world: with two, 5.12 asks for chunks for both but lays them only on the last (the server warns at start-up). Hole flags cut out exactly the flagged squares, with no slope at the edge. The square size may be 1 to 64; a huge one killed a live 5.12 right after "Terrain lit" (lab, 2026-11-25). The layouts come from a static read of the
 real 5.12 client (Graal_analysis `torque/terrain-512.md`). The 2026-11-25 terrain
 lab confirmed them live on a real 5.12, by sending them as raw lines from this
 server. The native `terrain` line has not yet run against a real client.
@@ -397,6 +397,23 @@ client whose class table has its class: 4.20r6 and 5.x list `TerrainBlock` and
 `Player` and `Sky` so those keep their ids. Raw objects on protocol 19 go out with
 the other ghosts, after the datablocks. Nothing here has been run with a real
 client yet; the 2026-11-25 terrain lab is the first user.
+
+## Lab: terrain switches
+
+```
+graal3dterrainall = true    # the 5.x TerrainBlock, WaterBlock and chunks to every 4.20r6 and 5.x client
+graal3dpushterrain = true   # heights.info and its textures over TCP right after the 3D link
+```
+
+`graal3dterrainall` ignores the capability rows that keep streamed terrain from
+builds such as 4.20r8, so a lab can see what those builds do with it. Real
+players' servers leave it off.
+
+`graal3dpushterrain` answers 5.12's first visit, which fetches only `heights.info`
+and draws the terrain white; its textures come on the next visit. With it on, the
+server sends `heights.info` and every texture it lists (as found at start-up) to the
+client unasked when its 3D link opens. Whether 5.12 then draws textures on the first
+visit is not yet tested.
 
 ## Lab: mutations (`graal3dmutate`)
 

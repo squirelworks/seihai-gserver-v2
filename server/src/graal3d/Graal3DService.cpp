@@ -562,6 +562,12 @@ namespace graal3d
 		m_sessions.emplace(from, std::move(session));
 		m_byPlayer[playerId] = from;
 		player->setAddonLinked(true);
+		if (m_pushTerrainFiles && m_world.terrain && takesTerrain(caps, static_cast<int>(profile->protocol)))
+		{
+			for (const auto& name : m_terrainFiles)
+				player->sendFile(name);
+			trace(account, profile->protocol, std::format("pushed {} terrain files over TCP (graal3dpushterrain)", m_terrainFiles.size()));
+		}
 
 		// The player's own object, on every screen; the world and the other
 		// players on theirs. Ghosts go out once the connection is up.
@@ -674,6 +680,7 @@ namespace graal3d
 		// Files are meant to keep their real extensions on disk; the clients
 		// drop them when they ask (bin/docs/graal3d.md, "Shipping a 3D world").
 		const auto& files = m_server.getFileSystem();
+		m_terrainFiles.clear();
 		const auto find = [&](const std::string& name) -> preagonal::fs::FileData* {
 			const std::filesystem::path path{name};
 			auto info = files.infoi(preagonal::fs::FileCategory::ALL, path.filename());
@@ -760,6 +767,7 @@ namespace graal3d
 			else
 			{
 				++found;
+				m_terrainFiles.push_back("heights.info");
 				const auto expected = std::filesystem::path(m_world.terrain->folder) / "heights.info";
 				std::error_code ec;
 				if (!std::filesystem::equivalent(info->file, expected, ec))
@@ -778,7 +786,10 @@ namespace graal3d
 						log::printLine(log::server, "** [Warning] Graal3D: terrain texture {} (heights.info) is not in the file folders.", line);
 					}
 					else
+					{
 						++found;
+						m_terrainFiles.push_back(line);
+					}
 				}
 			}
 		}
@@ -791,6 +802,13 @@ namespace graal3d
 		m_world = std::move(world);
 		m_packetStrings = packetStrings;
 		checkWorldFiles();
+
+		// One TerrainBlock a world: with two, live 5.12 asks for chunks for both
+		// but lays them only on the second (terrain lab, 2026-11-25).
+		const auto terrainBlocks = std::ranges::count_if(m_world.objects, [](const GhostObject& o) { return o.rawClass == "TerrainBlock"; });
+		if (terrainBlocks > 1)
+			log::printLine(log::server, "** [Warning] Graal3D: the world has {} TerrainBlocks; 5.12 lays the streamed chunks only on the last. Keep one.",
+						   terrainBlocks);
 
 		// The lab's raw fields may name files (file:, zfile:), relative to the
 		// server folder like the weapon3d files.
@@ -865,6 +883,20 @@ namespace graal3d
 		return nullptr;
 	}
 
+	bool Service::takesTerrain(const Capabilities* caps, int protocol) const
+	{
+		if (m_terrainForAll && (protocol == 21 || protocol == 24))
+			return true;
+		return caps && caps->takesStreamedTerrain512();
+	}
+
+	bool Service::offers(const Capabilities* caps, const GhostObject& object, int protocol) const
+	{
+		if (object.layout512 && m_terrainForAll && (protocol == 21 || protocol == 24))
+			return true;
+		return offersWorldObject(caps, object);
+	}
+
 	void Service::sendTerrain(const std::string& account, Connection& connection, const Capabilities* caps, const std::array<uint32_t, 256>& stamps)
 	{
 		if (!m_world.terrain)
@@ -872,7 +904,7 @@ namespace graal3d
 			log::printLine(log::server, "Graal3D: {} asked for terrain chunks; the world has no terrain line.", account);
 			return;
 		}
-		if (!caps || !caps->takesStreamedTerrain512())
+		if (!takesTerrain(caps, static_cast<int>(connection.profile().protocol)))
 		{
 			log::printLine(log::server, "Graal3D: {} asked for terrain chunks; its build ({}) does not take the 5.x terrain layout.", account,
 						   caps ? caps->label : "unknown");
@@ -910,7 +942,7 @@ namespace graal3d
 		{
 			if (object.kind == GhostObject::Kind::Raw)
 			{
-				if (offersWorldObject(caps, object))
+				if (offers(caps, object, static_cast<int>(connection.profile().protocol)))
 				{
 					connection.setGhost(key, object);
 					++count;
@@ -1022,7 +1054,7 @@ namespace graal3d
 		bool sky = false;
 		for (const auto& object : m_world.objects)
 		{
-			if (offersWorldObject(caps, object))
+			if (offers(caps, object, static_cast<int>(connection.profile().protocol)))
 				connection.setGhost(key, object);
 			sky = sky || object.kind == GhostObject::Kind::Sky;
 			++key;
