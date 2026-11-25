@@ -58,21 +58,27 @@ namespace graal3d
 		BigdataChunkMax,
 		TerrainChunkMax,
 		UdpPortOffset,
+		RequiresSky,
+		SkyGif,
+		Drawn,
+		Mirrors2dPosition,
+		Sees2dPlayers,
+		Takes2dChat,
 		Count,
 	};
 
 	std::string_view capFieldKey(CapField field);
 
-	constexpr uint32_t capMask(std::initializer_list<CapField> fields)
+	constexpr uint64_t capMask(std::initializer_list<CapField> fields)
 	{
-		uint32_t m = 0;
+		uint64_t m = 0;
 		for (auto f : fields)
-			m |= 1u << static_cast<uint8_t>(f);
+			m |= uint64_t{ 1 } << static_cast<uint8_t>(f);
 		return m;
 	}
 
-	static_assert(static_cast<uint8_t>(CapField::Count) <= 32, "the assumed mask is 32 bits");
-	inline constexpr uint32_t kAllCapFields = 0xFFFFFFFFu >> (32 - static_cast<uint8_t>(CapField::Count));
+	static_assert(static_cast<uint8_t>(CapField::Count) <= 64, "the assumed mask is 64 bits");
+	inline constexpr uint64_t kAllCapFields = ~uint64_t{ 0 } >> (64 - static_cast<uint8_t>(CapField::Count));
 
 	enum class GameLayer : uint8_t
 	{
@@ -85,6 +91,15 @@ namespace graal3d
 		Full,      // the stock procedural generator
 		Greyscale, // loadGreyscale, saveGreyscale and setTerrain only
 		None,
+	};
+
+	// The most a build has been seen to draw on this gserver: a lab state, not a
+	// limit of the client.
+	enum class Drawn : uint8_t
+	{
+		Nothing, // stayed on the loading picture (3.153)
+		SkyOnly, // the Sky gradient only (4.04r2 under Wine)
+		World,   // terrain, shapes or GameObjects
 	};
 
 	struct Capabilities
@@ -125,7 +140,13 @@ namespace graal3d
 		uint8_t bigdataChunkMax;
 		uint16_t terrainChunkMax;
 		uint8_t udpPortOffset;
-		uint32_t assumed; // capMask of the fields that are assumed, not read
+		bool requiresSky;       // crashes unless a Sky is ghosted (3.153 lab)
+		bool skyGif;            // asks for sky textures as .gif, never .png (3.153 lab)
+		Drawn drawn;            // the most it has drawn on this gserver
+		bool mirrors2dPosition; // its 3D walk moves its 2D player (no read build does)
+		bool sees2dPlayers;     // draws 2D players in its level (5.12 does not, lab)
+		bool takes2dChat;       // gets 2D players' chat as onRemotePlayerChats (5.12 lab)
+		uint64_t assumed; // capMask of the fields that are assumed, not read
 
 		[[nodiscard]] bool confirmed(CapField f) const { return (assumed & capMask({ f })) == 0; }
 		[[nodiscard]] bool allAssumed() const { return assumed == kAllCapFields; }
@@ -141,6 +162,10 @@ namespace graal3d
 		[[nodiscard]] bool requestsDownload(std::string_view name) const;
 		// The name the client asks for when a material names `texture`.
 		[[nodiscard]] std::string_view textureRequestName(std::string_view texture) const;
+		// The name the client asks for when a Sky names `texture` (3.153: <stem>.gif).
+		[[nodiscard]] std::string skyTextureRequestName(std::string_view texture) const;
+		// 2D clients see this player walk only if the server moves its 2D player.
+		[[nodiscard]] bool needs2dPositionRelay() const { return !mirrors2dPosition; }
 		// One line per row in the fixture's columns (Graal3DCapabilities_tests).
 		[[nodiscard]] std::string fixtureRow() const;
 	};
