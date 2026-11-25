@@ -444,6 +444,11 @@ chunks. A height sweep on the lab VM's software GL found the line: 4.20r8 crashe
 when its camera starts 150 units or less above the ground, and survives from 180 up,
 on a hilly and on a flat block. So 4.20r8 gets no terrain by default.
 
+The push sends each texture name once, however often `heights.info` lists it, and
+never a texture the start-up check found unsafe (a PNG header of 30000x30000 or
+65536x1 crashed 5.12). `heights.info` takes one texture name per line: 5.12 asks for a
+whole line as one file name, so the server warns about a line with spaces or commas.
+
 Clients ask for `heights.info` by its bare name, so only one file of that name may be
 in the file folders. Another one (a stray `world/global/heights.info` in that lab)
 wins, and the terrain then asks for that file's textures. The server logs an error at
