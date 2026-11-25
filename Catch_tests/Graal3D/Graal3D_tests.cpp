@@ -1228,21 +1228,21 @@ SCENARIO("Raw fields read files, zlib-compressed on request")
 
 SCENARIO("A replicator line ghosts ground cover in the 5.12 layout")
 {
-	const auto world = parseWorld("replicator DynamicGrass 10 -20 1.5 4 1 3 grass.dts 7\n"
-								  "replicator DynamicGrass 10 -20 1.5 65 1 3 grass.dts\n"  // radius past 64
-								  "replicator DynamicGrass 10 -20 1.5 4 5 3 grass.dts\n"   // min above max
-								  "replicator Sky 10 -20 1.5 4 1 3 grass.dts\n");          // not a replicator
+	const auto world = parseWorld("replicator DynamicGrass 10 -20 1.5 4 1 3 grass.png 7\n"
+								  "replicator DynamicGrass 10 -20 1.5 65 1 3 grass.png\n"  // radius past 64
+								  "replicator DynamicGrass 10 -20 1.5 4 5 3 grass.png\n"   // min above max
+								  "replicator Sky 10 -20 1.5 4 1 3 grass.png\n");          // not a replicator
 	REQUIRE(world.objects.size() == 1);
 	REQUIRE(world.errors.size() == 3);
-	REQUIRE(world.replicatorShapes == std::vector<std::string>{"grass.dts"});
-	REQUIRE(parseWorld("replicator DynamicGrass 0 0 0 4 1 3 a.dts,b.3ds,\n").replicatorShapes == std::vector<std::string>{"a.dts", "b.3ds"});
+	REQUIRE(world.replicatorShapes == std::vector<std::string>{"grass.png"});
+	REQUIRE(parseWorld("replicator DynamicShapeReplicator 0 0 0 4 1 3 a.dts,b.3ds,\n").replicatorShapes == std::vector<std::string>{"a.dts", "b.3ds"});
 	// scale= after the other words; the grass classes take up to 100 per cell.
 	const auto scaled = parseWorld("replicator DynamicShapeReplicator 0 0 0 4 1 3 a.3ds 7 scale=3\n"
 								   "replicator DynamicShapeReplicator 0 0 0 4 1 3 a.3ds scale=2,4\n"
 								   "replicator DynamicShapeReplicator 0 0 0 4 1 3 a.3ds scale=4,2\n"     // max below min
 								   "replicator DynamicShapeReplicator 0 0 0 4 1 3 a.3ds size=2\n"        // unknown option
 								   "replicator DynamicShapeReplicator 0 0 0 4 1 50 a.3ds\n"              // past 20
-								   "replicator DynamicGrass 0 0 0 4 1 50 grass\n");
+								   "replicator DynamicGrass 0 0 0 4 1 50 grass.png\n");
 	REQUIRE(scaled.objects.size() == 3);
 	REQUIRE(scaled.errors.size() == 3);
 	const auto scaleOf = [](const GhostObject& o) {
@@ -1264,6 +1264,15 @@ SCENARIO("A replicator line ghosts ground cover in the 5.12 layout")
 	};
 	REQUIRE(scaleOf(scaled.objects[0]) == std::pair{3.0f, 3.0f});
 	REQUIRE(scaleOf(scaled.objects[1]) == std::pair{2.0f, 4.0f});
+	// Grass takes a texture, DynamicShapeReplicator a shape (lab, 5.12).
+	const auto kinds = parseWorld("replicator DynamicGrassReplicator 0 0 0 4 1 3 GRASS.PNG,b.jpg\n"
+								  "replicator DynamicGrass 0 0 0 4 1 3 grass.dts\n"
+								  "replicator DynamicShapeReplicator 0 0 0 4 1 3 a.png\n"
+								  "replicator DynamicShapeReplicator 0 0 0 4 1 3 a.3ds,noext\n"
+								  "replicator DynamicShapeReplicator 0 0 0 4 1 3 ,\n");
+	REQUIRE(kinds.objects.size() == 1);
+	REQUIRE(kinds.errors.size() == 4);
+	REQUIRE(kinds.replicatorShapes == std::vector<std::string>{"GRASS.PNG", "b.jpg"});
 	const auto& object = world.objects[0];
 	REQUIRE(object.className() == "DynamicGrass");
 	REQUIRE(object.layout512);
@@ -1282,7 +1291,7 @@ SCENARIO("A replicator line ghosts ground cover in the 5.12 layout")
 		REQUIRE(r.readF32() == 0.0f);
 	REQUIRE_FALSE(r.readFlag());
 	REQUIRE(r.readU32() == 7);
-	REQUIRE(r.readString() == "grass.dts");
+	REQUIRE(r.readString() == "grass.png");
 	REQUIRE(r.readInt(8) == 4);
 	REQUIRE(r.readInt(8) == 1);
 	REQUIRE(r.readInt(8) == 3);
@@ -1307,8 +1316,8 @@ SCENARIO("A replicator line ghosts ground cover in the 5.12 layout")
 	REQUIRE(rawFieldBits(object.raw) == w.bitPosition());
 
 	// A box limits where cover grows (world x/y).
-	const auto boxed = parseWorld("replicator DynamicGrass 0 0 0 4 1 3 grass.dts 7 -512 -256 512 256\n"
-								  "replicator DynamicGrass 0 0 0 4 1 3 grass.dts 7 5 0 5 1\n"); // empty box
+	const auto boxed = parseWorld("replicator DynamicGrass 0 0 0 4 1 3 grass.png 7 -512 -256 512 256\n"
+								  "replicator DynamicGrass 0 0 0 4 1 3 grass.png 7 5 0 5 1\n"); // empty box
 	REQUIRE(boxed.objects.size() == 1);
 	BitWriter bw;
 	writeRawFields(bw, boxed.objects[0].raw);

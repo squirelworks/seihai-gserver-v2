@@ -868,18 +868,35 @@ namespace graal3d
 					}
 					ok = ok && rep.boxMin[0] < rep.boxMax[0] && rep.boxMin[1] < rep.boxMax[1];
 				}
+				// 5.12 splits the list at commas. DynamicShapeReplicator takes
+				// shapes (.3ds/.dts); the grass classes take a texture and draw
+				// nothing with a shape (lab, 5.12), so the wrong kind is a typo.
+				std::vector<std::string> names;
+				for (size_t start = 0; ok && start <= rep.shapeFiles.size();)
+				{
+					auto end = rep.shapeFiles.find(',', start);
+					if (end == std::string::npos)
+						end = rep.shapeFiles.size();
+					if (end > start)
+						names.push_back(rep.shapeFiles.substr(start, end - start));
+					start = end + 1;
+				}
+				const bool wantShape = rep.cls == "DynamicShapeReplicator";
+				for (const auto& name : names)
+				{
+					const auto dot = name.rfind('.');
+					std::string ext = dot == std::string::npos ? std::string() : name.substr(dot);
+					for (auto& ch : ext)
+						ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+					const bool isShape = ext == ".3ds" || ext == ".dts";
+					const bool isImage = ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp";
+					ok = ok && (wantShape ? isShape : isImage);
+				}
+				ok = ok && !names.empty();
 				if (ok)
 				{
-					// 5.12 splits the list at commas.
-					for (size_t start = 0; start <= rep.shapeFiles.size();)
-					{
-						auto end = rep.shapeFiles.find(',', start);
-						if (end == std::string::npos)
-							end = rep.shapeFiles.size();
-						if (end > start)
-							world.replicatorShapes.push_back(rep.shapeFiles.substr(start, end - start));
-						start = end + 1;
-					}
+					for (auto& name : names)
+						world.replicatorShapes.push_back(std::move(name));
 					GhostObject object;
 					object.kind = GhostObject::Kind::Raw;
 					object.rawClass = rep.cls;
