@@ -27,15 +27,24 @@ To run one: copy OUT/<id>/config and OUT/<id>/world into a lab server folder
 with graal3d = true, start it, connect a real client in a lab VM, and note
 what it does. Clear the client's levels3d download cache between variants;
 changed files also get new names, so a stale cached copy cannot stand in.
+Files keep their real names and extensions, as a shipped world should (the
+server answers the clients' bare-name requests); only T1 and T3 test
+extension-less copies.
 
 Round 1 (the default) varies textures, sky, object count, GameObject section
 2, .3ds damage and .dts/.dif versions. Round 2 varies placement (far, below,
 rotated, a zero rotation axis), model name case, .3ds structure (no UVs, no
 smoothing groups, no local axes, no version chunk, an odd version, the mesh
 twice, an empty mesh, a 65535-point mesh), 2048 objects, the ground alone, and
-a bare ghost of each networked class this server has no writer for. Each
+a bare ghost of each networked class this server has no writer for. Round 3
+(`--count N`, `--seed S`) is seeded fuzz: each world is the control plus one
+fuzzed GameObject (every section on or off, edge floats, long, empty, missing
+or odd strings), or one fuzzed sun, sky or object line. Each
 --levels DIR adds one variant per NAME_graal3dworld.txt in it (as written by
 `seihai-servertools gen terrain DIR --world NAME --3d`), served as it is.
+Each --cases DIR (a graal-client-repro g3d-fuzzcases set) adds one world per
+.3ds/.dts/.dif in it: C0 plus that shape, holding only the world file and
+the case, to copy over a server that already has C0's files.
 Run each variant on both routes (graal3droute = mission, then sharp3d).
 
 Tests: python3 -m unittest tools/lab/test_g3dlabworlds.py
@@ -210,7 +219,8 @@ class World:
     def __init__(self, scene):
         self.ground = scene["Model"]
         self.objects = [(o["Name"], o["Model"], o["X"], o["Y"], o["Z"]) for o in scene.get("Objects", [])]
-        sky = [s.rsplit(".", 1)[0] for s in scene.get("SkyMaterials", "").split(",") if s]
+        # Real file names: the server drops the extension for the client.
+        sky = [s for s in scene.get("SkyMaterials", "").split(",") if s]
         self.sky = sky
         self.sky_distance = 0.0
         self.fog = (0.78, 0.79, 0.63)
@@ -248,7 +258,7 @@ def raw_gameobject(name, shape, pos, section2):
 
 # --------------------------------------------------------------- variants
 
-def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None, round_=1, levels=()):
+def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None, round_=1, levels=(), count=40, cases=()):
     pack, out = Path(pack), Path(out)
     scene = json.loads((pack / "scene.json").read_text())
     if ground:
@@ -298,6 +308,8 @@ def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None, roun
                 keep.append(p)
             elif kind == "both":
                 keep.append(p)
+            elif kind == "named" and p.suffix:
+                keep.append(p)
             elif kind == "bare" and p.suffix == "":
                 keep.append(p)
             elif kind == "png" and p.suffix.lower() == ".png":
@@ -305,10 +317,12 @@ def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None, roun
         return keep
 
     control = World(scene)
-    variant("C0", "nothing: the control world (scene ground, its objects, its sky)", control, textures("both"))
+    variant("C0", "nothing: the control world (scene ground, its objects, its sky)", control, textures("named"))
     probe = next((o for o in control.objects if o[1] != control.ground), None)
     if round_ == 2:
         round2(scene, control, probe, base_files, textures, variant)
+    if round_ == 3:
+        round3(scene, control, probe, textures, variant, seed, count)
     for d in levels:
         for txt in sorted(Path(d).glob("*_graal3dworld.txt")):
             name = txt.name[: -len("_graal3dworld.txt")]
@@ -330,21 +344,43 @@ def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None, roun
             what = f"generated level {name} ({len(files)} models), served as written"
             (dest / "VARIANT.md").write_text(f"# {vid}\n\nIn place of C0: {what}\n")
             variants.append((vid, what))
-    if round_ == 2:
+    for d in cases:
+        # One world per malformed shape: config and the one case file only. The
+        # server keeps C0's world/g3dlab files; copy each case's over them.
+        for f in sorted(Path(d).iterdir()):
+            if f.suffix.lower() not in (".3ds", ".dts", ".dif"):
+                continue
+            vid = f"K-{Path(d).name}-{f.stem}"
+            if only and vid not in only:
+                continue
+            w = World(scene)
+            w.extra = [f"object FuzzCase {f.name} {control.spawn[0] + 3:g} {control.spawn[1]:g} 0"]
+            dest = out / vid
+            if dest.exists():
+                shutil.rmtree(dest)
+            (dest / "config").mkdir(parents=True)
+            (dest / "world" / LAB).mkdir(parents=True)
+            shutil.copyfile(f, dest / "world" / LAB / f.name)
+            what = f"C0 plus one {f.suffix[1:]} shape: fuzz case {f.name} from {Path(d).name} (its manifest.tsv says what changed)"
+            (dest / "config" / "graal3dworld.txt").write_text(w.text(f"{vid}: {what}"))
+            (dest / "VARIANT.md").write_text(f"# {vid}\n\n{what}\nOnly the case file is here: keep C0's world/g3dlab files on the server.\n")
+            variants.append((vid, what))
+    if round_ in (2, 3) or cases:
         return finish(out, variants, only, round_)
 
     w = World(scene)
-    variant("T1", "textures only as extension-less copies", w, textures("bare"))
+    variant("T1", "textures only as extension-less copies (the control ships real names)", w, textures("bare"))
     variant("T2", "textures only as .png files", w, textures("png"))
+    variant("T3", "textures both as real names and as extension-less copies", w, textures("both"))
 
     w = World(scene); w.sky = []
-    variant("S1", "no Sky", w, textures("both"))
+    variant("S1", "no Sky", w, textures("named"))
     w = World(scene); w.sky_distance = 2000
-    variant("S2", "Sky visible distance 2000 (control 0)", w, textures("both"))
+    variant("S2", "Sky visible distance 2000 (control 0)", w, textures("named"))
     w = World(scene); w.fog = (1.0, 0.2, 0.2)
-    variant("S3", "fog colour red (1 0.2 0.2)", w, textures("both"))
+    variant("S3", "fog colour red (1 0.2 0.2)", w, textures("named"))
     w = World(scene); w.sky = control.sky + control.sky[:1] if len(control.sky) < 6 else control.sky[:5]
-    variant("S4", f"Sky with {len(w.sky)} texture names (control {len(control.sky)})", w, textures("both"))
+    variant("S4", f"Sky with {len(w.sky)} texture names (control {len(control.sky)})", w, textures("named"))
 
     if probe:
         _, model, x, y, z = probe
@@ -354,11 +390,11 @@ def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None, roun
             w.objects = control.objects + [
                 (f"Probe{i}", model, x + (i % side) * 0.8, y - (i // side) * 0.8, z) for i in range(count)
             ]
-            variant(vid, f"{count} more copies of {model} in a grid", w, textures("both"))
+            variant(vid, f"{count} more copies of {model} in a grid", w, textures("named"))
         for vid, s2 in (("G1", (1, 1, 1)), ("G2", (2, 2, 2)), ("G3", (0.5, 0.5, 0.5))):
             w = World(scene)
             w.extra = [raw_gameobject("ProbeScale", model, (x + 1.5, y, z), s2)]
-            variant(vid, f"one more {model}, sent field by field with GameObject section 2 = {s2}", w, textures("both"))
+            variant(vid, f"one more {model}, sent field by field with GameObject section 2 = {s2}", w, textures("named"))
 
         source = next((p for p in base_files if p.name == model), None)
         data = source.read_bytes() if source else b""
@@ -367,7 +403,7 @@ def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None, roun
             w = World(scene)
             name = f"{stem}_{suffix}.3ds"
             w.objects = [(n, name if m == model else m, ox, oy, oz) for n, m, ox, oy, oz in control.objects]
-            variant(f"Z-{suffix}", f"{model} served as {name}: {what}", w, textures("both") + [(name, bytes_)])
+            variant(f"Z-{suffix}", f"{model} served as {name}: {what}", w, textures("named") + [(name, bytes_)])
 
     if mbg:
         mbg = Path(mbg)
@@ -376,7 +412,7 @@ def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None, roun
             for i, f in enumerate(found):
                 w = World(scene)
                 w.extra = [f"object Probe{kind.upper()} {f.name} {control.spawn[0] + 3:g} {control.spawn[1]:g} 0"]
-                variant(f"F-{kind}{i:02d}", f"one {kind} shape added: {f.name}", w, textures("both") + [f])
+                variant(f"F-{kind}{i:02d}", f"one {kind} shape added: {f.name}", w, textures("named") + [f])
             if found:
                 data = found[0].read_bytes()
                 tests = (16, 17, 24, 25) if kind == "dts" else (43, 44, 45)
@@ -391,9 +427,96 @@ def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None, roun
                     w = World(scene)
                     w.extra = [f"object Probe{kind.upper()} {name} {control.spawn[0] + 3:g} {control.spawn[1]:g} 0"]
                     variant(f"V-{kind}{v}", f"{found[0].name} with its version field set to {v}, as {name}", w,
-                            textures("both") + [(name, bytes(patched))])
+                            textures("named") + [(name, bytes(patched))])
 
     return finish(out, variants, only, round_)
+
+
+# Values that break naive readers: zeroes of both signs, tiny and huge
+# magnitudes, infinities and NaN (f32 tokens take "inf" and "nan").
+EDGE_FLOATS = ["0", "-0", "1e-38", "1e-45", "1e30", "-1e30", "3.4e38", "inf", "-inf", "nan", "-1", "1", "65536"]
+
+
+def fuzz_string(rng, model):
+    kind = rng.randrange(7)
+    if kind == 0:
+        return "-"                                         # empty
+    if kind == 1:
+        return "x" * rng.choice((200, 255))                 # long (the server takes up to 255)
+    if kind == 2:
+        return model                                       # a real model
+    if kind == 3:
+        return "missing_" + str(rng.randrange(1000)) + ".3ds"
+    if kind == 4:
+        return "%25s%25n%25d"                              # printf directives, percent-escaped
+    if kind == 5:
+        return "../" * rng.randrange(1, 4) + model         # path walk
+    return "%c3%a9t%c3%a9"                                 # UTF-8
+
+
+def fuzz_gameobject(rng, model, pos):
+    """A GameObject update whose 13 sections are each on or off at random,
+    with edge values; the transform keeps a sane position half the time."""
+    f = []
+    fl = lambda: "f32:" + (rng.choice(EDGE_FLOATS) if rng.random() < 0.7 else f"{rng.uniform(-100, 100):.3f}")
+    s = lambda: "str:" + fuzz_string(rng, model)
+    sec = lambda: rng.random() < 0.5
+    f += ["f1", s()] if sec() else ["f0"]                                   # 1 name
+    f += ["f1", fl(), fl(), fl()] if sec() else ["f0"]                      # 2 velocity or scale
+    f += ["f1", s()] if sec() else ["f0"]                                   # 3 shape
+    f += ["f1", s()] if sec() else ["f0"]                                   # 4 skin
+    if sec():                                                               # 5 transform
+        p = [f"f32:{v:g}" for v in pos] if rng.random() < 0.5 else [fl(), fl(), fl()]
+        f += ["f1"] + p + [fl(), fl(), fl(), fl()]
+    else:
+        f += ["f0"]
+    f += ["f1", "str:" + rng.choice(["interpolate", "list", "rigid", "-", "bogus"])] if sec() else ["f0"]  # 6 movetype
+    f += ["f0"]                                                             # 7 movement data: never (no length)
+    if sec():                                                               # 8 shape data, int14 length + bytes
+        n = rng.choice((0, 1, 16, 255))
+        f += ["f1", f"hex@14:{''.join(f'{rng.randrange(256):02x}' for _ in range(n))}"] if n else ["f1", "i14:0"]
+    else:
+        f += ["f0"]
+    f += ["f1", s()] if sec() else ["f0"]                                   # 9 chat
+    f += ["f1", s()] if sec() else ["f0"]                                   # 10 script classes
+    if sec():                                                               # 11 attr[1..8]
+        f += ["f1"] + sum((["f1", s()] if sec() else ["f0"] for _ in range(8)), [])
+    else:
+        f += ["f0"]
+    if sec():                                                               # 12 nickname + RGBA
+        f += ["f1", s()] + [f"u8:{rng.randrange(256)}" for _ in range(4)]
+    else:
+        f += ["f0"]
+    f += ["f1", f"u16:{rng.randrange(65536)}"] if sec() else ["f0"]         # 13 flags
+    return "rawobject GameObject " + " ".join(f)
+
+
+def round3(scene, control, probe, textures, variant, seed, count):
+    """Seeded fuzz: each variant is C0 plus one fuzzed GameObject (FZ-g), or C0
+    with one fuzzed sun (FZ-s), sky (FZ-k) or object line (FZ-o)."""
+    rng = random.Random(seed)
+    model = probe[1] if probe else control.ground
+    x, y, z = (probe[2], probe[3], probe[4]) if probe else (0, 0, 0)
+    e = lambda: rng.choice(EDGE_FLOATS)
+    for i in range(count):
+        kind = "gsko"[i % 4]
+        w = World(scene)
+        if kind == "g":
+            line = fuzz_gameobject(rng, model, (x + 1.5, y, z))
+            w.extra = [line]
+            what = "one fuzzed GameObject: " + line[len("rawobject GameObject "):][:160]
+        elif kind == "s":
+            w.sun = "sun " + " ".join(e() for _ in range(11))
+            what = "fuzzed sun line: " + w.sun
+        elif kind == "k":
+            w.sky_distance = float(e())
+            w.fog = tuple(float(e()) for _ in range(3))
+            what = f"fuzzed sky: distance {w.sky_distance}, fog {w.fog}"
+        else:
+            vals = [e() for _ in range(7)]
+            w.extra = [f"object FuzzObj {model} " + " ".join(vals)]
+            what = "fuzzed object line: " + w.extra[0]
+        variant(f"FZ-{kind}{i:03d}", what, w, textures("named"))
 
 
 def round2(scene, control, probe, base_files, textures, variant):
@@ -404,13 +527,13 @@ def round2(scene, control, probe, base_files, textures, variant):
                                ("P3", (x, y, z + 1e7), "at height 10 000 000")):
             w = World(scene)
             w.objects = [(n, m, *(pos if (n, m) == probe[:2] else (ox, oy, oz))) for n, m, ox, oy, oz in control.objects]
-            variant(vid, f"{probe[0]} ({model}) placed {what}", w, textures("both"))
+            variant(vid, f"{probe[0]} ({model}) placed {what}", w, textures("named"))
         for vid, rot, what in (("P4", "0 0 1 1.5708", "turned 90 degrees about z"),
                                ("P5", "1 0 0 3.1416", "turned upside down (180 degrees about x)"),
                                ("P6", "0 0 0 1", "a zero rotation axis")):
             w = World(scene)
             w.extra = [f"object ProbeRot {model} {x + 1.5:g} {y:g} {z:g} {rot}"]
-            variant(vid, f"one more {model} {what}", w, textures("both"))
+            variant(vid, f"one more {model} {what}", w, textures("named"))
         source = next((p for p in base_files if p.name == model), None)
         for vid, served, files_name, what in (
                 ("N1", model.upper(), model, f"the world names {model.upper()}, the file is {model}"),
@@ -418,7 +541,7 @@ def round2(scene, control, probe, base_files, textures, variant):
                 ("N3", "sub/" + model, None, f"the world names sub/{model}, the file is in a subfolder")):
             w = World(scene)
             w.objects = [(n, served if m == model else m, ox, oy, oz) for n, m, ox, oy, oz in control.objects]
-            files = [p for p in textures("both") if p.name != model]
+            files = [p for p in textures("named") if p.name != model]
             if files_name:
                 files.append((files_name, source.read_bytes()))
             else:
@@ -430,20 +553,20 @@ def round2(scene, control, probe, base_files, textures, variant):
             w = World(scene)
             name = f"{stem}_{suffix}.3ds"
             w.objects = [(n, name if m == model else m, ox, oy, oz) for n, m, ox, oy, oz in control.objects]
-            variant(f"X-{suffix}", f"{model} served as {name}: {what}", w, textures("both") + [(name, bytes_)])
+            variant(f"X-{suffix}", f"{model} served as {name}: {what}", w, textures("named") + [(name, bytes_)])
         w = World(scene)
         w.objects = control.objects + [(f"Probe{i}", model, x + (i % 45) * 0.8, y - (i // 45) * 0.8, z) for i in range(2048)]
-        variant("O3", f"2048 more copies of {model} in a grid", w, textures("both"))
+        variant("O3", f"2048 more copies of {model} in a grid", w, textures("named"))
     w = World(scene)
     w.objects = []
-    variant("O4", "the ground alone: no other objects", w, textures("both"))
+    variant("O4", "the ground alone: no other objects", w, textures("named"))
     for cls in BARE_CLASSES:
         w = World(scene)
         w.extra = [f"rawobject {cls} f0"]
-        variant(f"R-{cls}", f"one {cls} ghost whose update is a single 0 bit", w, textures("both"))
+        variant(f"R-{cls}", f"one {cls} ghost whose update is a single 0 bit", w, textures("named"))
         w = World(scene)
         w.extra = [f"rawobject {cls} f1 hex:{'00' * 32}"]
-        variant(f"R-{cls}-z", f"one {cls} ghost whose update is a 1 bit, then 256 zero bits", w, textures("both"))
+        variant(f"R-{cls}-z", f"one {cls} ghost whose update is a 1 bit, then 256 zero bits", w, textures("named"))
 
 
 def finish(out, variants, only, round_):
@@ -469,11 +592,13 @@ def main(argv=None):
     p.add_argument("--extra", action="append", default=[], help="another folder of files every variant gets")
     p.add_argument("--only", help="comma-separated variant ids")
     p.add_argument("--seed", type=int, default=2026)
-    p.add_argument("--round", type=int, choices=(1, 2), default=1)
+    p.add_argument("--round", type=int, choices=(1, 2, 3), default=1)
+    p.add_argument("--count", type=int, default=40, help="round 3: how many fuzz variants")
+    p.add_argument("--cases", action="append", default=[], help="a folder of fuzz-case shapes (g3d-fuzzcases): one world each")
     p.add_argument("--levels", action="append", default=[], help="a folder of generated NAME_graal3dworld.txt worlds")
     a = p.parse_args(argv)
     only = set(a.only.split(",")) if a.only else None
-    made = build(a.out, a.pack, a.mbg, only, a.seed, a.extra, a.ground, a.round, a.levels)
+    made = build(a.out, a.pack, a.mbg, only, a.seed, a.extra, a.ground, a.round, a.levels, a.count, a.cases)
     print(f"{len(made)} variants in {a.out}")
     return 0
 

@@ -1360,6 +1360,69 @@ SCENARIO("A terrain line ghosts a TerrainBlock and loads the chunk files")
 	}
 }
 
+SCENARIO("An object line's last three numbers are its scale, section 2 of the update")
+{
+	const auto world = parseWorld("object Big tree.3ds 1 2 3  0 0 1 0  2 2 3\nobject Plain tree.3ds 0 0 0\n");
+	REQUIRE(world.errors.empty());
+	REQUIRE(world.objects.size() == 2);
+	REQUIRE(world.objects[0].object.scale == std::array<float, 3>{2, 2, 3});
+	REQUIRE(world.objects[1].object.scale == std::array<float, 3>{1, 1, 1});
+	REQUIRE((gameObjectFullMask(world.objects[0].object) & GameObjectBits::Scale) != 0);
+	REQUIRE((gameObjectFullMask(world.objects[1].object) & GameObjectBits::Scale) == 0);
+
+	BitWriter w;
+	writeGameObjectUpdate(w, world.objects[0].object, gameObjectFullMask(world.objects[0].object));
+	const auto bytes = w.toString();
+	BitReader r(bytes);
+	REQUIRE(r.readFlag());
+	(void)r.readString();
+	REQUIRE(r.readFlag()); // section 2
+	REQUIRE(r.readF32() == 2.0f);
+	REQUIRE(r.readF32() == 2.0f);
+	REQUIRE(r.readF32() == 3.0f);
+}
+
+namespace
+{
+	std::string chunk3ds(uint16_t id, const std::string& body)
+	{
+		std::string out;
+		const uint32_t length = static_cast<uint32_t>(body.size() + 6);
+		out.push_back(static_cast<char>(id & 0xFF));
+		out.push_back(static_cast<char>(id >> 8));
+		for (int i = 0; i < 4; ++i)
+			out.push_back(static_cast<char>((length >> (8 * i)) & 0xFF));
+		return out + body;
+	}
+} // namespace
+
+SCENARIO("A .3ds the real client crashes on is found before it is served")
+{
+	const auto mesh = chunk3ds(0x4000, std::string("box\0", 4) + chunk3ds(0x4100, chunk3ds(0x4110, std::string(2, '\0'))));
+	const auto material = chunk3ds(0xAFFF, chunk3ds(0xA000, std::string("m\0", 2)));
+	const auto good = chunk3ds(0x4D4D, chunk3ds(0x3D3D, material + mesh));
+	REQUIRE_FALSE(unsafe3ds(good));
+
+	REQUIRE(unsafe3ds(chunk3ds(0x4D4D, chunk3ds(0x3D3D, mesh))) == "it has meshes but no materials");
+	REQUIRE(unsafe3ds(good.substr(0, good.size() / 2)));               // cut in half
+	std::string longer = good;
+	longer[2] = static_cast<char>(longer[2] + 100);                    // main length past the end
+	REQUIRE(unsafe3ds(longer));
+	std::string inner = good;
+	inner[8] = static_cast<char>(inner[8] + 50);                       // the editor chunk past its parent
+	REQUIRE(unsafe3ds(inner));
+	REQUIRE(unsafe3ds("not a 3ds") == "not a 3D Studio file");
+}
+
+SCENARIO("A Sky's textures may be named with their extensions")
+{
+	REQUIRE(skyTextureNames("sky_fr.png,sky_rt.JPG,sky_bk,clouds.v2.gif") == "sky_fr,sky_rt,sky_bk,clouds.v2");
+	REQUIRE(skyTextureNames("plain") == "plain");
+	const auto world = parseWorld("sky sky_fr.png,sky_up.png 500 0.6 0.7 0.9\n");
+	REQUIRE(world.objects.size() == 1);
+	REQUIRE(world.objects[0].sky.materialList == "sky_fr,sky_up");
+}
+
 SCENARIO("A water line ghosts a WaterBlock in the 5.12 layout")
 {
 	const auto world = parseWorld("water -1024 -1024 0.5 2048 2048 20 lake 1\nwater 1 2 3\n");

@@ -84,19 +84,21 @@ class G3DLabWorlds(unittest.TestCase):
 
     def test_every_variant_changes_one_thing(self):
         made = dict(g.build(self.out, self.pack, self.mbg))
-        for vid in ("C0", "T1", "T2", "S1", "S2", "S3", "S4", "O1", "O2", "G1", "G2", "G3",
+        for vid in ("C0", "T1", "T2", "T3", "S1", "S2", "S3", "S4", "O1", "O2", "G1", "G2", "G3",
                     "Z-nomat", "Z-half", "Z-mainlen", "Z-ptcount", "Z-faceidx", "F-dts00", "F-dif00",
                     "V-dts16", "V-dts25", "V-dif43", "V-dif45"):
             self.assertIn(vid, made)
         control = (self.out / "C0/config/graal3dworld.txt").read_text().splitlines()[1:]
         self.assertIn("object Ground ground.3ds 0 0 0", control)
-        self.assertIn("sky sky0,sky0 0 0.78 0.79 0.63", control)
+        self.assertIn("sky sky0.png,sky0.png 0 0.78 0.79 0.63", control)
+        self.assertFalse((self.out / "C0/world/g3dlab/sky0").exists())
+        self.assertTrue((self.out / "C0/world/g3dlab/sky0.png").exists())
 
         def diff(vid):
             lines = (self.out / vid / "config/graal3dworld.txt").read_text().splitlines()[1:]
             return [l for l in lines if l not in control], [l for l in control if l not in lines]
 
-        self.assertEqual(diff("S1"), ([], ["sky sky0,sky0 0 0.78 0.79 0.63"]))
+        self.assertEqual(diff("S1"), ([], ["sky sky0.png,sky0.png 0 0.78 0.79 0.63"]))
         added, removed = diff("Z-nomat")
         self.assertEqual(removed, ["object Lamp lamp.3ds 1 -1 0"])
         self.assertEqual(added, ["object Lamp lamp_nomat.3ds 1 -1 0"])
@@ -150,6 +152,31 @@ class G3DLabWorlds(unittest.TestCase):
         self.assertIn("object ProbeRot lamp.3ds 2.5 -1 0 0 0 0 1", (self.out / "P6/config/graal3dworld.txt").read_text())
         self.assertIn("rawobject WaterBlock f0", (self.out / "R-WaterBlock/config/graal3dworld.txt").read_text())
         self.assertIn("round 2", (self.out / "RUNSHEET.md").read_text())
+
+    def test_round_three_is_seeded_fuzz(self):
+        made = g.build(self.out, self.pack, None, None, seed=5, round_=3, count=8)
+        ids = [v for v, _ in made]
+        self.assertEqual(ids, ["C0", "FZ-g000", "FZ-s001", "FZ-k002", "FZ-o003", "FZ-g004", "FZ-s005", "FZ-k006", "FZ-o007"])
+        first = (self.out / "FZ-g000/config/graal3dworld.txt").read_text()
+        again = Path(self.tmp.name) / "again"
+        g.build(again, self.pack, None, {"FZ-g000"}, seed=5, round_=3, count=8)
+        self.assertEqual((again / "FZ-g000/config/graal3dworld.txt").read_text(), first)
+        line = next(l for l in first.splitlines() if l.startswith("rawobject GameObject"))
+        self.assertTrue(all(len(w) <= 4 + 255 * 3 for w in line.split()))
+        sun = next(l for l in (self.out / "FZ-s001/config/graal3dworld.txt").read_text().splitlines() if l.startswith("sun "))
+        self.assertEqual(len(sun.split()), 12)
+
+    def test_fuzz_case_worlds_hold_only_their_case(self):
+        cases = Path(self.tmp.name) / "3ds-lamp"
+        cases.mkdir()
+        (cases / "fl0001.3ds").write_bytes(b"bad")
+        (cases / "manifest.tsv").write_text("case\tchange\n")
+        made = dict(g.build(self.out, self.pack, None, None, round_=1, cases=[cases]))
+        self.assertIn("K-3ds-lamp-fl0001", made)
+        self.assertNotIn("T1", made)
+        files = sorted(p.name for p in (self.out / "K-3ds-lamp-fl0001/world/g3dlab").iterdir())
+        self.assertEqual(files, ["fl0001.3ds"])
+        self.assertIn("object FuzzCase fl0001.3ds", (self.out / "K-3ds-lamp-fl0001/config/graal3dworld.txt").read_text())
 
 
 if __name__ == "__main__":

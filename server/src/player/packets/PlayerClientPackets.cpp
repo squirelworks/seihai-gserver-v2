@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -985,10 +985,11 @@ HandlePacketResult PlayerClient::msgPLI_UPDATEFILE(CString& pPacket)
 	if (m_versionId < CLVER_2_1 && getExtension(file).isEmpty())
 		file << ".gif";
 
-	const auto& fileSystem = m_server->getFileSystem();
 	time_t fModTime = 0;
 
-	if (const auto info = fileSystem.infoi(fs::FileCategory::ALL, file.toStringView()); info != nullptr)
+	// The same lookup as a file request, so a 3D client's bare texture name
+	// finds <name>.png and gets "up to date" instead of the whole file again.
+	if (const auto info = findClientFile(std::filesystem::path{file.toString()}); info != nullptr)
 		fModTime = clock::to_time_t(toSystemClock(info->modifiedTime));
 
 	//printf("UPDATEFILE: %s\n", file.text());
