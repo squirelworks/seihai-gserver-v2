@@ -850,6 +850,15 @@ namespace graal3d
 						line.pop_back();
 					if (line.empty())
 						continue;
+					// 5.12 asks for the whole line as one file name, so four names
+					// on one line become one request for a file that is not there
+					// (fuzzing, lab 2026-11-25).
+					if (line.find_first_of(" \t,") != std::string::npos)
+						log::printLine(log::server, "** [Warning] Graal3D: heights.info line \"{}\" is not one texture name; clients ask for the whole line. Put one name on each line.", line);
+					// A name listed again is drawn from the same file: check and
+					// push it once (1000 repeats made the push about 60 MB).
+					if (std::ranges::find(m_terrainFiles, line) != m_terrainFiles.end())
+						continue;
 					if (const auto texture = find(line); texture == nullptr)
 					{
 						++missing;
@@ -859,12 +868,16 @@ namespace graal3d
 					{
 						++found;
 						checkImage(*texture);
+						const auto data = readAll(texture->file);
 						// Anything else and the client draws its default texture
 						// instead (lab, 2026-11-25).
-						if (const auto size = pngSize(readAll(texture->file)); size && (size->first != 256 || size->second != 256))
+						if (const auto size = pngSize(data); size && (size->first != 256 || size->second != 256))
 							log::printLine(log::server, "** [Warning] Graal3D: terrain texture {} is {}x{}; clients draw only 256x256 ones.",
 										   texture->file.filename().string(), size->first, size->second);
-						m_terrainFiles.push_back(line);
+						// One that would crash a client (30000x30000 and 65536x1
+						// did) is never pushed unasked.
+						if (m_shapeCheck == ShapeCheck::Off || !unsafeImage(data))
+							m_terrainFiles.push_back(line);
 					}
 				}
 			}
