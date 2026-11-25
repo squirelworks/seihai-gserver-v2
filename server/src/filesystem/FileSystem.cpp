@@ -91,15 +91,29 @@ void FileSystem::bind(const std::filesystem::path& directory)
 {
 	std::scoped_lock guard{m_file_mutex};
 
+	auto doneSearching = [this]()
+	{
+		// We are done searching our file system.
+		m_searching_files = false;
+		m_searching_files_condition.notify_all();
+	};
+
 	// If we are already watching this directory, abort.
 	if (std::ranges::contains(m_directories, directory))
+	{
+		doneSearching();
 		return;
+	}
 
 	// We are starting our file search.
 	m_searching_files = true;
 
 	// Create directories that don't exist.
-	std::filesystem::create_directories(directory);
+	if (std::error_code ec; !std::filesystem::create_directories(directory, ec) && ec)
+	{
+		doneSearching();
+		return;
+	}
 
 	// Fill our filesystem with file information.
 	for (const auto& file : std::filesystem::recursive_directory_iterator(directory))
@@ -255,10 +269,13 @@ void FileSystem::defaultWatchCallback(uint32_t id, const std::filesystem::path& 
 				iter = m_files.find(oldFile.filename());
 				if (iter != m_files.end())
 				{
+					std::error_code ec;
+					const auto modTime = std::filesystem::last_write_time(iter->second->file, ec);
+					if (!ec) iter->second->modifiedTime = modTime;
+
 					// Update the file entry.
 					iter->second->file = dir / file;
 					iter->second->file.make_preferred();
-					iter->second->modifiedTime = std::filesystem::last_write_time(iter->second->file);
 					iter->second->categories.reset();
 					assignCategoriesToFileData(*iter->second.get());
 
@@ -284,13 +301,17 @@ void FileSystem::defaultWatchCallback(uint32_t id, const std::filesystem::path& 
 			}
 
 			// New file.
-			if (iter == m_files.end() && e.test(FileEvent::Added) && std::filesystem::is_regular_file(dir / file))
+			if (std::error_code ec; iter == m_files.end() && e.test(FileEvent::Added) && std::filesystem::is_regular_file(dir / file, ec) && !ec)
 			{
 				auto entry = std::make_unique<FileData>();
+
+				const auto modTime = std::filesystem::last_write_time(entry->file, ec);
+				if (!ec) entry->modifiedTime = modTime;
+				const auto fileSize = std::filesystem::file_size(entry->file, ec);
+				if (!ec) entry->fileSize = fileSize;
+
 				entry->file = dir / file;
 				entry->file.make_preferred();
-				entry->fileSize = std::filesystem::file_size(entry->file);
-				entry->modifiedTime = std::filesystem::last_write_time(entry->file);
 				assignCategoriesToFileData(*entry);
 
 				iter = m_files.insert(std::make_pair(file.filename(), std::move(entry)));
@@ -676,10 +697,15 @@ void FileSystem::addExisting(FileCategory category, const std::filesystem::path&
 		return;
 
 	auto entry = std::make_unique<FileData>();
+
+	std::error_code ec;
+	const auto fileSize = std::filesystem::file_size(fullFilePath, ec);
+	if (!ec) entry->fileSize = fileSize;
+	const auto modTime = std::filesystem::last_write_time(fullFilePath, ec);
+	if (!ec) entry->modifiedTime = modTime;
+
 	entry->file = fullFilePath;
 	entry->file.make_preferred();
-	entry->fileSize = std::filesystem::file_size(entry->file);
-	entry->modifiedTime = std::filesystem::last_write_time(entry->file);
 	assignCategoriesToFileData(*entry);
 
 	m_files.insert(std::make_pair(fullFilePath.filename(), std::move(entry)));

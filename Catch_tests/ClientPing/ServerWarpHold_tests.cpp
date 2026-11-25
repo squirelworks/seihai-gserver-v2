@@ -1,4 +1,4 @@
-// Seihai project, 2026-11-13: see CHANGES-SEIHAI.md.
+// Seihai project, 2026-11-13, 2026-11-25: see CHANGES-SEIHAI.md.
 //
 // This file is part of the Seihai fork of GServer-v2 and is released under the
 // GNU General Public License version 3 (see LICENSE.md).
@@ -39,7 +39,7 @@ TEST_CASE("A held server warp goes after the longest hold even with requests sti
 
 TEST_CASE("File requests that count for the server warp hold", "[serverwarp]")
 {
-	for (const uint8_t id : {PLI_WANTFILE, PLI_UPDATEFILE, PLI_VERIFYWANTSEND, PLI_UPDATEGANI, PLI_UPDATESCRIPT, PLI_UPDATECLASS, PLI_UPDATEPACKAGEREQUESTFILE})
+	for (const uint8_t id : {PLI_WANTFILE, PLI_UPDATEFILE, PLI_VERIFYWANTSEND, PLI_UPDATEGANI, PLI_UPDATEWEAPON, PLI_UPDATECLASS, PLI_UPDATEPACKAGEREQUESTFILE})
 		CHECK(PlayerClient::isFileRequest(id));
 	for (const uint8_t id : {PLI_LEVELWARP, PLI_PLAYERPROPS, PLI_TOALL, PLI_SERVERWARP})
 		CHECK_FALSE(PlayerClient::isFileRequest(id));

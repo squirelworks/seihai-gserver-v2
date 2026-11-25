@@ -176,8 +176,8 @@ static constexpr std::array<std::string_view, 30> ganiAttributePropertyNames = {
 		DO(PLO_NPCBYTECODE)            \
 		DO(PLO_WEAPONBYTECODE)         \
 		DO(PLO_CLASSBYTECODE)          \
-		DO(PLO_GANISCRIPT)             \
-		DO(PLO_WEAPONBYTECODE2)        \
+		DO(PLO_GANIBYTECODE)           \
+		DO(PLO_HEADEREDBYTECODE)       \
 		DO(PLO_NPCDEL2)                \
 		DO(PLO_HIDENPCS)               \
 		DO(PLO_SAY2)                   \
@@ -244,11 +244,13 @@ static std::array<std::string, 255> OutputPacketNamesArray = FillOutputPacketNam
 
 CString ShootPacketWrapper::constructShootV1() const
 {
+	const auto localPosition = toLocalPixelPosition(position);
+
 	CString packet;
 	packet.writeGInt(source);
-	packet.writeGChar((position.x() % 1024) / 8);
-	packet.writeGChar((position.y() % 1024) / 8);
-	packet.writeGChar((position.z() / 16) + 50);
+	packet.writeGChar(localPosition.x() / 8);
+	packet.writeGChar(localPosition.y() / 8);
+	packet.writeGChar((localPosition.z() / 16) + 50);
 	packet.writeGChar(sangle);
 	packet.writeGChar(sanglez);
 	packet.writeGChar(power);
@@ -261,10 +263,12 @@ CString ShootPacketWrapper::constructShootV1() const
 
 CString ShootPacketWrapper::constructShootV2() const
 {
-	const PropertyPixelCoordinate x{static_cast<int16_t>(position.x())};
-	const PropertyPixelCoordinate y{static_cast<int16_t>(position.y())};
-	const PropertyPixelCoordinate z{static_cast<int16_t>(position.z())};
-	const PropertyPixelCoordinate pgravity{static_cast<int16_t>(gravityInTiles * 256)};
+	const auto localPosition = toLocalPixelPosition(position);
+
+	const PropertyPixelCoordinate x{localPosition.x()};
+	const PropertyPixelCoordinate y{localPosition.y()};
+	const PropertyPixelCoordinate z{localPosition.z()};
+	const PropertyPixelCoordinate pgravity{DoubleAsIntegralRound<int16_t>(gravityInTiles * 256)};
 
 	CString packet;
 	packet.write(x.serialize());
@@ -298,6 +302,7 @@ static PacketHandleArray GeneratePacketHandlers()
 	handlers[PLI_PRIVATEMESSAGE] = &Player::msgPLI_PRIVATEMESSAGE;
 	handlers[PLI_PACKETCOUNT] = &Player::msgPLI_PACKETCOUNT;
 	handlers[PLI_LANGUAGE] = &Player::msgPLI_LANGUAGE;
+	handlers[PLI_PROCESSRUNNING] = &Player::msgPLI_PROCESSRUNNING;
 	handlers[PLI_PROFILEGET] = &Player::msgPLI_PROFILEGET;
 	handlers[PLI_PROFILESET] = &Player::msgPLI_PROFILESET;
 	handlers[PLI_REQUESTTEXT] = &Player::msgPLI_REQUESTTEXT;
@@ -1458,6 +1463,11 @@ bool Player::enterLevel(const std::shared_ptr<Level>& level, std::optional<time_
 	return true;
 }
 
+bool Player::enterSubLevel(const std::shared_ptr<SubLevel>& subLevel, const std::optional<time_t> clientCachedTime)
+{
+	return true;
+}
+
 bool Player::leaveLevel(bool keepLevelReference)
 {
 	auto now = m_server->getFrameStartTime();
@@ -1550,8 +1560,6 @@ void Player::constructScriptParameters()
 	bind::bindPropertyAsReadWrite(scriptParameters, bind::IntegralProperty{.name = "maxhp"sv, .modTime = std::ref(modTime[PROPID(PlayerProp::FULLHEARTS)]), .value = std::ref(account.maxHitpoints)});
 	bind::bindPropertyAsReadWrite(scriptParameters, bind::IntegralProperty{.name = "mp"sv, .modTime = std::ref(modTime[PROPID(PlayerProp::MAGICPOINTS)]), .value = std::ref(account.character.mp)});
 	bind::bindPropertyAsReadWrite(scriptParameters, bind::IntegralProperty{.name = "ap"sv, .modTime = std::ref(modTime[PROPID(PlayerProp::ALIGNMENT)]), .value = std::ref(account.character.ap)});
-	bind::bindPropertyAsReadWrite(scriptParameters, bind::IntegralProperty{.name = "rupees"sv, .modTime = std::ref(modTime[PROPID(PlayerProp::GRALATS)]), .value = std::ref(account.character.gralats)});
-	bind::bindPropertyAsReadWrite(scriptParameters, bind::IntegralProperty{.name = "gralats"sv, .modTime = std::ref(modTime[PROPID(PlayerProp::GRALATS)]), .value = std::ref(account.character.gralats)});
 	bind::bindPropertyAsReadWrite(scriptParameters, bind::IntegralProperty{.name = "bombs"sv, .modTime = std::ref(modTime[PROPID(PlayerProp::BOMBS)]), .value = std::ref(account.character.bombs)});
 	bind::bindPropertyAsReadWrite(scriptParameters, bind::IntegralProperty{.name = "darts"sv, .modTime = std::ref(modTime[PROPID(PlayerProp::ARROWS)]), .value = std::ref(account.character.arrows)});
 	bind::bindPropertyAsReadWrite(scriptParameters, bind::IntegralProperty{.name = "bombpower"sv, .modTime = std::ref(modTime[PROPID(PlayerProp::BOMBPOWER)]), .value = std::ref(account.character.bombPower)});
@@ -1559,6 +1567,22 @@ void Player::constructScriptParameters()
 	bind::bindPropertyAsReadWrite(scriptParameters, bind::IntegralProperty{.name = "swordpower"sv, .modTime = std::ref(modTime[PROPID(PlayerProp::SWORDIMAGE)]), .value = std::ref(account.character.swordPower)});
 	bind::bindPropertyAsReadWrite(scriptParameters, bind::IntegralProperty{.name = "shieldpower"sv, .modTime = std::ref(modTime[PROPID(PlayerProp::SHIELDIMAGE)]), .value = std::ref(account.character.shieldPower)});
 	bind::bindPropertyAsReadWrite(scriptParameters, bind::IntegralProperty{.name = "shootpower"sv, .modTime = std::ref(modTime[PROPID(PlayerProp::GANI)]), .value = std::ref(account.character.bowPower)});
+
+	auto gralatsGet = [this](std::optional<size_t>) -> GameValueVariantForGetter { return (double)account.character.gralats; };
+	auto gralatsSet = [this](const GameValueVariantForSetter& incoming, std::optional<int64_t>)
+	{
+		if (const auto value = std::get_if<std::reference_wrapper<double>>(&incoming); value != nullptr)
+		{
+			account.character.gralats = static_cast<uint32_t>(std::clamp(DoubleAsIntegralFloor<int32_t>(value->get()), 0_i32, 999'999'999_i32));
+
+			// Update the gralat props.
+			auto now = m_server->getFrameStartTime();
+			modTime[PROPID(PlayerProp::GRALATS)] = now;
+			modTime[PROPID(PlayerProp::GRALATS2)] = now;
+		}
+	};
+	bind::bindPropertyAsReadWrite(scriptParameters, bind::ManuallyDefinedProperty<double>{.name = "rupees"sv, .getter = gralatsGet, .setter = gralatsSet});
+	bind::bindPropertyAsReadWrite(scriptParameters, bind::ManuallyDefinedProperty<double>{.name = "gralats"sv, .getter = gralatsGet, .setter = gralatsSet});
 
 	bind::bindPropertyAsReadWrite(scriptParameters, bind::ManuallyDefinedProperty<double>{
 		.name = "x"sv,
@@ -2059,6 +2083,12 @@ HandlePacketResult Player::msgPLI_LANGUAGE(CString& pPacket)
 	if (language.isEmpty())
 		language = "English";
 	account.language = language.toString();
+	return HandlePacketResult::Handled;
+}
+
+HandlePacketResult Player::msgPLI_PROCESSRUNNING(CString& pPacket)
+{
+	//const uint8_t wasRunning = pPacket.readGUChar();
 	return HandlePacketResult::Handled;
 }
 

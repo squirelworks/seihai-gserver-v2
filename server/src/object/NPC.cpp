@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-18, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-18, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -772,18 +772,22 @@ void NPC::setScript(const Script& script)
 	const auto classes = string::join(m_script.getServerJoinedClasses() | std::views::keys);
 	setJoinedClasses(classes);
 
-	const auto clientside = m_script.getClientSide();
+	const auto clientside = m_script.getClientSideScript();
 
 	// Check for position update blocking.
 	if (m_server->hasNPCServer() || clientside.contains("//#BLOCKPOSITIONUPDATES"))
 		m_blockPositionUpdates = true;
+
+	// Check for a sparringzone identifier.
+	if (clientside == "sparringzone" || clientside == "//#CLIENTSIDE\xa7sparringzone")
+		m_sparringzone = true;
 
 	// If we have no npc-server, we support toweapons, so extract the weapon name.
 	if (!m_server->hasNPCServer())
 		m_weaponName = toWeaponName(clientside);
 
 	// Just a little warning for people who don't know.
-	if (m_script.getClientByteCode().empty() && m_script.getClientSide().length() > 0x705F)
+	if (m_script.getClientSideByteCode().empty() && m_script.getClientSideScript().length() > 0x705F)
 		log::printLine(log::server, "WARNING: Clientside script of NPC ({}) exceeds the limit of 28767 bytes.", (!image.empty() ? image : std::to_string(id)));
 }
 
@@ -816,7 +820,7 @@ void NPC::setScript(const std::string_view script)
 		}
 	}
 
-	const auto clientside = m_script.getClientSide();
+	const auto clientside = m_script.getClientSideScript();
 
 	// Check for position update blocking.
 	if (m_server->hasNPCServer() || clientside.contains("//#BLOCKPOSITIONUPDATES"))
@@ -827,18 +831,18 @@ void NPC::setScript(const std::string_view script)
 		m_weaponName = toWeaponName(clientside);
 
 	// Just a little warning for people who don't know.
-	if (m_script.getClientByteCode().empty() && m_script.getClientSide().length() > 0x705F)
+	if (m_script.getClientSideByteCode().empty() && m_script.getClientSideScript().length() > 0x705F)
 		log::printLine(log::server, "WARNING: Clientside script of NPC ({}) exceeds the limit of 28767 bytes.", (!image.empty() ? image : std::to_string(id)));
 }
 
 std::string NPC::getClientSideScript() const
 {
-	std::string result{m_script.getClientSide()};
+	std::string result{m_script.getClientSideScript()};
 	for (const auto& classPtr : m_joinedClasses | std::views::values)
 	{
 		if (auto scriptClass = classPtr.lock(); scriptClass != nullptr)
 		{
-			if (const auto& clientSide = scriptClass->getScript().getClientSide(); !clientSide.empty())
+			if (const auto& clientSide = scriptClass->getScript().getClientSideScript(); !clientSide.empty())
 			{
 				result += '\xa7';
 				result += clientSide;
@@ -915,7 +919,7 @@ void NPC::setJoinedClasses(std::string_view classes)
 			lastUpdateTime = m_server->getFrameStartTime();
 
 			// If the joined script has clientside code, delete the NPC and resend the new code.
-			if (!scriptClass->getScript().getClientSide().empty())
+			if (!scriptClass->getScript().getClientSideScript().empty() || !scriptClass->getScript().getClientSideByteCode().empty())
 				sendToLevel = true;
 		}
 	}
@@ -944,7 +948,7 @@ void NPC::joinClass(std::string_view className)
 		lastUpdateTime = m_server->getFrameStartTime();
 
 		// If the joined script has clientside code, delete the NPC and resend the new code.
-		if (!scriptClass->getScript().getClientSide().empty())
+		if (!scriptClass->getScript().getClientSideScript().empty() || !scriptClass->getScript().getClientSideByteCode().empty())
 			sendScriptUpdatesToLevel(lastUpdateTime);
 	}
 	else
@@ -973,7 +977,7 @@ void NPC::leaveClass(std::string_view className)
 		lastUpdateTime = m_server->getFrameStartTime();
 
 		// If the joined script has clientside code, delete the NPC and resend the new code.
-		if (!scriptClass->getScript().getClientSide().empty())
+		if (!scriptClass->getScript().getClientSideScript().empty() || !scriptClass->getScript().getClientSideByteCode().empty())
 			sendToLevel = true;
 	}
 
@@ -997,7 +1001,7 @@ void NPC::sendScriptUpdatesToLevel(const clock::time_point fromWhen) const
 
 			const CString packet = CString() >> (char)PLO_NPCDEL2 >> (char)levelName.length() << levelName >> (int)id;
 			m_server->sendPacketToLevelAndPastVisitorsAfter(levelData.get(), fromWhen, packet);
-			sendAllPropsToNearby();
+			npclevel->sendNPCToNearbyPlayers(m_server->getNPC(id), std::nullopt);
 		}
 	}
 }
@@ -1006,7 +1010,7 @@ void NPC::updateScriptClass(ScriptClass* scriptClass)
 {
 	if (scriptClass == nullptr || !m_server->hasNPCServer())
 		return;
-	if (scriptClass->getScript().getClientSide().empty())
+	if (scriptClass->getScript().getClientSideScript().empty() && scriptClass->getScript().getClientSideByteCode().empty())
 		return;
 
 	sendScriptUpdatesToLevel(lastUpdateTime);
@@ -1267,22 +1271,39 @@ SetResults NPC::setProp(const NPCProp prop, const SetBy setBy, PropertyBase* bas
 				if (!ganiProp->bowGif.has_value())
 					SETPROP_RETURN_IGNORE;
 
-				auto& [image, power] = ganiProp->bowGif.value();
-				if (image.contains('.'))
-					image += ".gif";
+				auto& [bowImage, power] = ganiProp->bowGif.value();
+				if (bowImage.contains('.'))
+					bowImage += ".gif";
 
-				if (image == character.bowImage || power == character.bowPower)
+				if (bowImage == character.bowImage || power == character.bowPower)
 					SETPROP_RETURN_IGNORE;
 
 				character.bowPower = props::Limits::apply(power, props::Limits::MaxBowPower);
-				character.bowImage = image;
+				character.bowImage = bowImage;
 				break;
 			}
 
+			// Get the gani.
+			std::string gani = ganiProp->gani.value_or("idle");
+			const auto ganiLimited = props::Limits::apply(gani, props::Limits::GaniLength);
+			const auto ganiNoProps = string::retrieveLine(gani, ',');
+
+			// Check if the gani changed in a meaningful way.
+			bool allowChange = true;
+			if (ganiLimited == character.gani)
+			{
+				if (auto resource = m_server->getAnimationManager().findResource(std::filesystem::path{std::format("{}.gani", ganiNoProps)}); resource != nullptr)
+				{
+					if (resource->isContinuous())
+						allowChange = false;
+				}
+			}
+			if (!allowChange)
+				SETPROP_RETURN_IGNORE;
+
 			// Set the gani.
 			// Ganis can be set to themselves to play it again from the beginning, so don't check for equality here.
-			std::string gani = ganiProp->gani.value_or("idle");
-			character.gani = props::Limits::apply(gani, props::Limits::GaniLength);
+			character.gani = ganiLimited;
 			result.resultFlags.set(SetResults::getLatestOnSend);
 
 			// If we aren't a character, do that now.
@@ -1881,7 +1902,7 @@ CString NPC::getAllPropsPacket(const std::optional<clock::time_point> newTime, c
 
 bool NPC::sendsGS1ByteCodeTo(const Player& player) const
 {
-	if (!player.isClient() || m_script.getClientSide().empty())
+	if (!player.isClient() || m_script.getClientSideScript().empty())
 		return false;
 	// A modern server sends no script text. With an NPC-server it compiles clientside scripts itself and sends that
 	// bytecode (Level::sendNPCToPlayer); without one, every client gets this.
@@ -2505,8 +2526,13 @@ std::vector<std::string> NPC::getVariableDump() const
 
 	for (const auto& [flag, variable] : scripting.variables.store | variables::serializable)
 	{
+		std::string dump{std::format("{}.vars[{}]: ", npcname, flag)};
+
 		if (variable->value.has<double>())
-			result.emplace_back(std::format("{}.vars[{}]: {}", npcname, flag, variable->getCopy<double>().value_or(0.0)));
+		{
+			if (const auto value = variable->getCopy<double>().value_or(0.0); !variable->value.has<std::string>() || !DoubleIsZero(value))
+				dump += string::to_string(value);
+		}
 		if (variable->value.has<std::vector<double>>())
 		{
 			const auto values = variable->get<std::vector<double>>();
@@ -2517,9 +2543,17 @@ std::vector<std::string> NPC::getVariableDump() const
 					return std::format("{}", val);
 				});
 				auto valueString = string::join(valuesAsStrings, ", ");
-				result.emplace_back(std::format("{}.vars[{}]: {{{}}}", npcname, flag, valueString));
+
+				if (variable->value.has<double>() && !DoubleIsZero(variable->getCopy<double>().value()))
+					dump += " / ";
+
+				dump += '{';
+				dump += valueString;
+				dump += '}';
 			}
 		}
+
+		result.emplace_back(std::move(dump));
 	}
 
 	return result;

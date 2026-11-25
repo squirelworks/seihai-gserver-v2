@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-18, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-18, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -90,7 +90,7 @@ std::shared_ptr<Weapon> Weapon::loadWeapon(const std::filesystem::path& fileName
 	auto weapon = std::make_shared<Weapon>(weaponName.value(), weaponImage.value_or(""s), weaponScript.value_or(""s));
 
 	// Check for script limits.
-	if (const auto& script = weapon->getScript(); script.getClientByteCode().empty() && script.getClientSide().length() > 0x705F)
+	if (const auto& script = weapon->getScript(); script.getClientSideByteCode().empty() && script.getClientSideSource().length() > 0x705F)
 		log::printLine(log::server, "WARNING: Clientside script of weapon ({}) exceeds the limit of 28767 bytes.", *weaponName);
 
 	// Set the mod time to the file mod time.
@@ -146,7 +146,7 @@ bool Weapon::saveWeapon()
 
 	m_gs1ByteCodeSource.reset();
 	m_gs1ByteCode.clear();
-	calculateHeaderChecksum(m_script.getClientByteCode());
+	calculateHeaderChecksum(m_script.getClientSideByteCode());
 
 	// Queue the created event.
 	scripting.events.addEvent(ScriptEventType::CREATED, source::FromServer());
@@ -165,7 +165,7 @@ Weapon& Weapon::updateWeapon(const std::string_view newImage, const std::string_
 	// header out again for that bytecode.
 	m_gs1ByteCodeSource.reset();
 	m_gs1ByteCode.clear();
-	calculateHeaderChecksum(m_script.getClientByteCode());
+	calculateHeaderChecksum(m_script.getClientSideByteCode());
 
 	// Queue the created event.
 	scripting.events.addEvent(ScriptEventType::CREATED, source::FromServer());
@@ -191,7 +191,7 @@ void Weapon::registerWeaponWithPlayer(const std::shared_ptr<Player>& player) con
 	// Seihai (#113): a GS2 clientside script goes as bytecode to every build that reads it (4.042 on), not as text.
 	// Seihai: 5.08 to 5.12 no longer run GS1 text at all (5.12 ignored a GS1 weapon, lab 2026-11-19), so they get the
 	// translated bytecode as level NPCs already do (NPC::sendsGS1ByteCodeTo).
-	if (m_script.getClientByteCode().empty() && !scriptPackets::usesModernScriptCache(player->getVersion())
+	if (m_script.getClientSideByteCode().empty() && !scriptPackets::usesModernScriptCache(player->getVersion())
 		&& !(scriptPackets::usesClassicScriptBytecode(player->getVersion())
 			 && (clientScriptIsGS2() || (player->getVersion() > CLVER_5_07 && !getClientByteCode().empty()))))
 	{
@@ -217,7 +217,7 @@ void Weapon::registerWeaponWithPlayer(const std::shared_ptr<Player>& player) con
 
 		// Tell the client the load the script.
 		// Seihai: only when there is bytecode to load. A GS1-only weapon has none, so the header carried the CRC of
-		// nothing (0); 6.03 then skips its cache check, asks for the script with PLI_UPDATESCRIPT, and
+		// nothing (0); 6.03 then skips its cache check, asks for the script with PLI_UPDATEWEAPON, and
 		// sendByteCodeToPlayer has nothing to send (#23, lead 1).
 		// Hard guards: classic 193/132 only through 5.12; modern 197/140 from 5.24/6.00β1
 		// (Graal_analysis protocol/script-packet-guards.md). Prefer classic while both exist.
@@ -241,7 +241,7 @@ void Weapon::sendByteCodeToPlayer(const std::shared_ptr<Player>& player) const
 		const std::string_view bytecodeView(bytecodePtr, bytecode.size());
 
 		if (scriptPackets::usesModernScriptCache(player->getVersion()))
-			player->sendRawPacket(CString() >> (char)PLO_WEAPONBYTECODE2 >> (short)m_header.length() << m_header << bytecodeView);
+			player->sendRawPacket(CString() >> (char)PLO_HEADEREDBYTECODE >> (short)m_header.length() << m_header << bytecodeView);
 		else
 			player->sendRawPacket(CString() >> (char)PLO_WEAPONBYTECODE >> (char)name.length() << name << bytecodeView);
 	}
@@ -373,12 +373,12 @@ std::string Weapon::gs1WireText(const std::string_view script)
 
 std::string Weapon::getClientSideScript() const
 {
-	std::string result{m_script.getClientSide()};
+	std::string result{m_script.getClientSideSource()};
 	for (const auto& classPtr : m_joinedClasses | std::views::values)
 	{
 		if (auto scriptClass = classPtr.lock(); scriptClass != nullptr)
 		{
-			if (const auto& clientSide = scriptClass->getScript().getClientSide(); !clientSide.empty())
+			if (const auto& clientSide = scriptClass->getScript().getClientSideSource(); !clientSide.empty())
 			{
 				result += '\xa7';
 				result += clientSide;
@@ -390,7 +390,7 @@ std::string Weapon::getClientSideScript() const
 
 const ScriptByteCode& Weapon::getClientByteCode() const
 {
-	if (const auto& compiled = m_script.getClientByteCode(); !compiled.empty())
+	if (const auto& compiled = m_script.getClientSideByteCode(); !compiled.empty())
 		return compiled;
 
 	auto source = getClientSideScript();
@@ -418,7 +418,7 @@ const ScriptByteCode& Weapon::getClientByteCode() const
 
 bool Weapon::clientScriptIsGS2() const
 {
-	if (!m_script.getClientByteCode().empty())
+	if (!m_script.getClientSideByteCode().empty())
 		return false;
 	return !getClientByteCode().empty() && m_gs1ByteCodeIsGS2;
 }
@@ -440,7 +440,7 @@ void Weapon::calculateHeaderChecksum(const ScriptByteCode& bytecode) const
 	// CRC32 checksum the bytecode as the client stores it.
 	// Seihai (#24): 5.x/6.x clients cache the bytecode DES-encrypted with this key (GRESCR01) and compare the
 	// CRC32 of that stored body with this field. The CRC of the plain bytecode never matched, so every login
-	// asked for every weapon again with PLI_UPDATESCRIPT (real 6.03r7, lab run 2026-11-12).
+	// asked for every weapon again with PLI_UPDATEWEAPON (real 6.03r7, lab run 2026-11-12).
 	std::array<uint8_t, 8> keyBytes{};
 	for (size_t i = 0; i < 4; ++i)
 	{

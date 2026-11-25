@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-19, 2026-11-22: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-19, 2026-11-22, 2026-11-25: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -864,7 +864,7 @@ void Server::loadWorldFileSystem()
 		if (fileData->file.extension() == ".gupd")
 		{
 			// Look up the package by filename and skip failed loads.
-			if (auto package = getPackageManager().findOrAddResource(fs::getANSIFileName(fileData->file)); package != nullptr)
+			if (auto package = getPackageManager().findOrAddResource(fileData->file.filename()); package != nullptr)
 				package->reload(this);
 		}
 	}
@@ -1091,6 +1091,10 @@ int Server::loadServerObjects()
 		// some level scripts may require access to the databases.
 		log::printLine(log::server, "Pre-loading map levels.");
 		loadMapLevels();
+
+		// Load ganis.
+		log::printLine(log::server, "Loading ganis...");
+		loadGanis();
 	}
 
 	return 0;
@@ -1156,6 +1160,14 @@ void Server::loadMapLevels() const
 		auto sectionProfile = log::Profile(log::server, "", "(Completed in {1:0.6} ms)");
 		for (const auto& map : m_mapList)
 			map->loadMapLevels();
+	}
+}
+
+void Server::loadGanis()
+{
+	for (const auto ganiFile : m_fsWorld.info(fs::FileCategory::FILE) | toSharedPtr | std::views::filter([](const fs::FileDataPtr& data) { return string::equalsi(data->file.extension().string(), ".gani"sv); }))
+	{
+		m_animationManager.addResource(ganiFile->file.filename());
 	}
 }
 
@@ -2488,7 +2500,7 @@ void Server::sendPacketToOneLevelPart(const CString& packet, const LevelPtr& lev
 {
 	// Seihai: a client that is not in a level yet (THROWCARRIED and others before the
 	// first level, #87) has no level part to send to.
-	if (level == nullptr) return;
+	if (!running || level == nullptr) return;
 
 	for (const auto& id : level->findPlayersInLevelPart(mapPosition))
 	{
@@ -2633,17 +2645,20 @@ void Server::sendShootToOneLevel(const LevelShoot* shoot, const std::shared_ptr<
 		return;
 
 	constexpr float pi = std::numbers::pi_v<float>;
+	constexpr float twopi = pi * 2;
 	constexpr float halfpi = pi / 2;
 
 	const auto mapPosition = level->clampMapPositionToLevel(toMapPosition(shoot->position));
+	const auto shootAngle = std::clamp(shoot->angle, 0.0f, twopi);
+	const auto shootZAngle = std::clamp(shoot->zangle, -halfpi, halfpi);
 
 	ShootPacketWrapper newPacket{};
 	newPacket.source = (shoot->from.second == ScriptObjectType::NPC ? shoot->from.first : 0);
 	newPacket.position = toPixelPosition(shoot->position);
 	newPacket.gmapx = mapPosition.x();
 	newPacket.gmapy = mapPosition.y();
-	newPacket.sangle = static_cast<uint8_t>(220 * (std::clamp(shoot->angle, 0.0f, 2 * pi) / (2 * pi)));
-	newPacket.sanglez = std::clamp(110 + static_cast<uint8_t>(110 * (std::clamp(shoot->zangle, -halfpi, halfpi) / halfpi)), 0, 220);
+	newPacket.sangle = DoubleAsIntegralRound<uint8_t>(220 * shootAngle / twopi);
+	newPacket.sanglez = DoubleAsIntegralRound<uint8_t>(110 + (110 * shootZAngle / halfpi));
 	newPacket.power = shoot->powerIn44TileParts;
 	newPacket.gravityInTiles = shoot->gravity;
 	newPacket.gani = shoot->gani;
