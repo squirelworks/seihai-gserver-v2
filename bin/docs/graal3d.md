@@ -316,7 +316,10 @@ client keeps in its own cache (`levels3d/heights/<server>/`). A missing file lea
 that chunk out, and a file over 1023 bytes or one that does not inflate is logged
 at start-up. Put `heights.info` (one texture name a line, in material order, each
 256 x 256 24-bit) and its textures in the file folders: the client asks for
-`heights.info` over TCP when it has none, then fetches each texture. Write the
+`heights.info` over TCP when it has none, then fetches each texture. On a first visit (empty cache) 5.12 asks only for a bare `heights.info`, saves it in
+`levels3d/images/`, and draws the terrain white; on the next visit it logs "Missing
+terrain texture" for each line, asks for each texture by its listed name, and draws
+them (live, 2026-11-25). So test textures on a return visit. Write the
 names with their extension (`g3d_grass.png`): the Linux 4.206 client given bare
 names drew the terrain white, then saved the textures without an extension, could
 not load them and drew no terrain at all; with `.png` names it drew them textured
