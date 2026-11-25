@@ -98,6 +98,11 @@ namespace graal3d
 		// textures go to the client over TCP unasked (5.12 fetches the textures
 		// only on its second visit, so a first visit drew the terrain white).
 		void setPushTerrainFiles(bool on) { m_pushTerrainFiles = on; }
+
+		// Files the start-up check found would crash a client (graal3dshapecheck
+		// = skip): a 3D client asking for one is answered as if the server did
+		// not have it, which it survives.
+		[[nodiscard]] const std::set<std::string>& refusedFiles() const { return m_refusedFiles; }
 		[[nodiscard]] uint16_t port() const { return m_port; }
 
 		// Reads waiting datagrams and runs every connection. Called each server frame.
@@ -209,6 +214,7 @@ namespace graal3d
 		bool m_terrainForAll = false;
 		bool m_pushTerrainFiles = false;
 		std::vector<std::string> m_terrainFiles; // heights.info, then its textures, as found at start-up
+		std::set<std::string> m_refusedFiles;   // lower-cased file names the start-up check found would crash a client
 		std::set<std::string> m_terrainPushedTo; // accounts already sent m_terrainFiles (graal3dpushterrain)
 		[[nodiscard]] bool offers(const Capabilities* caps, const GhostObject& object, int protocol) const;
 		[[nodiscard]] bool takesTerrain(const Capabilities* caps, int protocol) const;
