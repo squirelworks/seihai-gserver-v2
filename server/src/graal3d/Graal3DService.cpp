@@ -355,6 +355,15 @@ namespace graal3d
 				profile = sharp;
 		}
 		const PlayerID playerId = player->getId();
+		const Capabilities* caps = capabilitiesFor(player->getVersionStr(), profile->protocol);
+		if (caps)
+		{
+			log::printLine(log::server, "Graal3D: {} is a {} client: {}, terrain {}, TorqueScript {}{}.", account, caps->label,
+						   caps->gameLayer == GameLayer::Tge ? "TGE layer" : "GameObject layer",
+						   caps->takesStreamedTerrain512() ? "streamed" : caps->terrainChunks ? "stock TGE only (not served)" : "none",
+						   caps->torqueScript ? "yes" : "no",
+						   caps->allAssumed() ? " (every capability assumed)" : caps->confirmed(CapField::Protocol) ? "" : " (protocol assumed)");
+		}
 
 		// One 3D link per player.
 		if (auto it = m_byPlayer.find(playerId); it != m_byPlayer.end())
@@ -404,10 +413,10 @@ namespace graal3d
 		cb.onTerrainRequest = [this, playerId, account](const std::array<uint32_t, 256>& stamps) {
 			if (auto it = m_byPlayer.find(playerId); it != m_byPlayer.end())
 				if (auto s = m_sessions.find(it->second); s != m_sessions.end())
-					sendTerrain(account, *s->second.connection, stamps);
+					sendTerrain(account, *s->second.connection, s->second.caps, stamps);
 		};
 
-		Session session{from, playerId, std::make_unique<Connection>(*profile, req->sequence, now, std::move(cb))};
+		Session session{from, playerId, std::make_unique<Connection>(*profile, req->sequence, now, std::move(cb)), caps};
 		auto& connection = *session.connection;
 		connection.setPacketStrings(m_packetStrings);
 		m_sessions.emplace(from, std::move(session));
@@ -641,11 +650,25 @@ namespace graal3d
 			log::printLine(log::server, "Graal3D: {}'s client has no event class {}: its raw events are not sent.", account, name);
 	}
 
-	void Service::sendTerrain(const std::string& account, Connection& connection, const std::array<uint32_t, 256>& stamps)
+	const Capabilities* Service::capabilitiesOf(PlayerID player) const
+	{
+		if (auto it = m_byPlayer.find(player); it != m_byPlayer.end())
+			if (auto s = m_sessions.find(it->second); s != m_sessions.end())
+				return s->second.caps;
+		return nullptr;
+	}
+
+	void Service::sendTerrain(const std::string& account, Connection& connection, const Capabilities* caps, const std::array<uint32_t, 256>& stamps)
 	{
 		if (!m_world.terrain)
 		{
 			log::printLine(log::server, "Graal3D: {} asked for terrain chunks; the world has no terrain line.", account);
+			return;
+		}
+		if (!caps || !caps->takesStreamedTerrain512())
+		{
+			log::printLine(log::server, "Graal3D: {} asked for terrain chunks; its build ({}) does not take the 5.x terrain layout.", account,
+						   caps ? caps->label : "unknown");
 			return;
 		}
 		size_t sent = 0, current = 0;
@@ -669,25 +692,32 @@ namespace graal3d
 		log::printLine(log::server, "Graal3D: {} gets {} terrain chunks ({} already current).", account, sent, current);
 	}
 
-	void Service::ghostRawObjects(const std::string& account, Connection& connection, ObjectKey firstKey)
+	void Service::ghostRawObjects(const std::string& account, Connection& connection, const Capabilities* caps, ObjectKey firstKey)
 	{
-		// Every raw object goes to every client; Connection::setGhost logs the ones
-		// whose class the client's table does not have.
+		// Every raw object goes to every client whose build takes it;
+		// Connection::setGhost logs the ones whose class the client's table does
+		// not have.
 		ObjectKey key = firstKey;
-		size_t count = 0;
-		const bool skipTerrain = connection.profile().tgePackets && m_world.terrain;
+		size_t count = 0, skipped = 0;
 		for (const auto& object : m_world.objects)
 		{
-			// The terrain line's TerrainBlock is the 5.x layout; 4.04r2's is stock TGE.
-			if (object.kind == GhostObject::Kind::Raw && !(skipTerrain && object.rawClass == "TerrainBlock"))
+			if (object.kind == GhostObject::Kind::Raw)
 			{
-				connection.setGhost(key, object);
-				++count;
+				if (offersWorldObject(caps, object))
+				{
+					connection.setGhost(key, object);
+					++count;
+				}
+				else
+					++skipped;
 			}
 			++key;
 		}
 		if (count > 0)
 			log::printLine(log::server, "Graal3D: {} gets {} raw objects.", account, count);
+		if (skipped > 0)
+			log::printLine(log::server, "Graal3D: {}'s build ({}) does not take the 5.x terrain or water layout: {} objects not sent.", account,
+						   caps ? caps->label : "unknown", skipped);
 	}
 
 	void Service::ghostWorld(PlayerID playerId, const std::string& account, Connection& connection)
@@ -752,7 +782,7 @@ namespace graal3d
 				if (auto a = m_avatars.find(playerId); a != m_avatars.end())
 					a->second.object.transform.position = m_world.spawn.position;
 			}
-			ghostRawObjects(account, connection, 1);
+			ghostRawObjects(account, connection, capabilitiesOf(playerId), 1);
 			sendRawEvents(account, connection, false);
 			log::printLine(log::server, "Graal3D: {} (protocol 19) gets a Sky and a {} at the spawn point as its control object.", account,
 						   control.className());
@@ -760,8 +790,13 @@ namespace graal3d
 		}
 
 		ObjectKey key = 1;
+		const Capabilities* caps = capabilitiesOf(playerId);
 		for (const auto& object : m_world.objects)
-			connection.setGhost(key++, object);
+		{
+			if (offersWorldObject(caps, object))
+				connection.setGhost(key, object);
+			++key;
+		}
 		for (const auto& [other, avatar] : m_avatars)
 			connection.setGhost(avatarKey(other), avatar); // its own included: the control object
 		// The Sharp3D route's control object is the client's Camera (set below).

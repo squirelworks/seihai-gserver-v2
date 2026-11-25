@@ -38,6 +38,7 @@
 #include <CSocket.h>
 #include <CString.h>
 
+#include <graal3d/Graal3DCapabilities.h>
 #include <graal3d/Graal3DConnection.h>
 #include <graal3d/Graal3DObjects.h>
 #include <utilities/CommonTypes.h>
@@ -121,6 +122,8 @@ namespace graal3d
 			Endpoint endpoint;
 			PlayerID player;
 			std::unique_ptr<Connection> connection;
+			// What the client's build can take (by its login token and protocol).
+			const Capabilities* caps = nullptr;
 		};
 
 		void handleDatagram(const Endpoint& from, std::string_view data, uint64_t nowMs);
@@ -148,8 +151,10 @@ namespace graal3d
 		// Lab: the world's rawevent lines (`late`: the ones for after the mission
 		// start) and, for protocol 19, its rawobject lines.
 		void sendRawEvents(const std::string& account, Connection& connection, bool late);
-		void sendTerrain(const std::string& account, Connection& connection, const std::array<uint32_t, 256>& stamps);
-		void ghostRawObjects(const std::string& account, Connection& connection, ObjectKey firstKey);
+		void sendTerrain(const std::string& account, Connection& connection, const Capabilities* caps, const std::array<uint32_t, 256>& stamps);
+		void ghostRawObjects(const std::string& account, Connection& connection, const Capabilities* caps, ObjectKey firstKey);
+		// The capabilities of the player's 3D session, or nullptr.
+		const Capabilities* capabilitiesOf(PlayerID player) const;
 		void sendWorldWeapons(Connection& connection);
 		std::string compileClientScript(const std::string& name, std::string_view source);
 		void sendTo(const Endpoint& to, std::string_view data);
