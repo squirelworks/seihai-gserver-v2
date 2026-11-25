@@ -10,6 +10,8 @@
 
 #include <memory>
 #include <optional>
+#include <set>
+#include <string>
 #include <span>
 #include <string_view>
 
@@ -38,12 +40,18 @@ namespace preagonal
 		/// extension that the server does not have under the bare name.
 		std::span<const char* const> bareNameExtensions;
 
+		/// File names (lower-cased, no folder) the client is answered as if the
+		/// server did not have them: files the add-on found would crash it.
+		const std::set<std::string>* refusedFiles = nullptr;
+
 		AddonClientNeeds& operator|=(const AddonClientNeeds& o)
 		{
 			answerMissingChecksumFiles |= o.answerMissingChecksumFiles;
 			alwaysServerListConnected |= o.alwaysServerListConnected;
 			if (bareNameExtensions.empty())
 				bareNameExtensions = o.bareNameExtensions;
+			if (refusedFiles == nullptr)
+				refusedFiles = o.refusedFiles;
 			return *this;
 		}
 	};

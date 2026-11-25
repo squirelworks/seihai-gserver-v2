@@ -655,6 +655,17 @@ AddonClientNeeds Player::addonNeeds() const
 fs::FileData* Player::findClientFile(const std::filesystem::path& file) const
 {
 	const auto& filesystem = m_server->getFileSystem();
+	const auto needs = addonNeeds();
+	// Seihai: a file an add-on found would crash this client is answered as
+	// missing, which its client survives (an oversized terrain PNG fetched by
+	// name crashed 5.12, lab 2026-11-25).
+	const auto refused = [&](fs::FileData* found) -> fs::FileData* {
+		if (found == nullptr || needs.refusedFiles == nullptr)
+			return found;
+		auto name = found->file.filename().string();
+		std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+		return needs.refusedFiles->contains(name) ? nullptr : found;
+	};
 	auto info = filesystem.infoi(fs::FileCategory::ALL, file.filename());
 
 	// An add-on's client may ask for a file by its bare name (the 5.x 3D client
@@ -664,7 +675,7 @@ fs::FileData* Player::findClientFile(const std::filesystem::path& file) const
 	// also finds the same stem with another.
 	if (info == nullptr)
 	{
-		const auto extensions = addonNeeds().bareNameExtensions;
+		const auto extensions = needs.bareNameExtensions;
 		auto stem = file.filename();
 		bool tryStem = !file.has_extension();
 		if (!tryStem)
@@ -683,7 +694,7 @@ fs::FileData* Player::findClientFile(const std::filesystem::path& file) const
 			}
 		}
 	}
-	return info;
+	return refused(info);
 }
 
 std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file, const PacketQueue channel)

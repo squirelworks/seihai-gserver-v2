@@ -122,6 +122,7 @@ namespace graal3d
 		// The 5.x 3D client asks for every texture by its bare, lower-cased name and
 		// stores what it gets under that name.
 		needs.bareNameExtensions = kImageExtensions;
+		needs.refusedFiles = &m_service->refusedFiles();
 		return needs;
 	}
 

@@ -690,6 +690,13 @@ namespace graal3d
 		// drop them when they ask (bin/docs/graal3d.md, "Shipping a 3D world").
 		const auto& files = m_server.getFileSystem();
 		m_terrainFiles.clear();
+		m_refusedFiles.clear();
+		const auto refuse = [&](const std::filesystem::path& file) {
+			auto name = file.filename().string();
+			for (auto& ch : name)
+				ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+			m_refusedFiles.insert(std::move(name));
+		};
 		const auto find = [&](const std::string& name) -> preagonal::fs::FileData* {
 			const std::filesystem::path path{name};
 			auto info = files.infoi(preagonal::fs::FileCategory::ALL, path.filename());
@@ -711,7 +718,13 @@ namespace graal3d
 				return;
 			const auto data = readAll(info.file);
 			if (const auto why = unsafeImage(data))
-				log::printLine(log::server, "** [Error] Graal3D: {} would crash a client ({}); replace it.", info.file.filename().string(), *why);
+			{
+				const bool skip = m_shapeCheck == ShapeCheck::Skip;
+				log::printLine(log::server, "** [Error] Graal3D: {} would crash a client ({}); {}.", info.file.filename().string(), *why,
+							   skip ? "3D clients are told the server does not have it" : "sent anyway (graal3dshapecheck = warn)");
+				if (skip)
+					refuse(info.file);
+			}
 			// 8-bit PNG, JPEG and GIF draw on 5.12; a 16-bit PNG does not
 			// (texture probe, Graal_analysis, 2026-11-25).
 			else if (pngSize(data) && static_cast<uint8_t>(data[24]) == 16)
@@ -786,6 +799,7 @@ namespace graal3d
 			}
 			++dropped;
 			log::printLine(log::server, "** [Error] Graal3D: {} would crash a client ({}); {} is left out (graal3dshapecheck = warn sends it).", shape, *why, object.object.name);
+			refuse(info->file);
 			return true;
 		});
 		// The player shapes go out at login; a bad one crashed 4.04r2 in "Phase 1:
@@ -818,6 +832,7 @@ namespace graal3d
 				continue;
 			}
 			log::printLine(log::server, "** [Error] Graal3D: the player shape {} would crash a client at login ({}); it is not used.", *shape, *why);
+			refuse(info->file);
 			shape->clear();
 		}
 
@@ -838,7 +853,13 @@ namespace graal3d
 				ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
 			if ((ext == ".3ds" || ext == ".dts") && m_shapeCheck != ShapeCheck::Off)
 				if (const auto why = unsafeAsset(ext, readAll(info->file)))
-					log::printLine(log::server, "** [Error] Graal3D: the replicator shape {} would crash a client ({}); replace it.", shape, *why);
+				{
+					const bool skip = m_shapeCheck == ShapeCheck::Skip;
+					log::printLine(log::server, "** [Error] Graal3D: the replicator shape {} would crash a client ({}); {}.", shape, *why,
+								   skip ? "3D clients are told the server does not have it" : "sent anyway (graal3dshapecheck = warn)");
+					if (skip)
+						refuse(info->file);
+				}
 		}
 
 		// Streamed terrain: the client asks for heights.info over TCP, then for
@@ -901,7 +922,7 @@ namespace graal3d
 										   texture->file.filename().string(), size->first, size->second);
 						// One that would crash a client (30000x30000 and 65536x1
 						// did) is never pushed unasked.
-						if (m_shapeCheck == ShapeCheck::Off || !unsafeImage(data))
+						if (m_shapeCheck != ShapeCheck::Skip || !unsafeImage(data))
 							m_terrainFiles.push_back(line);
 					}
 				}
