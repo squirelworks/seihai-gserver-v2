@@ -805,6 +805,38 @@ namespace graal3d
 					world.objects.push_back(std::move(block));
 				}
 			}
+			else if (w[0] == "replicator" && (w.size() == 9 || w.size() == 10) &&
+					 (w[1] == "DynamicShapeReplicator" || w[1] == "DynamicGrass" || w[1] == "DynamicGrassReplicator"))
+			{
+				ReplicatorSettings rep;
+				rep.cls = w[1];
+				ok = toFloats(w, 2, rep.position.data(), 3);
+				const auto whole = [&](size_t i, uint32_t max, uint32_t& out) {
+					char* end = nullptr;
+					const std::string word(w[i]);
+					const unsigned long v = std::strtoul(word.c_str(), &end, 10);
+					if (!end || *end != '\0' || word.empty() || v > max)
+						return false;
+					out = static_cast<uint32_t>(v);
+					return true;
+				};
+				// The client clamps radius to 1-64 and the counts to 0-20; out of
+				// range here is a typo, so the line is refused.
+				ok = ok && whole(5, 64, rep.radius) && rep.radius >= 1 && whole(6, 20, rep.minPerCell) && whole(7, 20, rep.maxPerCell) &&
+					 rep.minPerCell <= rep.maxPerCell;
+				rep.shapeFiles = w[8];
+				if (ok && w.size() == 10)
+					ok = whole(9, 0xFFFFFFFFu, rep.seed);
+				if (ok)
+				{
+					GhostObject object;
+					object.kind = GhostObject::Kind::Raw;
+					object.rawClass = rep.cls;
+					object.raw = replicatorFields(rep);
+					object.layout512 = true;
+					world.objects.push_back(std::move(object));
+				}
+			}
 			else if (w[0] == "terrain" && w.size() >= 2 && w.size() <= 4 && !world.terrain)
 			{
 				Terrain terrain;
@@ -1144,6 +1176,53 @@ namespace graal3d
 			num(255, 8); // specular colour
 		f32(6.0f);       // specular power
 		num(0, 8);       // ignore terrain
+		return f;
+	}
+
+	std::vector<RawField> replicatorFields(const ReplicatorSettings& rep)
+	{
+		std::vector<RawField> f;
+		const auto flag = [&](bool v) { f.push_back(RawField{RawField::Type::Flag, 1, v ? 1u : 0u}); };
+		const auto num = [&](uint32_t v, int bits) { f.push_back(RawField{RawField::Type::Int, bits, v}); };
+		// A signed intN: a sign flag (1 = negative), then an N-1 bit magnitude.
+		const auto signedNum = [&](int v, int bits) {
+			flag(v < 0);
+			num(static_cast<uint32_t>(v < 0 ? -v : v), bits - 1);
+		};
+		const auto f32 = [&](float v) {
+			RawField r{RawField::Type::F32};
+			r.f32 = v;
+			f.push_back(r);
+		};
+		const auto vec = [&](float x, float y, float z) { f32(x), f32(y), f32(z); };
+		for (int i = 0; i < 13; ++i)
+			flag(false); // GameObject: no section
+		flag(true);
+		for (const float v : rep.position)
+			f32(v);
+		vec(0.0f, 0.0f, 0.0f); // quaternion x, y, z: no rotation
+		flag(false);           // w is not negative
+		num(rep.seed, 32);
+		RawField shapes{RawField::Type::String};
+		shapes.data = rep.shapeFiles;
+		f.push_back(shapes);
+		num(rep.radius, 8);
+		num(rep.minPerCell, 8);
+		num(rep.maxPerCell, 8);
+		for (const int v : {-1, -1, 0})
+			signedNum(v, 16); // box min
+		for (const int v : {1, 1, 2})
+			signedNum(v, 16); // box max
+		vec(1.0f, 1.0f, 1.0f), vec(1.0f, 1.0f, 1.0f); // scale min, max
+		vec(0.0f, 0.0f, 0.0f), vec(0.0f, 0.0f, 360.0f); // rotation min, max
+		f32(0.0f);                                      // offset z
+		flag(true), flag(false), flag(false), flag(false), flag(false); // on terrain only
+		signedNum(90, 8);                                                // slope
+		flag(false);                                                     // align to terrain
+		vec(0.0f, 0.0f, 1.0f);                                           // terrain alignment
+		flag(false);                                                     // surface exclusion
+		signedNum(0, 8);                                                 // surface type
+		flag(false);                                                     // hide
 		return f;
 	}
 

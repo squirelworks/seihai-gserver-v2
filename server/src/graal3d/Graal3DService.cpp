@@ -711,6 +711,18 @@ namespace graal3d
 			// (texture probe, Graal_analysis, 2026-11-25).
 			else if (pngSize(data) && static_cast<uint8_t>(data[24]) == 16)
 				log::printLine(log::server, "** [Warning] Graal3D: {} is a 16-bit PNG, which 5.12 does not draw; save it as 8-bit.", info.file.filename().string());
+			// 5.12 drew textures up to 1024 a side; 2048 and 4096 came out white
+			// (live, Graal_analysis torque/live-512-shapes-2026-11-25.md).
+			else if (const auto size = pngSize(data); size && (size->first > kMaxDrawnImageSide || size->second > kMaxDrawnImageSide))
+				log::printLine(log::server, "** [Warning] Graal3D: {} is {}x{}; 5.12 draws nothing over {} a side.", info.file.filename().string(), size->first,
+							   size->second, kMaxDrawnImageSide);
+			if (data.empty())
+				log::printLine(log::server, "** [Warning] Graal3D: {} is empty; clients draw it white.", info.file.filename().string());
+			auto ext = info.file.extension().string();
+			for (auto& ch : ext)
+				ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+			if (ext == ".bmp")
+				log::printLine(log::server, "** [Warning] Graal3D: {} is a BMP, which 5.12 does not draw; use PNG, JPEG or GIF.", info.file.filename().string());
 		};
 
 		size_t found = 0, missing = 0, dropped = 0;

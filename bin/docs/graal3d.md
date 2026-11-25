@@ -290,12 +290,28 @@ world/3d/                        any folder the file folders cover
 - **Texture formats.** Only 8-bit PNG, JPEG and GIF draw on 5.12. BMP, TGA, DDS and 16-bit PNG draw white.
 - **Lower-case names** are safest, because the clients lower-case what they ask for. The server's lookup ignores case, so mixed case still works.
 - **Start-up check.** At start-up the server looks up every shape and Sky texture the world file names, and with a `terrain` line, `heights.info` and every texture it lists (a client that cannot fetch them draws the terrain white). It logs any that are missing, and any found only without an extension.
-- **Unsafe shapes and textures.** Every `.3ds` and `.dts` shape is checked for the faults that crashed a real client. For a `.3ds` these are: no materials, a cut file, a chunk longer than its parent, a vertex or face list claiming more entries than it holds, or a face using a vertex the mesh does not have. A `.dts` must be version 24, the only version the real 5.12 drew (it trusts the version word: other versions were refused, hung, crashed or drew nothing), and the memory buffer its header claims must fit the file; a cut file or a huge size word crashed 5.12. Sky and terrain textures that are PNGs must claim a width and height from 1 to 8192; one claiming 30000x30000 crashed 5.12 (content fuzzing, lab, 2026-11-25). A bad texture is logged as an error, since it cannot be left out. A 16-bit PNG gets a warning too, since 5.12 does not draw one (8-bit PNG, JPEG and GIF draw). Terrain textures should be 256x256 24-bit; the client draws its default texture for any other size, and the server warns about it. With `graal3dshapecheck = skip` (the default), an object with such a shape is left out of the world and logged. Labs that send broken shapes on purpose set `warn`, which logs and sends them anyway; `off` skips the check.
+- **Unsafe shapes and textures.** Every `.3ds` and `.dts` shape is checked for the faults that crashed a real client. For a `.3ds` these are: no materials, a cut file, a chunk longer than its parent, a vertex or face list claiming more entries than it holds, or a face using a vertex the mesh does not have. A `.dts` must be version 24, the only version the real 5.12 drew (it trusts the version word: other versions were refused, hung, crashed or drew nothing), and the memory buffer its header claims must fit the file; a cut file or a huge size word crashed 5.12. Sky and terrain textures that are PNGs must claim a width and height from 1 to 8192; one claiming 30000x30000 crashed 5.12 (content fuzzing, lab, 2026-11-25). A bad texture is logged as an error, since it cannot be left out. A 16-bit PNG, a BMP, an empty file, or an image over 1024 a side gets a warning too, since 5.12 draws none of them (it drew 1024; 2048 and 4096 came out white). 8-bit PNG, JPEG and GIF draw. Terrain textures should be 256x256 24-bit; the client draws its default texture for any other size, and the server warns about it. With `graal3dshapecheck = skip` (the default), an object with such a shape is left out of the world and logged. Labs that send broken shapes on purpose set `warn`, which logs and sends them anyway; `off` skips the check.
 
 - **Folders config.** A file folder covers only its own files, not its subfolders. `config/foldersconfig.txt` needs `file 3d/*` and a line for each streamed terrain folder, such as `file 3d/island_terrain/*`; without them the world's files are not found (lab, 2026-11-25). The default and modern servers have `file 3d/*`.
 
 `seihai-servertools gen terrain DIR --world NAME --stream --playerworld` writes a whole
 world in this layout from a generated height field.
+
+## Lab: ground cover (`replicator`)
+
+```
+# replicator <class> <x> <y> <z> <radius> <min> <max> <shapes> [<seed>]
+replicator DynamicGrass 10 -20 1.5 4 1 3 grass.dts
+```
+
+Ghosts a `DynamicShapeReplicator`, `DynamicGrass` or `DynamicGrassReplicator`: ground
+cover scattered around the point on a grid of 8-unit cells. `<radius>` is in cells
+(1 to 64), `<min>` and `<max>` are objects per cell (0 to 20), and `<shapes>` is the
+shape list as one string. The layout is from a static read of the real 5.12 client
+(Graal_analysis `torque/replicators-512.md`) and has not been seen live yet. The other
+fields are fixed: a box of -1..1 x -1..1 x 0..2, scale 1, any rotation about z, terrain
+only, slopes up to 90 degrees, no alignment, shown. Only clients that take streamed
+terrain get it.
 
 ## Terrain (4.20r6 and 5.x)
 

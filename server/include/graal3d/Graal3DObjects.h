@@ -269,6 +269,8 @@ namespace graal3d
 
 	// Checks a PNG's header for a sane width and height; other images pass.
 	inline constexpr uint32_t kMaxImageSide = 8192;
+	// The largest side 5.12 drew; 2048 and 4096 drew white (live, 2026-11-25).
+	inline constexpr uint32_t kMaxDrawnImageSide = 1024;
 	std::optional<std::string> unsafeImage(std::string_view data);
 
 	// unsafe3ds, unsafeDts or unsafeImage, by the file's extension.
@@ -288,6 +290,29 @@ namespace graal3d
 	// The update: the name, the position with no rotation, the scale, the
 	// textures, the liquid type, then stock TGE 1.x's default look.
 	std::vector<RawField> waterBlockFields(const WaterSettings& water);
+
+	// A DynamicShapeReplicator, DynamicGrass or DynamicGrassReplicator: ground
+	// cover scattered around a point on a grid of 8-unit cells (Graal_analysis
+	// torque/replicators-512.md, a static read of the 5.12 client; not yet seen
+	// live). The rest of the update uses fixed lab defaults (see
+	// replicatorFields).
+	struct ReplicatorSettings
+	{
+		std::string cls = "DynamicShapeReplicator";
+		std::array<float, 3> position{};
+		uint32_t radius = 4;         // grid cells; the client clamps to 1-64
+		uint32_t minPerCell = 1;     // the client clamps both to 0-20
+		uint32_t maxPerCell = 3;
+		std::string shapeFiles;
+		uint32_t seed = 1;
+	};
+
+	// The update: an empty GameObject update (13 cleared section flags), then the
+	// replicator's part: position with no rotation, seed, shapes, radius, grid
+	// counts, a box of -1..1 x -1..1 x 0..2, scale 1 to 1, rotation 0 to 360
+	// about z, no height offset, terrain only, slopes up to 90 degrees, no
+	// alignment, no surface exclusion, shown.
+	std::vector<RawField> replicatorFields(const ReplicatorSettings& replicator);
 
 	// One object the server ghosts: its class and state.
 	struct GhostObject
@@ -399,6 +424,10 @@ namespace graal3d
 	//   water <x> <y> <z> <sx> <sy> <sz> [<surface texture> [<liquid type>]]
 	//                             a WaterBlock (see WaterSettings), for 4.20r6
 	//                             and 5.x
+	//   replicator <class> <x> <y> <z> <radius> <min> <max> <shapes> [<seed>]
+	//                             lab: ground cover (see ReplicatorSettings) for
+	//                             5.x; <class> is DynamicShapeReplicator,
+	//                             DynamicGrass or DynamicGrassReplicator
 	//   terrain <folder> [<square size>] [repeat]
 	//                             streamed terrain for 4.20r6 and 5.x (see
 	//                             Terrain): a TerrainBlock ghost, then the

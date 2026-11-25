@@ -287,6 +287,9 @@ namespace graal3d
 			return caps && caps->takesStreamedTerrain512();
 		if (object.rawClass == "WaterBlock")
 			return caps && caps->takesWater512();
+		// Ground cover: the layout is read from 5.12 only, and it grows on terrain.
+		if (object.rawClass == "DynamicShapeReplicator" || object.rawClass == "DynamicGrass" || object.rawClass == "DynamicGrassReplicator")
+			return caps && caps->takesStreamedTerrain512();
 		return true;
 	}
 } // namespace graal3d
