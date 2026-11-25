@@ -8,7 +8,8 @@ so that a rejected or misdrawn variant points at the one thing that changed.
 Nothing here contains game content: you pass the folders, and the output stays
 on the lab machines (never commit it).
 
-    g3dlabworlds.py OUT --pack PACKDIR [--ground NAME] [--extra DIR ...] [--mbg MBGDIR] [--only ID,ID]
+    g3dlabworlds.py OUT --pack PACKDIR [--ground NAME] [--extra DIR ...] [--mbg MBGDIR]
+                    [--round 1|2] [--levels DIR ...] [--only ID,ID]
 
 PACKDIR is a scene folder of .3ds models and textures with a scene.json
 ("Model", "Objects", "SkyMaterials", ...), such as the kokiri scene of the
@@ -26,6 +27,15 @@ To run one: copy OUT/<id>/config and OUT/<id>/world into a lab server folder
 with graal3d = true, start it, connect a real client in a lab VM, and note
 what it does. Clear the client's levels3d download cache between variants;
 changed files also get new names, so a stale cached copy cannot stand in.
+
+Round 1 (the default) varies textures, sky, object count, GameObject section
+2, .3ds damage and .dts/.dif versions. Round 2 varies placement (far, below,
+rotated, a zero rotation axis), model name case, .3ds structure (no UVs, no
+smoothing groups, no local axes, no version chunk, an odd version, the mesh
+twice, an empty mesh, a 65535-point mesh), 2048 objects, the ground alone, and
+a bare ghost of each networked class this server has no writer for. Each
+--levels DIR adds one variant per NAME_graal3dworld.txt in it (as written by
+`seihai-servertools gen terrain DIR --world NAME --3d`), served as it is.
 Run each variant on both routes (graal3droute = mission, then sharp3d).
 
 Tests: python3 -m unittest tools/lab/test_g3dlabworlds.py
@@ -87,6 +97,30 @@ def drop_chunks(data, ids):
     return b"".join(rebuild(s, e, c) for c, s, e in top if c not in ids)
 
 
+def replace_chunk(data, cid, new_body):
+    """A copy of a .3ds with the first chunk `cid` given a new body, and the
+    lengths of the chunks around it fixed."""
+
+    def rebuild(start, end, cur):
+        if cur == cid and not done[0]:
+            done[0] = True
+            return struct.pack("<HI", cur, len(new_body) + 6) + new_body
+        if cur not in CONTAINERS:
+            return data[start:end]
+        body_start = start + 6
+        body = bytearray()
+        if cur == 0x4000:
+            nul = data.index(b"\0", body_start, end)
+            body += data[body_start:nul + 1]
+            body_start = nul + 1
+        for sub, s, e in chunks(data, body_start, end):
+            body += rebuild(s, e, sub)
+        return struct.pack("<HI", cur, len(body) + 6) + bytes(body)
+
+    done = [False]
+    return b"".join(rebuild(s, e, c) for c, s, e in chunks(data))
+
+
 def find_chunk(data, cid, start=0, end=None):
     """The first chunk `cid` anywhere in the tree: (start, end) or None."""
     for sub, s, e in chunks(data, start, end):
@@ -134,6 +168,42 @@ def mutations(data, seed):
     return out
 
 
+def structure_variants(data):
+    """Well-formed .3ds files that differ in one structural way: (suffix, bytes, what)."""
+    out = []
+    for cid, suffix, what in ((0x4140, "nouv", "texture coordinates (0x4140) removed"),
+                              (0x4150, "nosmooth", "smoothing groups (0x4150) removed"),
+                              (0x4160, "noaxes", "local axes (0x4160) removed"),
+                              (0x0002, "nover", "the version chunk (0x0002) removed")):
+        if find_chunk(data, cid):
+            out.append((suffix, drop_chunks(data, {cid}), what))
+    if find_chunk(data, 0x0002):
+        out.append(("ver99", replace_chunk(data, 0x0002, struct.pack("<I", 99)), "file version 99"))
+    edit = find_chunk(data, 0x3D3D)
+    obj = find_chunk(data, 0x4000)
+    if edit and obj:
+        twice = bytearray(data[: edit[1]]) + data[obj[0]: obj[1]] + data[edit[1]:]
+        for at, extra in ((2, obj[1] - obj[0]), (edit[0] + 2, obj[1] - obj[0])):
+            struct.pack_into("<I", twice, at, struct.unpack_from("<I", twice, at)[0] + extra)
+        out.append(("twice", bytes(twice), "its first mesh object a second time, same name"))
+    if find_chunk(data, 0x4110) and find_chunk(data, 0x4120):
+        empty = replace_chunk(replace_chunk(data, 0x4110, struct.pack("<H", 0)), 0x4120, struct.pack("<H", 0))
+        out.append(("empty", empty, "first mesh with no points and no faces"))
+        n = 0xFFFF
+        pts = struct.pack("<H", n) + b"".join(struct.pack("<3f", (i % 256) * 0.01, (i // 256) * 0.01, 0) for i in range(n))
+        big = replace_chunk(data, 0x4110, pts)
+        if find_chunk(big, 0x4140):
+            big = drop_chunks(big, {0x4140})
+        out.append(("pts65535", big, "first mesh with 65535 points (its faces unchanged, UVs removed)"))
+    return out
+
+
+# Networked classes this server has no writer for, by protocol (the class
+# tables in Graal3DProtocol.cpp). Round 2 sends each one bare.
+BARE_CLASSES = ["WaterBlock", "DynamicGrass", "DynamicGrassReplicator", "DynamicShapeReplicator",
+                "fxSunLight", "SimpleNetObject", "twSurfaceReference"]
+
+
 # ------------------------------------------------------------- world files
 
 class World:
@@ -178,7 +248,7 @@ def raw_gameobject(name, shape, pos, section2):
 
 # --------------------------------------------------------------- variants
 
-def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None):
+def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None, round_=1, levels=()):
     pack, out = Path(pack), Path(out)
     scene = json.loads((pack / "scene.json").read_text())
     if ground:
@@ -207,10 +277,16 @@ def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None):
         dest = d / "world" / LAB
         dest.mkdir(parents=True)
         for f in files:
+            if isinstance(f, tuple) and f[0] == "sub":
+                continue
             if isinstance(f, tuple):
                 (dest / f[0]).write_bytes(f[1])
             else:
                 shutil.copyfile(f, dest / f.name)
+        for n, m, *_ in world.objects:
+            if "/" in m:
+                (dest / Path(m).parent).mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(next(p for p in base_files if p.name == Path(m).name), dest / m)
         (d / "config" / "graal3dworld.txt").write_text(world.text(f"{vid}: {what}"))
         (d / "VARIANT.md").write_text(f"# {vid}\n\nChanged from C0: {what}\n")
         variants.append((vid, what))
@@ -230,6 +306,32 @@ def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None):
 
     control = World(scene)
     variant("C0", "nothing: the control world (scene ground, its objects, its sky)", control, textures("both"))
+    probe = next((o for o in control.objects if o[1] != control.ground), None)
+    if round_ == 2:
+        round2(scene, control, probe, base_files, textures, variant)
+    for d in levels:
+        for txt in sorted(Path(d).glob("*_graal3dworld.txt")):
+            name = txt.name[: -len("_graal3dworld.txt")]
+            vid = f"L-{name}"
+            if only and vid not in only:
+                continue
+            files = [p for p in Path(d).glob(f"{name}*.3ds")]
+            dest = out / vid
+            if dest.exists():
+                shutil.rmtree(dest)
+            (dest / "config").mkdir(parents=True)
+            (dest / "world" / LAB).mkdir(parents=True)
+            for f in files:
+                shutil.copyfile(f, dest / "world" / LAB / f.name.lower())
+            text = txt.read_text()
+            for f in files:
+                text = text.replace(f.name, f.name.lower())
+            (dest / "config" / "graal3dworld.txt").write_text(f"# g3dlabworlds: {vid}: generated level {name}\n" + text)
+            what = f"generated level {name} ({len(files)} models), served as written"
+            (dest / "VARIANT.md").write_text(f"# {vid}\n\nIn place of C0: {what}\n")
+            variants.append((vid, what))
+    if round_ == 2:
+        return finish(out, variants, only, round_)
 
     w = World(scene)
     variant("T1", "textures only as extension-less copies", w, textures("bare"))
@@ -244,7 +346,6 @@ def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None):
     w = World(scene); w.sky = control.sky + control.sky[:1] if len(control.sky) < 6 else control.sky[:5]
     variant("S4", f"Sky with {len(w.sky)} texture names (control {len(control.sky)})", w, textures("both"))
 
-    probe = next((o for o in control.objects if o[1] != control.ground), None)
     if probe:
         _, model, x, y, z = probe
         for vid, count in (("O1", 64), ("O2", 512)):
@@ -292,7 +393,61 @@ def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None):
                     variant(f"V-{kind}{v}", f"{found[0].name} with its version field set to {v}, as {name}", w,
                             textures("both") + [(name, bytes(patched))])
 
-    sheet = ["# Graal 3D lab worlds", "",
+    return finish(out, variants, only, round_)
+
+
+def round2(scene, control, probe, base_files, textures, variant):
+    if probe:
+        _, model, x, y, z = probe
+        for vid, pos, what in (("P1", (x + 5000, y - 5000, z), "5000 units away on x and y"),
+                               ("P2", (x, y, z - 500), "500 units below the ground"),
+                               ("P3", (x, y, z + 1e7), "at height 10 000 000")):
+            w = World(scene)
+            w.objects = [(n, m, *(pos if (n, m) == probe[:2] else (ox, oy, oz))) for n, m, ox, oy, oz in control.objects]
+            variant(vid, f"{probe[0]} ({model}) placed {what}", w, textures("both"))
+        for vid, rot, what in (("P4", "0 0 1 1.5708", "turned 90 degrees about z"),
+                               ("P5", "1 0 0 3.1416", "turned upside down (180 degrees about x)"),
+                               ("P6", "0 0 0 1", "a zero rotation axis")):
+            w = World(scene)
+            w.extra = [f"object ProbeRot {model} {x + 1.5:g} {y:g} {z:g} {rot}"]
+            variant(vid, f"one more {model} {what}", w, textures("both"))
+        source = next((p for p in base_files if p.name == model), None)
+        for vid, served, files_name, what in (
+                ("N1", model.upper(), model, f"the world names {model.upper()}, the file is {model}"),
+                ("N2", model, model.upper(), f"the world names {model}, the file is {model.upper()}"),
+                ("N3", "sub/" + model, None, f"the world names sub/{model}, the file is in a subfolder")):
+            w = World(scene)
+            w.objects = [(n, served if m == model else m, ox, oy, oz) for n, m, ox, oy, oz in control.objects]
+            files = [p for p in textures("both") if p.name != model]
+            if files_name:
+                files.append((files_name, source.read_bytes()))
+            else:
+                files.append(("sub", None))
+            variant(vid, what, w, files)
+        data = source.read_bytes() if source else b""
+        stem = Path(model).stem
+        for suffix, bytes_, what in structure_variants(data):
+            w = World(scene)
+            name = f"{stem}_{suffix}.3ds"
+            w.objects = [(n, name if m == model else m, ox, oy, oz) for n, m, ox, oy, oz in control.objects]
+            variant(f"X-{suffix}", f"{model} served as {name}: {what}", w, textures("both") + [(name, bytes_)])
+        w = World(scene)
+        w.objects = control.objects + [(f"Probe{i}", model, x + (i % 45) * 0.8, y - (i // 45) * 0.8, z) for i in range(2048)]
+        variant("O3", f"2048 more copies of {model} in a grid", w, textures("both"))
+    w = World(scene)
+    w.objects = []
+    variant("O4", "the ground alone: no other objects", w, textures("both"))
+    for cls in BARE_CLASSES:
+        w = World(scene)
+        w.extra = [f"rawobject {cls} f0"]
+        variant(f"R-{cls}", f"one {cls} ghost whose update is a single 0 bit", w, textures("both"))
+        w = World(scene)
+        w.extra = [f"rawobject {cls} f1 hex:{'00' * 32}"]
+        variant(f"R-{cls}-z", f"one {cls} ghost whose update is a 1 bit, then 256 zero bits", w, textures("both"))
+
+
+def finish(out, variants, only, round_):
+    sheet = [f"# Graal 3D lab worlds, round {round_}", "",
              "Each variant changes one thing from C0. Run each on both routes",
              "(graal3droute = mission, then sharp3d), clearing the client's download",
              "cache between runs. Results: drawn / drawn differently / not drawn / login",
@@ -300,6 +455,7 @@ def build(out, pack, mbg=None, only=None, seed=2026, extra=(), ground=None):
              "| Variant | Changed from C0 | mission | sharp3d |", "|---|---|---|---|"]
     sheet += [f"| {vid} | {what} | | |" for vid, what in variants]
     if not only:
+        out.mkdir(parents=True, exist_ok=True)
         (out / "RUNSHEET.md").write_text("\n".join(sheet) + "\n")
     return variants
 
@@ -313,9 +469,11 @@ def main(argv=None):
     p.add_argument("--extra", action="append", default=[], help="another folder of files every variant gets")
     p.add_argument("--only", help="comma-separated variant ids")
     p.add_argument("--seed", type=int, default=2026)
+    p.add_argument("--round", type=int, choices=(1, 2), default=1)
+    p.add_argument("--levels", action="append", default=[], help="a folder of generated NAME_graal3dworld.txt worlds")
     a = p.parse_args(argv)
     only = set(a.only.split(",")) if a.only else None
-    made = build(a.out, a.pack, a.mbg, only, a.seed, a.extra, a.ground)
+    made = build(a.out, a.pack, a.mbg, only, a.seed, a.extra, a.ground, a.round, a.levels)
     print(f"{len(made)} variants in {a.out}")
     return 0
 

@@ -122,6 +122,35 @@ class G3DLabWorlds(unittest.TestCase):
         self.assertEqual([v for v, _ in made], ["C0", "S1"])
         self.assertFalse((self.out / "RUNSHEET.md").exists())
 
+    def test_structure_variants_stay_well_formed(self):
+        made = dict((k, v) for k, v, _ in g.structure_variants(cube()))
+        self.assertEqual(sorted(made), ["empty", "nover", "pts65535", "twice", "ver99"])
+        for suffix, data in made.items():
+            ids = walk(data)
+            self.assertIn(0x4D4D, ids, suffix)
+        self.assertEqual(walk(made["twice"]).count(0x4000), 2)
+        self.assertNotIn(0x0002, walk(made["nover"]))
+        self.assertEqual(len(made["pts65535"]), len(cube()) + (0xFFFF - 8) * 12)
+
+    def test_round_two_and_generated_levels(self):
+        levels = Path(self.tmp.name) / "levels"
+        levels.mkdir()
+        (levels / "Hills.3ds").write_bytes(cube())
+        (levels / "Hills_tree.3ds").write_bytes(cube())
+        (levels / "Hills_graal3dworld.txt").write_text("object Ground Hills.3ds 0 0 0\nobject Tree Hills_tree.3ds 1 1 0\n")
+        made = dict(g.build(self.out, self.pack, None, None, round_=2, levels=[levels]))
+        for vid in ("C0", "P1", "P4", "P6", "N1", "N2", "N3", "X-twice", "X-empty", "O3", "O4",
+                    "R-WaterBlock", "R-fxSunLight-z", "L-Hills"):
+            self.assertIn(vid, made)
+        self.assertNotIn("T1", made)
+        self.assertTrue((self.out / "L-Hills/world/g3dlab/hills_tree.3ds").exists())
+        self.assertIn("object Tree hills_tree.3ds 1 1 0", (self.out / "L-Hills/config/graal3dworld.txt").read_text())
+        self.assertTrue((self.out / "N3/world/g3dlab/sub/lamp.3ds").exists())
+        self.assertTrue((self.out / "N2/world/g3dlab/LAMP.3DS").exists())
+        self.assertIn("object ProbeRot lamp.3ds 2.5 -1 0 0 0 0 1", (self.out / "P6/config/graal3dworld.txt").read_text())
+        self.assertIn("rawobject WaterBlock f0", (self.out / "R-WaterBlock/config/graal3dworld.txt").read_text())
+        self.assertIn("round 2", (self.out / "RUNSHEET.md").read_text())
+
 
 if __name__ == "__main__":
     unittest.main()
