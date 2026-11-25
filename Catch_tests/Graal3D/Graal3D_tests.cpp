@@ -241,6 +241,16 @@ namespace
 			now += ms;
 			REQUIRE(conn.update(now));
 		}
+
+		// The client's MissionStartPhase1Ack (its event 0) in its data packet 2,
+		// acking the server's packet 1: ghosts go out only after it.
+		void phase1Ack()
+		{
+			std::vector<OutEvent> evs;
+			evs.push_back({"RemoteCommandEvent", remoteCommandEvent({CommandArg{false, 0, "MissionStartPhase1Ack"}})});
+			conn.receive(clientDataPacket(profile, 2, 1, 1, evs, 0), now);
+			tick(60);
+		}
 	};
 } // namespace
 
@@ -723,8 +733,16 @@ SCENARIO("Ghosting a world and handing the client its control object")
 	h.conn.receive(kFirstData, h.now);
 	h.tick(60);
 
+	// No ghost before the client's MissionStartPhase1Ack: a 5.12 on a return
+	// visit dropped them and stalled on "Received unknown camera object" (lab
+	// 2026-11-25).
 	REQUIRE(h.sent.size() == 1);
-	const auto first = readServerPacket(h.sent[0]);
+	REQUIRE(readServerPacket(h.sent[0]).ghosts.empty());
+	h.phase1Ack();
+	REQUIRE(h.sent.size() == 2);
+	REQUIRE(h.mission.back() == MissionState::Phase2Sent);
+	const auto first = readServerPacket(h.sent[1]);
+	REQUIRE(first.header.sequence == 2);
 
 	THEN("the first packet creates every ghost, with its class id and a full update")
 	{
@@ -749,7 +767,7 @@ SCENARIO("Ghosting a world and handing the client its control object")
 	WHEN("the client acks that packet but has not finished the mission start")
 	{
 		h.sent.clear();
-		h.conn.receive(clientDataPacket(profile, 2, 1, 1, {}, 0), h.now);
+		h.conn.receive(clientDataPacket(profile, 3, 2, 3, {}, 0), h.now);
 		h.tick(60);
 		h.tick(1000);
 
@@ -762,18 +780,9 @@ SCENARIO("Ghosting a world and handing the client its control object")
 		}
 	}
 
-	WHEN("the client acks that packet and answers both mission phases")
+	WHEN("the client acks that packet and answers the second mission phase")
 	{
-		std::vector<OutEvent> phase1;
-		phase1.push_back({"RemoteCommandEvent", remoteCommandEvent({CommandArg{false, 0, "MissionStartPhase1Ack"}})});
-		h.sent.clear();
-		h.conn.receive(clientDataPacket(profile, 2, 1, 1, phase1, 0), h.now);
-		h.tick(60);
-
-		REQUIRE(h.sent.size() == 1);
-		const auto phase2 = readServerPacket(h.sent.back());
-		REQUIRE(h.mission.back() == MissionState::Phase2Sent);
-		REQUIRE_FALSE(phase2.control); // MissionStartPhase2 would undo login step 5
+		REQUIRE_FALSE(first.control); // MissionStartPhase2 would undo login step 5
 
 		std::vector<OutEvent> phase2Ack;
 		phase2Ack.push_back({"RemoteCommandEvent", remoteCommandEvent({CommandArg{false, 0, "MissionStartPhase2Ack"}})});
@@ -852,7 +861,7 @@ SCENARIO("Ghosting a world and handing the client its control object")
 	WHEN("the packet with the creates is lost")
 	{
 		h.sent.clear();
-		h.conn.receive(clientDataPacket(profile, 2, 1, 0, {}, 0), h.now);
+		h.conn.receive(clientDataPacket(profile, 3, 2, 2, {}, 0), h.now); // 1 in, 2 lost
 		h.tick(60);
 
 		THEN("the creates go out again")
@@ -905,6 +914,8 @@ SCENARIO("A Camera ghost becomes the client's camera once it is in")
 	h.conn.setCameraObject(7);
 	h.conn.receive(kFirstData, h.now);
 	h.tick(60);
+	REQUIRE_FALSE(readServerPacket(h.sent.back()).camera);
+	h.phase1Ack();
 
 	const auto first = readServerPacket(h.sent.back());
 	THEN("it is created as a Camera, and not named before the client has it")
@@ -924,7 +935,7 @@ SCENARIO("A Camera ghost becomes the client's camera once it is in")
 
 	WHEN("the create is acked")
 	{
-		h.conn.receive(clientDataPacket(profile, 2, 1, 1, {}, 0), h.now);
+		h.conn.receive(clientDataPacket(profile, 3, 2, 3, {}, 0), h.now);
 		h.tick(60);
 		h.tick(1000);
 		THEN("every packet names it as the camera")
@@ -1065,10 +1076,11 @@ SCENARIO("A ghost can be sent whole again")
 	h.conn.resendGhost(1); // not created yet: nothing extra
 	h.conn.receive(kFirstData, h.now);
 	h.tick(60);
+	h.phase1Ack();
 	REQUIRE(readServerPacket(h.sent.back()).ghosts.size() == 1);
 
 	h.sent.clear();
-	h.conn.receive(clientDataPacket(h.profile, 2, 1, 1, {}, 0), h.now);
+	h.conn.receive(clientDataPacket(h.profile, 3, 2, 3, {}, 0), h.now);
 	h.tick(60);
 	h.tick(1000);
 	for (const auto& data : h.sent)
@@ -1252,10 +1264,13 @@ SCENARIO("A raw object is ghosted with its fields, and a raw event is posted")
 
 	h.conn.receive(kFirstData, h.now);
 	h.tick(60);
-	const auto pkt = readServerPacket(h.sent.back());
+	const auto pkt = readServerPacket(h.sent.back()); // the event; the ghost waits for MissionStartPhase1Ack
+	h.phase1Ack();
+	const auto ghostPkt = readServerPacket(h.sent.back());
 
 	THEN("the ghost carries exactly the fields")
 	{
+		const auto& pkt = ghostPkt;
 		REQUIRE(pkt.ghosts.size() == 1);
 		REQUIRE(pkt.ghosts[0].classId == *objectClassId(h.profile, "TerrainBlock"));
 		PayloadReader p(pkt.ghosts[0].payload);

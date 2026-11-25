@@ -230,6 +230,7 @@ namespace graal3d
 		void writeCameraSection(BitWriter& writer);
 		void writeGhostSection(BitWriter& writer, Notify& note);
 		void ghostNotify(const Notify& note, bool delivered);
+		[[nodiscard]] bool ghostsMayGo() const;
 		[[nodiscard]] bool ghostWorkPending() const;
 		[[nodiscard]] bool controlPending() const;
 		std::optional<uint32_t> allocateGhostIndex();
@@ -299,7 +300,7 @@ namespace graal3d
 		// Protocol 19 mission start and moves.
 		uint32_t m_missionSeq = 1;
 		bool m_datablocksSent = false;
-		bool m_ghostingAllowed = false;
+		bool m_ghostingAllowed = false; // see ghostsMayGo
 		bool m_phase2Acked = false;
 		// Sharp3D route: the GhostAlwaysObjectEvent that creates each ghost, by
 		// event sequence; its ack marks the ghost created.

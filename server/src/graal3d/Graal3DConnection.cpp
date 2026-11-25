@@ -705,7 +705,7 @@ namespace graal3d
 		// The client looks the index up as a Camera and, if that fails, drops the
 		// rest of the packet. So name it only once its create has been acked.
 		m_cameraNamed = false;
-		if (m_cameraKey)
+		if (m_cameraKey && ghostsMayGo())
 		{
 			const auto it = m_ghosts.find(*m_cameraKey);
 			m_cameraNamed = it != m_ghosts.end() && it->second.created && !it->second.kill &&
@@ -747,8 +747,22 @@ namespace graal3d
 		return it != m_ghosts.end() && it->second.created && !it->second.kill;
 	}
 
+	bool Connection::ghostsMayGo() const
+	{
+		// Protocol 19: not before the client has loaded the datablocks they name
+		// (an unknown datablock id drops the connection). Protocols 21 and 24: not
+		// before MissionStartPhase1Ack. A 5.12 on a return visit dropped the ghosts
+		// it got before that ack, then stalled in phase 1 on "Received unknown
+		// camera object" when the server named its Camera (a world of 0 or 1
+		// objects, lab 2026-11-25; with 6 objects the ghosts went after the ack and
+		// it worked). The Sharp3D route ghosts through events from the start.
+		return m_ghostingAllowed || m_profile.ghostAlwaysWorld;
+	}
+
 	bool Connection::ghostWorkPending() const
 	{
+		if (!ghostsMayGo())
+			return false;
 		for (const auto& [key, g] : m_ghosts)
 		{
 			if (g.createInFlight || g.killInFlight)
@@ -801,9 +815,7 @@ namespace graal3d
 			int order; // 0 delete, 1 create, 2 update
 		};
 
-		// Protocol 19: no ghost before the client has loaded the datablocks they
-		// name (an unknown datablock id drops the connection).
-		if (m_profile.tgePackets && !m_ghostingAllowed)
+		if (!ghostsMayGo())
 		{
 			w.writeFlag(false);
 			return;
@@ -1277,6 +1289,7 @@ namespace graal3d
 
 			if (command == "MissionStartPhase1Ack" && m_mission == MissionState::Phase1Sent)
 			{
+				m_ghostingAllowed = true; // see ghostsMayGo
 				sendCommand("MissionStartPhase2");
 				m_mission = MissionState::Phase2Sent;
 			}

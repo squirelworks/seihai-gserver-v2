@@ -290,6 +290,8 @@ world/3d/                        any folder the file folders cover
 - **Start-up check.** At start-up the server looks up every shape and Sky texture the world file names. It logs any that are missing, and any found only without an extension.
 - **Unsafe `.3ds` files.** Every `.3ds` is checked for the faults that crashed a real client: no materials, a cut file, or a chunk longer than its parent. With `graal3dshapecheck = skip` (the default), an object with such a shape is left out of the world and logged. Labs that send broken shapes on purpose set `warn`, which logs and sends them anyway; `off` skips the check.
 
+- **Folders config.** A file folder covers only its own files, not its subfolders. `config/foldersconfig.txt` needs `file 3d/*` and a line for each streamed terrain folder, such as `file 3d/island_terrain/*`; without them the world's files are not found (lab, 2026-11-25). The default and modern servers have `file 3d/*`.
+
 `seihai-servertools gen terrain DIR --world NAME --stream --playerworld` writes a whole
 world in this layout from a generated height field.
 
