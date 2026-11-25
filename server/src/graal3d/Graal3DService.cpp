@@ -193,6 +193,78 @@ namespace graal3d
 		}
 		for (const auto& endpoint : dead)
 			closeSession(endpoint, "The 3D connection timed out.", false);
+		relayTgeMoves();
+	}
+
+	bool Service::tgeOthers() const
+	{
+		return m_world.tgeControl == World::TgeControl::Player && !m_world.tgePlayerShape.empty();
+	}
+
+	void Service::ghostAvatar(Connection& connection, PlayerID who, const GhostObject& avatar) const
+	{
+		if (!connection.profile().tgePackets)
+		{
+			connection.setGhost(avatarKey(who), avatar);
+			return;
+		}
+		// Protocol 19 has no GameObject: the other player is a stock Player on the
+		// PlayerData this client already has (sent for its own Player). Without
+		// one, it gets no other players.
+		if (!tgeOthers())
+			return;
+		GhostObject player;
+		player.kind = GhostObject::Kind::TgePlayer;
+		player.datablockId = tge::PlayerDatablockId;
+		player.tgeShape = m_world.tgePlayerShape;
+		player.object.name = avatar.object.name;
+		const auto& t = avatar.object.transform;
+		player.tgePlayer.position = t.position;
+		player.tgePlayer.rotZ = t.axis[2] < 0.0f ? -t.angle : t.angle;
+		connection.setGhost(avatarKey(who), player);
+	}
+
+	void Service::relayAvatar(PlayerID playerId, const GhostObject& before)
+	{
+		const auto it = m_avatars.find(playerId);
+		if (it == m_avatars.end())
+			return;
+		size_t relayed = 0;
+		forEachOtherConnection(playerId, [&](Connection& other) {
+			ghostAvatar(other, playerId, it->second);
+			++relayed;
+		});
+		if (m_trace)
+		{
+			const auto& object = it->second.object;
+			trace(object.name, 0,
+				  std::format("relay to {} other 3D clients: at={:.3f},{:.3f},{:.3f} angle={:.3f}{}", relayed, object.transform.position[0],
+							  object.transform.position[1], object.transform.position[2], object.transform.angle,
+							  object.chat != before.object.chat ? " chat=" + object.chat : std::string()));
+		}
+	}
+
+	void Service::relayTgeMoves()
+	{
+		for (auto& [endpoint, session] : m_sessions)
+		{
+			if (!session.connection->profile().tgePackets)
+				continue;
+			const auto player = session.connection->controlPlayer();
+			if (!player)
+				continue;
+			const auto it = m_avatars.find(session.player);
+			if (it == m_avatars.end())
+				continue;
+			const GhostObject before = it->second;
+			auto& t = it->second.object.transform;
+			t.position = player->position;
+			t.axis = {0.0f, 0.0f, 1.0f};
+			t.angle = player->rotZ;
+			if (it->second.object == before.object)
+				continue;
+			relayAvatar(session.player, before);
+		}
 	}
 
 	void Service::handleDatagram(const Endpoint& from, std::string_view data, uint64_t now)
@@ -352,7 +424,7 @@ namespace graal3d
 		avatar.object.flags = GameObjectFlags::Shadow;
 		m_avatars[playerId] = avatar;
 		ghostWorld(playerId, account, connection);
-		forEachOtherConnection(playerId, [&](Connection& other) { other.setGhost(avatarKey(playerId), avatar); });
+		forEachOtherConnection(playerId, [&](Connection& other) { ghostAvatar(other, playerId, avatar); });
 
 		sendTo(from, buildConnectAccept(req->sequence, *profile));
 		log::printLine(log::server, "Graal3D: {} linked from {} (protocol {}, {}).", account, ipString(from), profile->protocol, profile->clients);
@@ -669,6 +741,17 @@ namespace graal3d
 			}
 			connection.setGhost(cameraKey(playerId), control);
 			connection.setControlObject(cameraKey(playerId));
+			for (const auto& [other, avatar] : m_avatars)
+			{
+				if (other != playerId)
+					ghostAvatar(connection, other, avatar);
+			}
+			if (player)
+			{
+				// Its own object, for the others: where its Player starts.
+				if (auto a = m_avatars.find(playerId); a != m_avatars.end())
+					a->second.object.transform.position = m_world.spawn.position;
+			}
 			ghostRawObjects(account, connection, 1);
 			sendRawEvents(account, connection, false);
 			log::printLine(log::server, "Graal3D: {} (protocol 19) gets a Sky and a {} at the spawn point as its control object.", account,
@@ -680,7 +763,7 @@ namespace graal3d
 		for (const auto& object : m_world.objects)
 			connection.setGhost(key++, object);
 		for (const auto& [other, avatar] : m_avatars)
-			connection.setGhost(avatarKey(other), avatar);
+			connection.setGhost(avatarKey(other), avatar); // its own included: the control object
 		// The Sharp3D route's control object is the client's Camera (set below).
 		if (!connection.profile().ghostAlwaysWorld)
 			connection.setControlObject(avatarKey(playerId));
@@ -769,15 +852,9 @@ namespace graal3d
 		}
 		if (object == before)
 			return;
-		size_t relayed = 0;
-		forEachOtherConnection(playerId, [&](Connection& other) {
-			other.setGhost(avatarKey(playerId), it->second);
-			++relayed;
-		});
-		if (m_trace)
-			trace(object.name, 0,
-				  std::format("relay to {} other 3D clients: at={:.3f},{:.3f},{:.3f}{}", relayed, object.transform.position[0], object.transform.position[1],
-							  object.transform.position[2], object.chat != before.chat ? " chat=" + object.chat : std::string()));
+		GhostObject was = it->second;
+		was.object = before;
+		relayAvatar(playerId, was);
 	}
 
 	bool Service::moveAvatar(PlayerID playerId, std::string_view position)
@@ -803,7 +880,12 @@ namespace graal3d
 
 		const auto key = avatarKey(playerId);
 		for (auto& [endpoint, session] : m_sessions)
-			session.connection->setGhost(key, it->second);
+		{
+			if (session.player != playerId)
+				ghostAvatar(*session.connection, playerId, it->second);
+			else if (!session.connection->profile().tgePackets)
+				session.connection->setGhost(key, it->second);
+		}
 		return true;
 	}
 

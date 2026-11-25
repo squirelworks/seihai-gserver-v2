@@ -132,6 +132,15 @@ namespace graal3d
 		void handleClientState(PlayerID player, const ClientState& state);
 		void ghostWorld(PlayerID player, const std::string& account, Connection& connection);
 		void forEachOtherConnection(PlayerID player, const std::function<void(Connection&)>& fn);
+		// Puts `who`'s object on `connection` in the form its build takes: the
+		// GameObject itself (protocols 21 and 24), or a stock TGE Player with the
+		// world's tgeplayershape (protocol 19, when that client's own control
+		// object is a Player too).
+		void ghostAvatar(Connection& connection, PlayerID who, const GhostObject& avatar) const;
+		[[nodiscard]] bool tgeOthers() const;
+		// A protocol 19 client moves its Player itself: pass that on to the others.
+		void relayTgeMoves();
+		void relayAvatar(PlayerID playerId, const GhostObject& before);
 		static ObjectKey avatarKey(PlayerID player) { return 0x10000u + player; }
 		static ObjectKey cameraKey(PlayerID player) { return 0x20000u + player; }
 		static ObjectKey skyKey() { return 0x30000u; } // protocol 19's plain Sky, when the world has none

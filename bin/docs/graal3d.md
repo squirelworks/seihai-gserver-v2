@@ -162,8 +162,8 @@ What the server does when more than one 3D client is on at once:
 | | 4.20r6 and 5.x (protocols 21 and 24) | 3.153 and 4.04r2 (protocol 19) |
 |---|---|---|
 | Joining | Each client gets its own 3D link, matched to its own TCP login by account and address, so several clients on one machine are fine. | the same |
-| Seeing the others | Every other linked player appears as a `GameObject` named `G3DPlayer_<account>`, with the world's player shape and the player's nickname. | Not yet: these clients get no other players, and their moves are not passed on. |
-| What is passed on | The position, rotation, scale and `chat` that each client reports for its own object. Nick colour, move type, velocity and attachment are not sent yet. On the Sharp3D route, a player moves only through `g3dpos`. | nothing |
+| Seeing the others | Every other linked player appears as a `GameObject` named `G3DPlayer_<account>`, with the world's player shape and the player's nickname. Every other linked player appears as a stock TGE `Player` on the world's `tgeplayershape`, at that player's position and facing. This needs `tgecontrol player` and a `tgeplayershape`; with a Camera as the control object, these clients get no other players. |
+| What is passed on | The position, rotation, scale and `chat` that each client reports for its own object. Nick colour, move type, velocity and attachment are not sent yet. On the Sharp3D route, a player moves only through `g3dpos`. | The position and facing of the client's Player, as the server runs its moves. The other builds see this as that player's `GameObject`. |
 | TCP side | Every 3D client is also an ordinary TCP player, so the gserver sends the usual other-player props, chat and PMs, as it would to 2D clients in the same level. | the same |
 
 **Accounts:** with `localhost = true` (the lab default) the gserver accepts any account
