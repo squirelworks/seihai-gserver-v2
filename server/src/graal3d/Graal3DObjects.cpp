@@ -1092,6 +1092,13 @@ namespace graal3d
 			return std::format("its buffer is {} bytes, more than the {} the file has", words * 4, data.size() - 16);
 		if (start16 > start8 || start8 > words)
 			return "its buffer's parts are out of order";
+		// The buffer opens with the node, object, decal and sub-shape counts; a
+		// count past the whole buffer cannot be real (4.04r2 crashed at login on a
+		// player shape with a count of 0x7FFFFFFF or -1, fuzzing, lab 2026-11-25).
+		static constexpr const char* kCounts[] = {"node", "object", "decal", "sub-shape"};
+		for (size_t i = 0; i < std::size(kCounts) && i < words; ++i)
+			if (const uint32_t count = u32(16 + i * 4); count > words)
+				return std::format("its {} count is {}, more than its buffer holds", kCounts[i], count);
 		return std::nullopt;
 	}
 

@@ -1603,6 +1603,9 @@ SCENARIO("A .dts or PNG the real 5.12 crashes on is found before it is served")
 	REQUIRE(unsafeDts(le32(24) + le32(4) + le32(3) + le32(2) + std::string(16, '\0')));  // parts out of order
 	for (const uint32_t version : {16u, 17u, 19u, 22u, 23u, 25u})                // only 24 draws on 5.12
 		REQUIRE(unsafeDts(le32(version) + dts.substr(4)));
+	for (const uint32_t count : {5u, 0x7FFFFFFFu, 0xFFFFFFFFu})                  // node count past the buffer
+		REQUIRE(unsafeDts(dts.substr(0, 16) + le32(count) + dts.substr(20)));
+	REQUIRE_FALSE(unsafeDts(dts.substr(0, 16) + le32(4) + dts.substr(20)));
 	REQUIRE(unsafeAsset(".DTS", dts.substr(0, 10)));
 
 	const auto be32 = [](uint32_t v) {
