@@ -303,7 +303,9 @@ Torque's CRC of the inflated bytes. The client stamps its own re-encoding of eac
 chunk (mode 2, the material ids it uses in ascending order, its own deltas), so
 write chunks in that form, or every chunk is sent again on every visit.
 `seihai-servertools gen terrain --stream` writes them that way. A damaged zlib
-stream is saved by the client as a flat chunk. Protocol 19 clients do not get the block,
+stream is saved by the client as a flat chunk. The 5.12 client does not clamp heights: keep the first
+height and every running sum in 0 to 16383, or they wrap. It ignores trailing
+bytes, and a second copy of a chunk overwrites the first (lab, 2026-11-25). Protocol 19 clients do not get the block,
 because their stock TGE terrain is a different layout.
 
 ### Water
