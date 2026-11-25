@@ -1261,7 +1261,7 @@ SCENARIO("A replicator line ghosts ground cover in the 5.12 layout")
 		const int v = static_cast<int>(r.readInt(bits - 1));
 		return negative ? -v : v;
 	};
-	for (const int v : {-1, -1, 0, 1, 1, 2})
+	for (const int v : {-32767, -32767, -32767, 32767, 32767, 32767})
 		REQUIRE(signedInt(16) == v);
 	for (const float v : {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 360.0f, 0.0f})
 		REQUIRE(r.readF32() == v);
@@ -1275,6 +1275,30 @@ SCENARIO("A replicator line ghosts ground cover in the 5.12 layout")
 	REQUIRE(signedInt(8) == 0);
 	REQUIRE_FALSE(r.readFlag());
 	REQUIRE(rawFieldBits(object.raw) == w.bitPosition());
+
+	// A box limits where cover grows (world x/y).
+	const auto boxed = parseWorld("replicator DynamicGrass 0 0 0 4 1 3 grass.dts 7 -512 -256 512 256\n"
+								  "replicator DynamicGrass 0 0 0 4 1 3 grass.dts 7 5 0 5 1\n"); // empty box
+	REQUIRE(boxed.objects.size() == 1);
+	BitWriter bw;
+	writeRawFields(bw, boxed.objects[0].raw);
+	const auto boxBytes = bw.toString();
+	BitReader br(boxBytes);
+	for (int i = 0; i < 13 + 1; ++i)
+		br.readFlag();
+	for (int i = 0; i < 6; ++i)
+		br.readF32();
+	br.readFlag();
+	br.readU32();
+	br.readString();
+	br.readInt(8), br.readInt(8), br.readInt(8);
+	const auto boxInt = [&] {
+		const bool negative = br.readFlag();
+		const int v = static_cast<int>(br.readInt(15));
+		return negative ? -v : v;
+	};
+	for (const int v : {-512, -256, -32767, 512, 256, 32767})
+		REQUIRE(boxInt() == v);
 }
 
 SCENARIO("The world file takes rawobject and rawevent lines")
