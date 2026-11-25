@@ -42,7 +42,13 @@ does with them off`, set it to `false`.
 To list the server as a 3D server, set `hq_level = 4` in `config/adminconfig.txt`.
 seihai-listserver tags HQ level 4 as `3 ` on the gen 4 and gen 5 lists.
 
-Open UDP `serverport + 1` in the firewall as well as the TCP port.
+Open UDP `serverport + 1` in the firewall as well as the TCP port. The client always
+sends its 3D traffic to the listed port + 1; nothing the server sends changes that
+(Graal_analysis `torque/3d-server-entry-and-udp-port.md`). So set `graal3dport` only
+when something in between maps listed port + 1 to another local port. The client's
+own UDP port is chosen by its OS unless the player turns on `fixedport`
+(`fixedudpport`, default 14899). The server answers every packet at its source
+address and port, so either works.
 
 ## The world
 
