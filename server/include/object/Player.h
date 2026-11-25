@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-01, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-16: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-01, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-25: see CHANGES-SEIHAI.md.
 #ifndef PLAYER_H
 #define PLAYER_H
 
@@ -26,6 +26,7 @@
 #include <IUtil.h>
 
 #include <Account.h>
+#include <addons/ServerAddon.h>
 #include <limits>
 #include <network/IPacketHandler.h>
 #include <player/PlayerProps.h>
@@ -365,11 +366,10 @@ public:
 	void sendPacketUnchecked(const CString& packet, PacketQueue channel = PacketQueue::NORMAL);
 	void sendRawPacket(const CString& packet, PacketQueue channel = PacketQueue::NORMAL);
 	std::pair<bool, bool> sendFile(const std::filesystem::path& file, PacketQueue channel = PacketQueue::FILE);
-	// A 3.153 to 5.x client on a server with the Graal 3D side on. Its 3D login
-	// waits until every file it asked for is answered, so a missing file must get
-	// PLO_FILESENDFAILED rather than no answer, and its "Connecting..." window
-	// closes only on PLO_SERVERLISTCONNECTED.
-	bool isGraal3DClient() const;
+	// What the server's add-ons need done differently for this client
+	// (addons/ServerAddon.h); the defaults when it is not a game client or no
+	// add-on runs.
+	AddonClientNeeds addonNeeds() const;
 	// For an encrypted package (.gpake), sends its key (PLO_FILEDECRYPTKEY) from
 	// config/gpakkeys.txt. raw puts it in the file queue, so it goes out before a file
 	// queued after it. Returns false when the package has no key; true for other files.
@@ -387,9 +387,10 @@ public:
 	bool isControlClient() const { return (m_type & PLTYPE_ANYCONTROL) != 0; }
 	bool isHiddenClientType() const { return (m_type & PLTYPE_NONITERABLE) != 0; }
 	bool isLoaded() const { return m_loaded; }
-	// Set while the player has a Graal 3D (Torque UDP) link; see graal3d/Graal3DService.h.
-	void setGraal3DLinked(bool linked) { m_graal3dLinked = linked; }
-	bool isGraal3DLinked() const { return m_graal3dLinked; }
+	// Set while an add-on holds a side link for the player (a Graal 3D UDP link,
+	// for one): its packets are passed to the add-ons too (ServerAddon::onPacketToPlayer).
+	void setAddonLinked(bool linked) { m_addonLinked = linked; }
+	bool isAddonLinked() const { return m_addonLinked; }
 	bool isGuest() const { return account.loadOnly && account.communityName == "guest"; }
 	/// @brief True when serveroptions put this player into ghost appearance (ghostmodeenabled matrix).
 	[[nodiscard]] bool appearsAsGhost() const;
@@ -526,7 +527,7 @@ protected:
 	std::string m_serverName;
 	uint8_t m_statusMsg = 0;
 	uint8_t m_additionalFlags = 0;
-	bool m_graal3dLinked = false;
+	bool m_addonLinked = false;
 	bool m_secureLogin = false;
 	std::set<std::string> m_channelList;
 	clock::time_point m_lastData;

@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -1598,8 +1598,9 @@ HandlePacketResult PlayerClient::msgPLI_VERIFYWANTSEND(CString& pPacket)
 		const auto info = m_server->getFileSystem().infoi(fs::FileCategory::ALL, fileName.toStringView());
 		if (info == nullptr)
 		{
-			// A 3D client's login waits on this answer: sendFile tells it the file is missing.
-			if (!isGraal3DClient())
+			// An add-on may need an answer (a 3D client's login waits on it): sendFile
+			// tells the client the file is missing.
+			if (!addonNeeds().answerMissingChecksumFiles)
 				return HandlePacketResult::Handled;
 		}
 		else

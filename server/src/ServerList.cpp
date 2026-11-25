@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-20, 2026-11-25: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -489,12 +489,10 @@ int ServerList::serverHQLevel() const
 	if (m_server->getSettings().get<bool>("onlystaff").value_or(false))
 		return 0;
 
-	// Seihai: a 3D server (`graal3d = true`) is listed at HQ level 4, which the
-	// listserver tags "3 ". The 3.153 to 5.x clients open the 3D link on that tag
-	// alone, and Mac 3.153 reads only the first tag, so a server left at the
-	// default bronze level ("H ") is not seen as 3D even with "3 " in its name.
-	if (m_server->getSettings().get<bool>("graal3d").value_or(false))
-		return 4;
+	// Seihai: an add-on may pick the level; the Graal 3D add-on lists the server
+	// at 4 (Graal3D), which the listserver tags "3 ".
+	if (const auto level = m_server->getAddons().listHqLevel(); level.has_value())
+		return *level;
 
 	return m_server->getAdminSettings().get<int>("hq_level").value_or(1);
 }

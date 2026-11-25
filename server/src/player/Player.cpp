@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-01, 2026-11-04, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-18, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-01, 2026-11-04, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-18, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -585,12 +585,10 @@ void Player::sendPacketUnchecked(const CString& packet, const PacketQueue channe
 	log::print(log::networkdump, "\n\n");
 #endif
 
-	// A client in Graal 3D mode ignores flag packets on TCP; send them on its 3D link too.
-	if (m_graal3dLinked && m_server != nullptr)
-	{
-		if (auto* graal3d = m_server->getGraal3D(); graal3d != nullptr)
-			graal3d->mirrorPacket(getId(), packet);
-	}
+	// An add-on holding a side link for this player sees its packets (a client in
+	// Graal 3D mode ignores flag packets on TCP; the add-on sends them on its 3D link).
+	if (m_addonLinked && m_server != nullptr)
+		m_server->getAddons().onPacketToPlayer(getId(), packet);
 
 	// append buffer
 	m_fileQueue.addPacket(channel, packet);
@@ -641,9 +639,11 @@ bool Player::sendGpakKey(std::string_view filename, bool raw)
 	return true;
 }
 
-bool Player::isGraal3DClient() const
+AddonClientNeeds Player::addonNeeds() const
 {
-	return isClient() && m_server->getGraal3D() != nullptr && graal3d::Service::clientHasGraal3D(m_versionId);
+	if (!isClient() || m_server == nullptr)
+		return {};
+	return m_server->getAddons().clientNeeds(m_versionId);
 }
 
 std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file, const PacketQueue channel)
@@ -686,11 +686,11 @@ std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file, const 
 	{
 		auto info = filesystem.infoi(fs::FileCategory::ALL, file.filename());
 
-		// The 5.x 3D client asks for Torque textures (a Sky's, for one) without an
-		// extension, and stores what it gets under the name it asked for.
-		if (info == nullptr && isGraal3DClient() && !file.has_extension())
+		// An add-on's client may ask for a file with no extension (the 5.x 3D client
+		// asks so for Torque textures) and store what it gets under that name.
+		if (info == nullptr && !file.has_extension())
 		{
-			for (const auto* ext : {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".dds"})
+			for (const auto* ext : addonNeeds().bareNameExtensions)
 			{
 				if ((info = filesystem.infoi(fs::FileCategory::ALL, file.filename().string() + ext)) != nullptr)
 					break;
@@ -701,8 +701,6 @@ std::pair<bool, bool> Player::sendFile(const std::filesystem::path& file, const 
 		{
 			if (m_server->cached.warnOnMissingFiles.getValue() == true)
 				return {sendFailure("File not found when trying to send to player"), false};
-			if (isGraal3DClient())
-				return {sendFailure("Graal3D: file not found, told the client"), false};
 			// A missing file always gets an answer. warnonmissingfiles only decides whether it is logged.
 			// With no answer the client keeps asking.
 			return {sendFailure({}), false};

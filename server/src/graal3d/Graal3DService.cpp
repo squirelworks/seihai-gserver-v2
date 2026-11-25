@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-14, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-14, 2026-11-19, 2026-11-20, 2026-11-25: see CHANGES-SEIHAI.md.
 // New file: the gserver's Graal 3D UDP side. See Graal3DService.h.
 
 #include <graal3d/Graal3DService.h>
@@ -325,7 +325,7 @@ namespace graal3d
 		connection.setPacketStrings(m_packetStrings);
 		m_sessions.emplace(from, std::move(session));
 		m_byPlayer[playerId] = from;
-		player->setGraal3DLinked(true);
+		player->setAddonLinked(true);
 
 		// The player's own object, on every screen; the world and the other
 		// players on theirs. Ghosts go out once the connection is up.
@@ -387,7 +387,7 @@ namespace graal3d
 		{
 			m_byPlayer.erase(p);
 			if (auto player = m_server.getPlayer(playerId))
-				player->setGraal3DLinked(false);
+				player->setAddonLinked(false);
 			m_avatars.erase(playerId);
 			m_movedUntil.erase(playerId);
 			forEachOtherConnection(playerId, [&](Connection& other) { other.removeGhost(avatarKey(playerId)); });
