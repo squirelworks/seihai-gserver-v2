@@ -1300,6 +1300,34 @@ SCENARIO("A raw object is ghosted with its fields, and a raw event is posted")
 	}
 }
 
+SCENARIO("A Camera as the control object: its two extra sections are read")
+{
+	// A live 5.12 writes the Camera's mode and followed-object flags after its
+	// GameObject update (T3D-023, lab 2026-11-25); the events after them must read.
+	Harness h;
+	GhostObject camera;
+	camera.kind = GhostObject::Kind::Camera;
+	camera.object.name = "G3DCamera_guest";
+	h.conn.setGhost(7, camera);
+	h.conn.setControlObject(7);
+	h.conn.receive(kFirstData, h.now);
+	h.tick(60);
+	h.phase1Ack();
+
+	BitWriter echo;
+	echo.setPacketStrings(true);
+	writeGameObjectUpdate(echo, camera.object, GameObjectBits::Transform);
+	echo.writeFlag(false); // mode
+	echo.writeFlag(false); // followed object
+	ClientControl control{{0.0f, 0.0f, 0.0f}, 0, &echo};
+	std::vector<OutEvent> evs;
+	evs.push_back({"RemoteCommandEvent", remoteCommandEvent({CommandArg{false, 0, "Hello"}})});
+	h.conn.receive(clientDataPacket(h.profile, 3, 2, 3, evs, 1, &control), h.now);
+
+	REQUIRE_FALSE(h.logs.empty());
+	REQUIRE(h.logs.back() == "remote command ignored: Hello");
+}
+
 SCENARIO("Every event says its exact length")
 {
 	// 5.12 trusts an event's int14 length: one that claimed a bit more than it

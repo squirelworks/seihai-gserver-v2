@@ -1029,11 +1029,15 @@ namespace graal3d
 			state.controlling = true;
 			state.changed = readGameObjectUpdate(r, m_clientObject, m_clientMoveType);
 			state.object = m_clientObject;
-			if (m_profile.ghostAlwaysWorld)
+			const auto control = m_controlKey ? m_ghosts.find(*m_controlKey) : m_ghosts.end();
+			const bool cameraControl = control != m_ghosts.end() && control->second.object.kind == GhostObject::Kind::Camera;
+			if (m_profile.ghostAlwaysWorld || cameraControl)
 			{
-				// Sharp3D route: the control object is a Camera, whose update has two
-				// more sections (mode, followed object). Assumed: the client writes
-				// them as it reads them. Not yet checked against a real client.
+				// A Camera as the control object (always on the Sharp3D route): its
+				// update has two more sections, mode and followed object. A live 5.12
+				// writes both flags (2 bits, nothing else parses with events in the
+				// packet; T3D-023, lab 2026-11-25). Without them this route lost every
+				// client event while a Camera was in control.
 				if (r.readFlag())
 					r.readInt(1);
 				if (r.readFlag() && r.readFlag())
