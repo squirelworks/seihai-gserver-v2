@@ -307,7 +307,7 @@ terrain world/terrain
 The 5.12 client gets its terrain in two parts. A `TerrainBlock` ghost carries only
 settings, and the heights, materials and holes follow as up to 256
 `TerrainChunkEvent`s of 16 x 16 squares. The terrain is 256 x 256 squares, centred
-on the origin, 8 m a square by default. The square size may be 1 to 64; a huge one killed a live 5.12 right after "Terrain lit" (lab, 2026-11-25). The layouts come from a static read of the
+on the origin, 8 m a square by default. Send one TerrainBlock a world: with two, 5.12 asks for chunks for both but lays them only on the last (the server warns at start-up). Hole flags cut out exactly the flagged squares, with no slope at the edge. The square size may be 1 to 64; a huge one killed a live 5.12 right after "Terrain lit" (lab, 2026-11-25). The layouts come from a static read of the
 real 5.12 client (Graal_analysis `torque/terrain-512.md`). The 2026-11-25 terrain
 lab confirmed them live on a real 5.12, by sending them as raw lines from this
 server. The native `terrain` line has not yet run against a real client.

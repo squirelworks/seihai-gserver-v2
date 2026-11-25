@@ -803,6 +803,13 @@ namespace graal3d
 		m_packetStrings = packetStrings;
 		checkWorldFiles();
 
+		// One TerrainBlock a world: with two, live 5.12 asks for chunks for both
+		// but lays them only on the second (terrain lab, 2026-11-25).
+		const auto terrainBlocks = std::ranges::count_if(m_world.objects, [](const GhostObject& o) { return o.rawClass == "TerrainBlock"; });
+		if (terrainBlocks > 1)
+			log::printLine(log::server, "** [Warning] Graal3D: the world has {} TerrainBlocks; 5.12 lays the streamed chunks only on the last. Keep one.",
+						   terrainBlocks);
+
 		// The lab's raw fields may name files (file:, zfile:), relative to the
 		// server folder like the weapon3d files.
 		const auto read = [](const std::string& path) -> std::optional<std::string> {
