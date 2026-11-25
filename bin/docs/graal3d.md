@@ -174,9 +174,12 @@ too. The server never sends a player's position back to that player.
 ## The Sharp3D route
 
 `graal3droute = sharp3d` in `serveroptions.txt` (default `mission`) gives protocol
-24 clients (5.00r7, 5.12) a second way in. It copies a third-party 3D server
-that a real 5.12 client joined and drew (capture of 2026-11-24, read by
-graal-client-repro's `g3d-replay`):
+24 clients (5.00r7, 5.12) a second way in, for comparison. It copies an
+unofficial, LLM-written third-party 3D server that a real 5.12 client joined and
+drew (capture of 2026-11-24, read by graal-client-repro's `g3d-replay`). That
+server is not a reference: it only shows one layout the client accepts. What the
+client itself reads (static and live analysis, and fuzzing it against this
+server) is the authority, and the default route stays the one built from that.
 
 - The connect accept's class table is objects `Sun`, `GameObject`, `Camera`, `Sky`
   and events `BigDataStartEvent`, `BigDataChunkEvent`, `ConnectionMessageEvent`,
