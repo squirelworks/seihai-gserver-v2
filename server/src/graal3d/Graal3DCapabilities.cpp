@@ -108,8 +108,9 @@ namespace graal3d
 
 		// Windows 4.20r8: 4.20r6's values except what was read. A lab run
 		// (Graal_analysis PR #854) linked it as protocol 24; it takes the 5.12
-		// TerrainBlock and chunk layout, then crashes soon after the TerrainBlock
-		// is added, so it is offered no streamed terrain.
+		// TerrainBlock and chunk layout, then crashes drawing terrain near the
+		// camera under the lab's GDI Generic OpenGL 1.1 (untested on Mesa or a
+		// GPU), so it is offered no streamed terrain.
 		constexpr Capabilities k4208 = []
 		{
 			Capabilities c = with(k420, "4.20r8", "G3D20126",
