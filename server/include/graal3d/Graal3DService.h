@@ -67,6 +67,10 @@ namespace graal3d
 		// The objects every client is sent. `packetStrings`: see TorqueBitStream.h
 		// (the option graal3dstringprefix). Call before start().
 		void setWorld(World world, bool packetStrings);
+		// graal3droute = sharp3d: protocol 24 clients get the Sharp3D route (the
+		// world as GhostAlwaysObjectEvents, no mission phases, a Camera as the
+		// control object). Call before start().
+		void setSharp3DRoute(bool on) { m_sharp3d = on; }
 		[[nodiscard]] uint16_t port() const { return m_port; }
 
 		// Reads waiting datagrams and runs every connection. Called each server frame.
@@ -137,6 +141,7 @@ namespace graal3d
 
 		World m_world;
 		bool m_packetStrings = true;
+		bool m_sharp3d = false;
 		std::map<PlayerID, GhostObject> m_avatars;
 		// Until when the client's own reports of its position are ignored, after
 		// moveAvatar: an older report would put the object back.

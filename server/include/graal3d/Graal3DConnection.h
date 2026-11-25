@@ -270,6 +270,11 @@ namespace graal3d
 		bool m_datablocksSent = false;
 		bool m_ghostingAllowed = false;
 		bool m_phase2Acked = false;
+		// Sharp3D route: the GhostAlwaysObjectEvent that creates each ghost, by
+		// event sequence; its ack marks the ghost created.
+		std::map<int32_t, ObjectKey> m_ghostAlwaysEvents;
+		void postGhostAlways(ObjectKey key, Ghost& ghost);
+		void finishGhostAlways();
 		uint32_t m_lastMoveAck = 0;
 		size_t m_movesReceived = 0;
 		bool m_controlMoved = false; // the Player moved since its packet data last went out

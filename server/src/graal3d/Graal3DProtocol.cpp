@@ -44,6 +44,16 @@ namespace graal3d
 			"SimpleMessageEvent", "TerrainChunkEvent", "TerrainRequestUpdatesEvent",
 		};
 
+		// The Sharp3D route: the class table of a server real 5.12 joined and drew
+		// (capture of 2026-11-24, read by graal-client-repro's g3d-replay), in its
+		// id order: objects Sun, GameObject, Camera, Sky; events BigDataStart,
+		// BigDataChunk, ConnectionMessage, GhostAlwaysObject.
+		const std::vector<std::string_view> kSharpObjects{"Sun", "GameObject", "Camera", "Sky"};
+		const std::vector<std::string_view> kSharpEvents{
+			"BigDataStartEvent", "BigDataChunkEvent", "ConnectionMessageEvent", "GhostAlwaysObjectEvent",
+		};
+		const Profile kSharp24{24, "5.x (5.00r7, 5.12), Sharp3D route", false, true, 0, kSharpObjects, kSharpEvents, {}, false, true};
+
 		const std::array<Profile, 3> kProfiles{
 			Profile{19, "3.153, 4.04r2", true, false, 3, kObjects404, kEvents404, kDatablocks404, true},
 			Profile{21, "4.20r6", false, true, 2, kObjects420, kEvents420},
@@ -65,6 +75,11 @@ namespace graal3d
 				return &p;
 		}
 		return nullptr;
+	}
+
+	const Profile* sharp3dProfileForProtocol(uint32_t protocol)
+	{
+		return protocol == kSharp24.protocol ? &kSharp24 : nullptr;
 	}
 
 	std::optional<uint32_t> eventClassId(const Profile& profile, std::string_view name)

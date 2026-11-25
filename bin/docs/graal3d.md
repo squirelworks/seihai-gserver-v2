@@ -1,6 +1,6 @@
 # Graal 3D (Seihai)
 
-<!-- Modified by the Seihai project, 2026-11-14: reconcile recorded lab coverage; 2026-11-19: protocol 19 Sky and Player; 2026-11-20: default Camera facing the spawn; 2026-11-25: lab raw objects and events. -->
+<!-- Modified by the Seihai project, 2026-11-14: reconcile recorded lab coverage; 2026-11-19: protocol 19 Sky and Player; 2026-11-20: default Camera facing the spawn; 2026-11-25: lab raw objects and events, the Sharp3D route. -->
 
 This file is part of the Seihai fork (GPL-3.0, see `LICENSE.md` and `CHANGES-SEIHAI.md`).
 
@@ -30,6 +30,7 @@ In `config/serveroptions.txt`:
 graal3d = true
 # graal3dport = 0      (0 or unset: serverport + 1, the port the clients use)
 # graal3dstringprefix = true
+# graal3droute = mission   (or sharp3d: see "The Sharp3D route")
 ```
 
 `graal3dstringprefix` says whether strings inside game packets start with Torque's
@@ -169,6 +170,36 @@ too. The server never sends a player's position back to that player.
 | `movetype` | **not sent.** |
 | From the client: `TerrainRequestUpdatesEvent` | logged: its length, how many of its 256 stamps are set, the first eight `(x,y)=stamp`, and the payload as hex. Other events the server does not decode are logged with their length and first 64 bytes. |
 | 3.15x and 4.04r2 game packets | done up to a walking `Player` control object and a `Sky`. A real 4.04r2 runs a `Camera` session with the `Sky`, and a `Player` session once `tgeplayershape` names a loadable TGE `.dts` (lab 2026-11-19). See "Protocol 19" below. |
+
+## The Sharp3D route
+
+`graal3droute = sharp3d` in `serveroptions.txt` (default `mission`) gives protocol
+24 clients (5.00r7, 5.12) a second way in. It copies a third-party 3D server
+that a real 5.12 client joined and drew (capture of 2026-11-24, read by
+graal-client-repro's `g3d-replay`):
+
+- The connect accept's class table is objects `Sun`, `GameObject`, `Camera`, `Sky`
+  and events `BigDataStartEvent`, `BigDataChunkEvent`, `ConnectionMessageEvent`,
+  `GhostAlwaysObjectEvent`, in that id order. There is no `RemoteCommandEvent` or
+  `NetStringEvent`, so no mission-start commands.
+- Every object is created by a `GhostAlwaysObjectEvent`: ghost index (12 bits), a
+  flag (set), class (12), the update's length (14), then the update. Later
+  changes (other players moving, chat) go in the normal ghost section; the
+  captured server's world was static, so that part is this server's choice.
+- The mission counts as started once the client has acked every one of those
+  events. Then the client's `Camera` becomes its control object, named in every
+  packet with an empty Camera update (13 GameObject flags and 2 Camera flags), and
+  as its camera.
+- Flags and `weapon3d` scripts still go over the BigData text channel.
+- The client's reports for its Camera do not move its player object, which moves
+  with the `g3dpos` trigger only. The reader assumes the client writes a Camera
+  update as it reads one (the two extra flags); not yet checked live.
+- `TerrainBlock`, `WaterBlock` and the lab's raw objects are not in this class
+  table, so they are not sent on this route. The captured server also sent a
+  field of view of 60 in every packet; this server sends none.
+
+Catch tests check the table, the event layout and the control object. No real
+client has run this route on our server yet.
 
 ## Lab: raw objects and events
 

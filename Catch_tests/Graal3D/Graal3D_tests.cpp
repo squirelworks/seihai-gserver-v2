@@ -80,7 +80,7 @@ namespace
 			: r(payload) { r.setStringBuffer(&buffer); }
 	};
 
-	ServerPacket readServerPacket(std::string_view datagram)
+	ServerPacket readServerPacket(std::string_view datagram, bool cameraControl = false)
 	{
 		BitReader r(datagram);
 		std::string stringBuffer;
@@ -104,6 +104,11 @@ namespace
 			GameObjectState state;
 			std::string moveType;
 			out.controlMask = readGameObjectUpdate(r, state, moveType);
+			if (cameraControl)
+			{
+				REQUIRE_FALSE(r.readFlag()); // camera mode
+				REQUIRE_FALSE(r.readFlag()); // followed object
+			}
 		}
 		if (r.readFlag())
 		{
@@ -1292,4 +1297,113 @@ SCENARIO("A TerrainRequestUpdatesEvent from the client is logged with its stamps
 		if (l.find("TerrainRequestUpdatesEvent: 8192 bits, 1 chunks with a stamp (1,1)=42") != std::string::npos)
 			found = true;
 	REQUIRE(found);
+}
+
+SCENARIO("The Sharp3D route sends the world as ghost-always events and controls the Camera")
+{
+	const Profile& profile = *sharp3dProfileForProtocol(24);
+	REQUIRE(profile.ghostAlwaysWorld);
+	REQUIRE_FALSE(sharp3dProfileForProtocol(21));
+	REQUIRE_FALSE(eventClassId(profile, "RemoteCommandEvent"));
+	REQUIRE_FALSE(eventClassId(profile, "NetStringEvent"));
+	REQUIRE(*objectClassId(profile, "Sun") == 0);
+	REQUIRE(*objectClassId(profile, "GameObject") == 1);
+	REQUIRE(*objectClassId(profile, "Camera") == 2);
+	REQUIRE(*objectClassId(profile, "Sky") == 3);
+	REQUIRE(*eventClassId(profile, "GhostAlwaysObjectEvent") == 3);
+
+	uint64_t now = 1000;
+	std::vector<std::string> sent;
+	std::vector<MissionState> mission;
+	std::vector<std::string> logs;
+	Connection conn{profile, 0, now, Connection::Callbacks{
+										 [&](std::string_view d) { sent.emplace_back(d); },
+										 [](const TextMessage&) {},
+										 [&](std::string_view l) { logs.emplace_back(l); },
+										 [&](MissionState m) { mission.push_back(m); },
+										 [](const ClientState&) {},
+									 }};
+	GhostObject sun;
+	sun.kind = GhostObject::Kind::Sun;
+	GhostObject ground;
+	ground.object.name = "Ground";
+	ground.object.shape = "isle.3ds";
+	GhostObject camera;
+	camera.kind = GhostObject::Kind::Camera;
+	camera.object.name = "G3DCamera_lab";
+	conn.setGhost(1, sun);
+	conn.setGhost(2, ground);
+	conn.setGhost(3, camera);
+	conn.setCameraObject(3);
+	conn.setControlObject(3);
+
+	conn.receive(kFirstData, now);
+	now += 60;
+	REQUIRE(conn.update(now));
+	REQUIRE(mission == std::vector<MissionState>{MissionState::Phase1Sent});
+	const auto first = readServerPacket(sent.back(), true);
+
+	THEN("every object is a GhostAlwaysObjectEvent and no command or ghost section goes out")
+	{
+		REQUIRE(first.ghosts.empty());
+		REQUIRE_FALSE(first.control);
+		REQUIRE(first.events.size() == 3);
+		const std::vector<uint32_t> classes{0, 1, 2};
+		for (size_t i = 0; i < 3; ++i)
+		{
+			const auto& ev = first.events[i];
+			REQUIRE(ev.classId == *eventClassId(profile, "GhostAlwaysObjectEvent"));
+			PayloadReader p(ev.payload);
+			REQUIRE(p.r.readInt(12) == i); // ghost index
+			REQUIRE(p.r.readFlag());
+			REQUIRE(p.r.readInt(12) == classes[i]);
+			const auto bits = p.r.readInt(14);
+			REQUIRE(12 + 1 + 12 + 14 + bits == ev.bits);
+			if (i == 1)
+			{
+				GameObjectState state;
+				std::string moveType;
+				readGameObjectUpdate(p.r, state, moveType);
+				REQUIRE(state.shape == "isle.3ds");
+			}
+		}
+	}
+
+	WHEN("the client acks the events")
+	{
+		sent.clear();
+		conn.receive(clientDataPacket(profile, 2, 1, 1, {}, 0), now);
+		now += 60;
+		REQUIRE(conn.update(now));
+
+		THEN("the mission is done and the Camera is the control object in every packet")
+		{
+			REQUIRE(mission.back() == MissionState::Done);
+			REQUIRE_FALSE(sent.empty());
+			const auto pkt = readServerPacket(sent.back(), true);
+			REQUIRE(pkt.control);
+			REQUIRE(pkt.controlIndex == 2);
+			REQUIRE(pkt.camera);
+			REQUIRE(pkt.cameraIndex == 2);
+			REQUIRE(pkt.ghosts.empty());
+
+			conn.receive(clientDataPacket(profile, 3, 2, 1, {}, 0), now);
+			now += 1000;
+			REQUIRE(conn.update(now));
+			const auto later = readServerPacket(sent.back(), true);
+			REQUIRE(later.control);
+			REQUIRE(later.controlIndex == 2);
+		}
+
+		THEN("a later change goes out in the ghost section")
+		{
+			ground.object.chat = "hi";
+			conn.setGhost(2, ground);
+			now += 1000;
+			REQUIRE(conn.update(now));
+			const auto pkt = readServerPacket(sent.back(), true);
+			REQUIRE(pkt.ghosts.size() == 1);
+			REQUIRE(pkt.ghosts[0].index == 1);
+		}
+	}
 }

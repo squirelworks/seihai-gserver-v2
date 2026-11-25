@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-19: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -263,6 +263,13 @@ int Server::init(const std::string_view serverip, const std::string_view serverp
 		for (const auto& error : world.errors)
 			log::printLine(log::server, "** [Error] Graal3D: graal3dworld.txt {}", error);
 		m_graal3d->setWorld(std::move(world), m_settings.get<bool>("graal3dstringprefix").value_or(true));
+		// graal3droute = sharp3d: the route of a server real 5.12 joined (see bin/docs/graal3d.md).
+		const auto route = m_settings.get<std::string>("graal3droute").value_or("mission"s);
+		m_graal3d->setSharp3DRoute(route == "sharp3d");
+		if (route != "mission" && route != "sharp3d")
+			log::printLine(log::server, "** [Error] Graal3D: graal3droute {} is not mission or sharp3d; using mission.", route);
+		else if (route == "sharp3d")
+			log::printLine(log::server, "Graal3D: Sharp3D route for protocol 24 clients.");
 		if (udpPort < 65536 && m_graal3d->start(oInter, static_cast<uint16_t>(udpPort)))
 		{
 			auto indent = log::server.indent();

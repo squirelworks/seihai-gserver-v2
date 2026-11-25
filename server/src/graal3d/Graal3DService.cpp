@@ -277,6 +277,11 @@ namespace graal3d
 		}
 
 		const auto* profile = profileForProtocol(req->currentProtocol);
+		if (m_sharp3d)
+		{
+			if (const auto* sharp = sharp3dProfileForProtocol(req->currentProtocol))
+				profile = sharp;
+		}
 		const PlayerID playerId = player->getId();
 
 		// One 3D link per player.
@@ -541,7 +546,9 @@ namespace graal3d
 			connection.setGhost(key++, object);
 		for (const auto& [other, avatar] : m_avatars)
 			connection.setGhost(avatarKey(other), avatar);
-		connection.setControlObject(avatarKey(playerId));
+		// The Sharp3D route's control object is the client's Camera (set below).
+		if (!connection.profile().ghostAlwaysWorld)
+			connection.setControlObject(avatarKey(playerId));
 
 		// A Camera of its own. The 5.x client draws its 3D view only through
 		// one: with just the control object the window stays black (lab
@@ -554,6 +561,8 @@ namespace graal3d
 		camera.object.transform = cameraTransform(m_world);
 		connection.setGhost(cameraKey(playerId), camera);
 		connection.setCameraObject(cameraKey(playerId));
+		if (connection.profile().ghostAlwaysWorld)
+			connection.setControlObject(cameraKey(playerId));
 		log::printLine(log::server, "Graal3D: {} gets {} world objects and {} players.", account, m_world.objects.size(), m_avatars.size());
 		sendRawEvents(account, connection, false);
 	}
@@ -572,6 +581,14 @@ namespace graal3d
 		auto it = m_avatars.find(playerId);
 		if (it == m_avatars.end())
 			return;
+		// Sharp3D route: the client controls its Camera, not its player object,
+		// so what it reports is not where the player is. Its object moves with
+		// the g3dpos trigger only.
+		if (auto e = m_byPlayer.find(playerId); e != m_byPlayer.end())
+		{
+			if (auto s = m_sessions.find(e->second); s != m_sessions.end() && s->second.connection->profile().ghostAlwaysWorld)
+				return;
+		}
 
 		// The client owns its object: take what it reports, and pass it on to
 		// everyone else. Its own screen is never sent its position back.

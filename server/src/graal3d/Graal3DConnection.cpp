@@ -95,6 +95,20 @@ namespace graal3d
 		if (!m_profile.gamePackets())
 			return;
 
+		if (m_profile.ghostAlwaysWorld)
+		{
+			// Sharp3D route: no mission-start commands. The world's ghosts go out as
+			// GhostAlwaysObjectEvents (posted by setGhost), and the mission counts as
+			// started once the client has acked all of them; then the control
+			// object follows. Phase1Sent is still reported, since the owner sends
+			// the flags and weapons over the text channel then.
+			m_mission = MissionState::Phase1Sent;
+			if (m_cb.onMission)
+				m_cb.onMission(m_mission);
+			finishGhostAlways();
+			return;
+		}
+
 		// The 5.x and 4.04r2 clients answer these natively and raise
 		// onGraal3DLoginStep. 3.153 runs the stock TorqueScript, which takes
 		// (sequence, mission name) and sends the sequence back in its ack.
@@ -369,7 +383,19 @@ namespace graal3d
 		if (delivered)
 		{
 			for (auto seq : note.events)
+			{
 				m_events.erase(seq);
+				if (auto ga = m_ghostAlwaysEvents.find(seq); ga != m_ghostAlwaysEvents.end())
+				{
+					if (auto it = m_ghosts.find(ga->second); it != m_ghosts.end())
+					{
+						it->second.createInFlight = false;
+						it->second.created = true;
+					}
+					m_ghostAlwaysEvents.erase(ga);
+				}
+			}
+			finishGhostAlways();
 			m_lastAckedEventSeq = m_events.empty() ? m_nextSendEventSeq - 1 : m_events.begin()->first - 1;
 			return;
 		}
@@ -432,7 +458,9 @@ namespace graal3d
 			g.index = *index;
 			g.classId = *classId;
 			g.object = object;
-			m_ghosts.emplace(key, std::move(g));
+			auto& placed = m_ghosts.emplace(key, std::move(g)).first->second;
+			if (m_profile.ghostAlwaysWorld)
+				postGhostAlways(key, placed);
 			return;
 		}
 
@@ -553,15 +581,27 @@ namespace graal3d
 		// may only name a ghost the client already has, so the control object goes
 		// out once its create has been acked and the mission start is done.
 		w.writeFlag(true);
-		if (!w.writeFlag(controlPending()))
+		// The Sharp3D route names its Camera control object in every packet once
+		// the world is in, as the server the 5.12 client joined did.
+		const bool again = m_profile.ghostAlwaysWorld && m_controlDelivered && m_controlKey && m_ghosts.contains(*m_controlKey) &&
+						   m_ghosts.at(*m_controlKey).created && !m_ghosts.at(*m_controlKey).kill;
+		if (!w.writeFlag(controlPending() || again))
 			return;
 
 		const auto& g = m_ghosts.at(*m_controlKey);
+		if (again)
+		{
+			w.writeU32(static_cast<uint32_t>(nowMs));
+			w.writeInt(g.index, 12);
+			g.object.writeUpdate(w, 0);
+			return;
+		}
 		w.writeU32(static_cast<uint32_t>(nowMs)); // the client's synchronised clock (timevar3)
 		w.writeInt(g.index, 12);
 		// The packet data is a full GameObject update with no length prefix. The
 		// ghost already carries the object's state, so no section is set.
-		writeGameObjectUpdate(w, g.object.object, 0);
+		// A Camera's carries its two Camera flags too (both clear).
+		g.object.writeUpdate(w, 0);
 		note.control = true;
 		m_controlInFlight = true;
 		log("control object (ghost " + std::to_string(g.index) + ") sent in seq " + std::to_string(note.sequence));
@@ -654,6 +694,44 @@ namespace graal3d
 		w.writeFlag(false);
 	}
 
+	void Connection::postGhostAlways(ObjectKey key, Ghost& g)
+	{
+		// GhostAlwaysObjectEvent: ghost index (12 bits), a flag (an object
+		// follows), its class (12), the update's length (14), the update.
+		BitWriter update;
+		update.setPacketStrings(m_packetStrings);
+		g.object.writeUpdate(update, g.object.fullMask(), m_controlKey == key);
+		if (update.bitPosition() >= (1u << 14))
+		{
+			log("ghost-always object too large, not sent: " + std::string(g.object.className()));
+			return;
+		}
+		BitWriter payload;
+		payload.setPacketStrings(m_packetStrings);
+		payload.writeInt(g.index, 12);
+		payload.writeFlag(true);
+		payload.writeInt(g.classId, 12);
+		payload.writeInt(static_cast<uint32_t>(update.bitPosition()), 14);
+		payload.writeBits(update);
+		const int32_t seq = m_nextSendEventSeq;
+		postEvent("GhostAlwaysObjectEvent", std::move(payload));
+		if (m_nextSendEventSeq == seq)
+			return; // no such event class
+		m_ghostAlwaysEvents[seq] = key;
+		g.createInFlight = true; // the ghost section leaves it alone; the event's ack creates it
+		g.pending = 0;
+	}
+
+	void Connection::finishGhostAlways()
+	{
+		if (!m_profile.ghostAlwaysWorld || !m_established || m_mission == MissionState::Done || !m_ghostAlwaysEvents.empty())
+			return;
+		m_mission = MissionState::Done;
+		log("every ghost-always object is on the client");
+		if (m_cb.onMission)
+			m_cb.onMission(m_mission);
+	}
+
 	void Connection::ghostNotify(const Notify& note, bool delivered)
 	{
 		if (note.controlUpdate && !delivered)
@@ -734,6 +812,16 @@ namespace graal3d
 			state.controlling = true;
 			state.changed = readGameObjectUpdate(r, m_clientObject, m_clientMoveType);
 			state.object = m_clientObject;
+			if (m_profile.ghostAlwaysWorld)
+			{
+				// Sharp3D route: the control object is a Camera, whose update has two
+				// more sections (mode, followed object). Assumed: the client writes
+				// them as it reads them. Not yet checked against a real client.
+				if (r.readFlag())
+					r.readInt(1);
+				if (r.readFlag() && r.readFlag())
+					r.readInt(12);
+			}
 		}
 		if (r.readFlag())
 			r.readInt(8);
