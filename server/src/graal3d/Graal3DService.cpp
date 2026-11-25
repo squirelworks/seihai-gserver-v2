@@ -41,6 +41,21 @@ namespace graal3d
 {
 	namespace
 	{
+		std::string hexString(std::string_view bytes)
+		{
+			static constexpr char digits[] = "0123456789abcdef";
+			std::string out;
+			for (const auto c : bytes)
+			{
+				out.push_back(digits[static_cast<uint8_t>(c) >> 4]);
+				out.push_back(digits[static_cast<uint8_t>(c) & 15]);
+			}
+			return out;
+		}
+	} // namespace
+
+	namespace
+	{
 		void closeSocket(SOCKET s)
 		{
 #if defined(_WIN32) || defined(_WIN64)
@@ -332,7 +347,8 @@ namespace graal3d
 		{
 			if (it->second.connection->connectSequence() == req->sequence)
 			{
-				sendTo(from, buildConnectAccept(req->sequence, it->second.connection->profile()));
+				sendTo(from, buildConnectAccept(req->sequence, it->second.connection->profile(),
+												 acceptTweak(m_mutation, m_mutationSeed, it->second.connection->profile())));
 				return;
 			}
 			closeSession(from, "reconnected", false);
@@ -443,7 +459,17 @@ namespace graal3d
 		ghostWorld(playerId, account, connection);
 		forEachOtherConnection(playerId, [&](Connection& other) { ghostAvatar(other, playerId, avatar); });
 
-		sendTo(from, buildConnectAccept(req->sequence, *profile));
+		connection.setMutation(m_mutation, m_mutationSeed);
+		std::string tweaked;
+		const auto acceptPacket = buildConnectAccept(req->sequence, *profile, acceptTweak(m_mutation, m_mutationSeed, *profile, &tweaked));
+		if (!tweaked.empty())
+		{
+			const auto line = std::format("mutation {}:{} in the connect accept: {}; packet {}", mutationName(m_mutation), m_mutationSeed, tweaked,
+										  hexString(acceptPacket));
+			log::printLine(log::server, "Graal3D {}: {}", account, line);
+			trace(account, profile->protocol, line);
+		}
+		sendTo(from, acceptPacket);
 		log::printLine(log::server, "Graal3D: {} linked from {} (protocol {}, {}).", account, ipString(from), profile->protocol, profile->clients);
 		trace(account, profile->protocol, std::format("linked from {} ({}); {} other 3D players", ipString(from), profile->clients, m_sessions.size() - 1));
 	}
@@ -800,6 +826,21 @@ namespace graal3d
 			connection.setControlObject(cameraKey(playerId));
 		log::printLine(log::server, "Graal3D: {} gets {} world objects and {} players.", account, m_world.objects.size(), m_avatars.size());
 		sendRawEvents(account, connection, false);
+	}
+
+	void Service::setMutation(const std::string& text)
+	{
+		m_mutation = Mutation::None;
+		if (text.empty() || text == "off")
+			return;
+		if (const auto parsed = parseMutation(text))
+		{
+			std::tie(m_mutation, m_mutationSeed) = *parsed;
+			log::printLine(log::server, "Graal3D: LAB MUTATION {}:{} on every 3D link (graal3dmutate). Never on a public server.", mutationName(m_mutation),
+						   m_mutationSeed);
+		}
+		else
+			log::printLine(log::server, "** [Error] Graal3D: graal3dmutate {} is not a known mutation; off.", text);
 	}
 
 	void Service::setTrace(const std::string& path)

@@ -1584,3 +1584,85 @@ SCENARIO("The Sharp3D route sends the world as ghost-always events and controls 
 		}
 	}
 }
+
+SCENARIO("Lab mutations (graal3dmutate) are parsed, seeded and sent once")
+{
+	GIVEN("the setting's text")
+	{
+		THEN("each kind parses, with a seed or 1")
+		{
+			REQUIRE(parseMutation("ghost-uncreated") == std::pair{Mutation::GhostUncreated, 1u});
+			REQUIRE(parseMutation("accept-protocol:42") == std::pair{Mutation::AcceptProtocol, 42u});
+			REQUIRE(mutationName(Mutation::ControlDeleted) == "control-deleted");
+			REQUIRE_FALSE(parseMutation("nonsense"));
+			REQUIRE_FALSE(parseMutation("ghost-uncreated:x"));
+		}
+	}
+
+	GIVEN("an accept mutation")
+	{
+		const auto& profile = *profileForProtocol(24);
+		THEN("the same seed gives the same accept, and it differs from the real one")
+		{
+			for (const auto m : {Mutation::AcceptProtocol, Mutation::AcceptClassTable})
+			{
+				for (uint32_t seed = 1; seed < 8; ++seed)
+				{
+					std::string what;
+					const auto a = buildConnectAccept(0x400, profile, acceptTweak(m, seed, profile, &what));
+					REQUIRE_FALSE(what.empty());
+					REQUIRE(a == buildConnectAccept(0x400, profile, acceptTweak(m, seed, profile)));
+					REQUIRE(a != buildConnectAccept(0x400, profile));
+				}
+			}
+			REQUIRE(buildConnectAccept(0x400, profile, acceptTweak(Mutation::GhostUncreated, 1, profile)) == buildConnectAccept(0x400, profile));
+		}
+	}
+
+	GIVEN("a packet mutation on a connection whose mission start is done")
+	{
+		for (const auto m : {Mutation::EventUnknownClass, Mutation::EventBadLength, Mutation::GhostUncreated, Mutation::GhostDoubleDelete,
+							 Mutation::GhostIndexWidth, Mutation::ControlWrongClass, Mutation::ControlDeleted})
+		{
+			Harness h;
+			h.conn.setMutation(m, 7);
+			const auto& profile = h.profile;
+			h.conn.receive(kFirstData, h.now);
+			h.tick(60);
+			std::vector<OutEvent> evs;
+			evs.push_back({"RemoteCommandEvent", remoteCommandEvent({CommandArg{false, 0, "MissionStartPhase1Ack"}})});
+			h.conn.receive(clientDataPacket(profile, 2, 1, 1, evs, 0), h.now);
+			h.tick(60);
+			std::vector<OutEvent> evs2;
+			evs2.push_back({"RemoteCommandEvent", remoteCommandEvent({CommandArg{false, 0, "MissionStartPhase2Ack"}})});
+			h.conn.receive(clientDataPacket(profile, 3, 2, 1, evs2, 1), h.now);
+			REQUIRE(h.mission.back() == MissionState::Done);
+
+			h.tick(60);
+			REQUIRE_FALSE(h.conn.mutationSent());
+			const auto line = [&] {
+				for (const auto& l : h.logs)
+				{
+					if (l.starts_with("mutation "))
+						return l;
+				}
+				return std::string();
+			};
+			REQUIRE(line().empty());
+			h.tick(2100);
+			REQUIRE(h.conn.mutationSent());
+			const auto said = line();
+			INFO(said);
+			REQUIRE(said.starts_with("mutation " + std::string(mutationName(m)) + ":7 in seq "));
+			REQUIRE(said.find("; packet ") != std::string::npos);
+			// The control mutations need a ghost of another class, which this world
+			// does not have; the rest always find something to change.
+			if (m != Mutation::ControlWrongClass && m != Mutation::GhostIndexWidth)
+				REQUIRE(said.find("nothing to mutate") == std::string::npos);
+			// Once only.
+			const auto count = std::ranges::count_if(h.logs, [](const std::string& l) { return l.starts_with("mutation "); });
+			h.tick(3000);
+			REQUIRE(std::ranges::count_if(h.logs, [](const std::string& l) { return l.starts_with("mutation "); }) == count);
+		}
+	}
+}

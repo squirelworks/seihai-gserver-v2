@@ -20,6 +20,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <graal3d/TorqueBitStream.h>
@@ -102,7 +103,15 @@ namespace graal3d
 	std::optional<uint32_t> parseDisconnect(std::string_view packet, std::string* reason = nullptr);
 
 	std::string buildChallengeResponse(uint32_t sequence, const Digest& digest);
-	std::string buildConnectAccept(uint32_t sequence, const Profile& profile);
+	// Lab only (graal3dmutate): changes to the accept. Empty: the real accept.
+	struct AcceptTweak
+	{
+		std::optional<uint32_t> protocol;           // in place of the profile's
+		size_t dropEventClasses = 0;                // leave out the last N event classes
+		std::vector<std::string> extraEventClasses; // listed after the real ones
+		std::optional<std::pair<size_t, std::string>> renameObject; // object class i gets this name
+	};
+	std::string buildConnectAccept(uint32_t sequence, const Profile& profile, const AcceptTweak& tweak = {});
 	std::string buildConnectReject(uint32_t sequence, std::string_view reason);
 	std::string buildDisconnect(uint32_t sequence, std::string_view reason);
 

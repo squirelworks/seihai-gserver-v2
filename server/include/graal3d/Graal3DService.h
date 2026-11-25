@@ -87,6 +87,9 @@ namespace graal3d
 		// time a player's object is passed on to the others, for multi-client labs
 		// (see bin/docs/graal3d.md). Empty: off.
 		void setTrace(const std::string& path);
+		// graal3dmutate = <kind>[:<seed>]: lab only, one seeded mutation per 3D link
+		// (see bin/docs/graal3d.md, "Lab: mutations"). Empty or "off": none.
+		void setMutation(const std::string& text);
 		[[nodiscard]] uint16_t port() const { return m_port; }
 
 		// Reads waiting datagrams and runs every connection. Called each server frame.
@@ -177,6 +180,8 @@ namespace graal3d
 		// moveAvatar: an older report would put the object back.
 		std::map<PlayerID, uint64_t> m_movedUntil;
 		std::unique_ptr<std::ofstream> m_trace;
+		Mutation m_mutation = Mutation::None;
+		uint32_t m_mutationSeed = 1;
 		void trace(std::string_view account, int protocol, std::string_view what);
 		std::set<std::string> m_unmatched; // "ip,account" already logged as unmatched
 	};

@@ -273,6 +273,8 @@ int Server::init(const std::string_view serverip, const std::string_view serverp
 			log::printLine(log::server, "** [Error] Graal3D: graal3dshapecheck {} is not skip, warn or off; using skip.", shapeCheck);
 		// graal3dtrace = <file>: a line for everything each 3D client sends (see bin/docs/graal3d.md).
 		m_graal3d->setTrace(m_settings.get<std::string>("graal3dtrace").value_or(""s));
+		// graal3dmutate = <kind>[:<seed>]: lab fuzzing only (see bin/docs/graal3d.md).
+		m_graal3d->setMutation(m_settings.get<std::string>("graal3dmutate").value_or(""s));
 		m_graal3d->setWorld(std::move(world), m_settings.get<bool>("graal3dstringprefix").value_or(true));
 		// graal3droute = sharp3d: the route of a server real 5.12 joined (see bin/docs/graal3d.md).
 		const auto route = m_settings.get<std::string>("graal3droute").value_or("mission"s);

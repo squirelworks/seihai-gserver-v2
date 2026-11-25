@@ -365,6 +365,32 @@ client whose class table has its class: 4.20r6 and 5.x list `TerrainBlock` and
 the other ghosts, after the datablocks. Nothing here has been run with a real
 client yet; the 2026-11-25 terrain lab is the first user.
 
+## Lab: mutations (`graal3dmutate`)
+
+**Lab only. Never set this on a server real players use.** `graal3dmutate =
+<kind>[:<seed>]` changes one thing in what the server sends each 3D client, so a lab
+can watch how a real client in a VM copes. The seed (default 1) picks the details, so
+a run can be repeated. Each link gets the mutation once, and the server log and
+`graal3dtrace` both get a `mutation <kind>:<seed>` line with what changed and the
+packet's exact bytes in hex.
+
+| Kind | What is sent |
+|---|---|
+| `accept-protocol` | the connect accept carries a wrong protocol number (one off, 0, `0xFFFFFFFF` or 100 more) |
+| `accept-classtable` | the accept's class table leaves out the last 1 to 3 event classes, adds an event class `SeihaiLabEvent`, or renames one object class `SeihaiLabObject` |
+| `event-unknown-class` | an unguaranteed event whose 12-bit class id is past the table, with 0 to 63 random bits |
+| `event-bad-length` | an unguaranteed event of a real class whose int14 length is 1 or 8 more, 1 less, or 16383, against its 0 to 63 bits |
+| `ghost-uncreated` | an update for a ghost index that holds no ghost, with an existing ghost's class id and random bits |
+| `ghost-double-delete` | two deletes of an index that holds no ghost, in one ghost section |
+| `ghost-index-width` | a full update of an existing ghost, in a ghost section whose 4-bit index width is wrong |
+| `control-wrong-class` | the control object names a ghost of another class (a Sky, Sun, ...) |
+| `control-deleted` | the control object names an index that holds no ghost |
+
+The accept mutations go out with the accept. The others go out 2 s after the mission
+start is done, in one packet. A mutation that finds nothing to change (no ghost of
+another class, say) logs that instead. The server's own state is not changed by a
+mutation: its ghosts and control object stay as they were.
+
 ## Protocol 19 (3.151 Linux, 3.153, 4.04r2)
 
 These clients run the stock Torque game layer: datablocks, `Camera` / `Player`

@@ -39,6 +39,7 @@
 #include <string_view>
 #include <vector>
 
+#include <graal3d/Graal3DMutation.h>
 #include <graal3d/Graal3DObjects.h>
 #include <graal3d/Graal3DProtocol.h>
 
@@ -114,6 +115,16 @@ namespace graal3d
 		// Strings inside game packets carry the packet string flag (default on;
 		// see TorqueBitStream.h). Set before anything is sent.
 		void setPacketStrings(bool on) { m_packetStrings = on; }
+
+		// Lab (graal3dmutate): one packet, 2 s after the mission start is done,
+		// carries this mutation (seeded), and the log gets its bytes. Accept
+		// mutations are the service's; they are ignored here.
+		void setMutation(Mutation mutation, uint32_t seed)
+		{
+			m_mutation = mutation;
+			m_mutationSeed = seed;
+		}
+		[[nodiscard]] bool mutationSent() const { return m_mutationDone; }
 
 		// Ghosting. setGhost adds an object or updates it (only what changed is
 		// sent); removeGhost deletes it on the client. Ignored for profiles whose
@@ -231,6 +242,12 @@ namespace graal3d
 		uint32_t m_connectSequence;
 		Callbacks m_cb;
 		mutable std::string m_lastStateTrace; // a state line is traced only when it changes
+		Mutation m_mutation = Mutation::None;
+		uint32_t m_mutationSeed = 0;
+		uint64_t m_mutationAt = 0;
+		bool m_mutationDone = false;
+		[[nodiscard]] bool mutationDue(uint64_t nowMs) const;
+		std::string m_mutationNote; // what the mutation packet changed, for the log
 
 		// ConnectionProtocol state, as in Torque.
 		uint32_t m_lastSeqRecvd = 0;
