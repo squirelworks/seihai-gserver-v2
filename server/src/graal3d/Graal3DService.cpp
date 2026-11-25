@@ -591,7 +591,12 @@ namespace graal3d
 		}
 		sendTo(from, acceptPacket);
 		log::printLine(log::server, "Graal3D: {} linked from {} (protocol {}, {}).", account, ipString(from), profile->protocol, profile->clients);
-		trace(account, profile->protocol, std::format("linked from {} ({}); {} other 3D players", ipString(from), profile->clients, m_sessions.size() - 1));
+		{
+			const auto& at = m_avatars[playerId].object.transform.position;
+			trace(account, profile->protocol,
+				  std::format("linked from {} ({}); {} other 3D players; spawn {:.2f},{:.2f},{:.2f}", ipString(from), profile->clients, m_sessions.size() - 1, at[0],
+							  at[1], at[2]));
+		}
 	}
 
 	std::shared_ptr<Player> Service::findTcpPlayer(const std::string& requested, const std::string& ip)
@@ -738,6 +743,45 @@ namespace graal3d
 			log::printLine(log::server, "** [Error] Graal3D: {} would crash a client ({}); {} is left out (graal3dshapecheck = warn sends it).", shape, *why, object.object.name);
 			return true;
 		});
+		// Streamed terrain: the client asks for heights.info over TCP, then for
+		// each texture it names. If the file folders do not cover the terrain
+		// folder, 5.12 draws the terrain white and fetches nothing (lab,
+		// 2026-11-25); a foldersconfig line such as `file 3d/<name>_terrain/*`
+		// is needed, since a folder line covers only its own files.
+		if (m_world.terrain)
+		{
+			const auto info = find("heights.info");
+			if (info == nullptr)
+			{
+				++missing;
+				log::printLine(log::server, "** [Warning] Graal3D: heights.info is not in the file folders, so clients draw the terrain white; add a foldersconfig line for {}.",
+							   m_world.terrain->folder);
+			}
+			else
+			{
+				++found;
+				const auto expected = std::filesystem::path(m_world.terrain->folder) / "heights.info";
+				std::error_code ec;
+				if (!std::filesystem::equivalent(info->file, expected, ec))
+					log::printLine(log::server, "** [Warning] Graal3D: clients get {} as heights.info, not the one in {}.", info->file.string(),
+								   m_world.terrain->folder);
+				std::istringstream lines(readAll(info->file));
+				for (std::string line; std::getline(lines, line);)
+				{
+					while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
+						line.pop_back();
+					if (line.empty())
+						continue;
+					if (find(line) == nullptr)
+					{
+						++missing;
+						log::printLine(log::server, "** [Warning] Graal3D: terrain texture {} (heights.info) is not in the file folders.", line);
+					}
+					else
+						++found;
+				}
+			}
+		}
 		log::printLine(log::server, "Graal3D: the world names {} files the folders have, {} they do not{}.", found, missing,
 					   dropped ? std::format(", and {} unsafe .3ds objects were left out", dropped) : std::string{});
 	}
