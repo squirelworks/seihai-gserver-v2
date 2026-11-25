@@ -26,7 +26,7 @@ namespace graal3d
 			.controlPlayer = true, .controlCamera = true, .controlGameObject = false,
 			.terFile = true, .terMax = 3, .terrainChunks = false, .heightsCache = false, .terrainTextureSize = 0,
 			.water = true, .torqueScript = true, .serverScripts = false, .terraformer = Terraformer::Full, .terrainEditor = true,
-			.dtsMin = 19, .dtsMax = 24, .difVersion = 44, .threeDs = false, .md3Version = 0, .stripPngTextures = false,
+			.dtsMin = 0, .dtsMax = 24, .difVersion = 44, .threeDs = false, .md3Version = 0, .stripPngTextures = false,
 			.downloadRefused = {}, .bigdata = false, .bigdataChunkMax = 0, .terrainChunkMax = 0, .udpPortOffset = 1,
 			.assumed = capMask({ F::MissionPhases, F::PhasesOptional, F::ClientMoves, F::ControlObjects, F::TerFile,
 								 F::TerMax, F::TerrainTexture, F::Water, F::ServerScripts, F::DtsMin, F::DtsMax, F::DifVersion, F::ThreeDs,
@@ -41,7 +41,7 @@ namespace graal3d
 			.controlPlayer = true, .controlCamera = true, .controlGameObject = false,
 			.terFile = true, .terMax = 3, .terrainChunks = true, .heightsCache = true, .terrainTextureSize = 0,
 			.water = true, .torqueScript = true, .serverScripts = false, .terraformer = Terraformer::Full, .terrainEditor = true,
-			.dtsMin = 19, .dtsMax = 24, .difVersion = 44, .threeDs = true, .md3Version = 15, .stripPngTextures = false,
+			.dtsMin = 0, .dtsMax = 24, .difVersion = 44, .threeDs = true, .md3Version = 15, .stripPngTextures = false,
 			.downloadRefused = {}, .bigdata = true, .bigdataChunkMax = 191, .terrainChunkMax = 1023, .udpPortOffset = 1,
 			.assumed = capMask({ F::MissionPhases, F::PhasesOptional, F::ControlObjects, F::TerMax, F::ChunkCache,
 								 F::TerrainTexture, F::Water, F::DtsMin, F::DtsMax, F::DifVersion, F::Md3Version, F::TextureNames,
@@ -56,7 +56,7 @@ namespace graal3d
 			.controlPlayer = true, .controlCamera = true, .controlGameObject = false,
 			.terFile = true, .terMax = 3, .terrainChunks = true, .heightsCache = true, .terrainTextureSize = 0,
 			.water = true, .torqueScript = false, .serverScripts = false, .terraformer = Terraformer::Greyscale, .terrainEditor = true,
-			.dtsMin = 19, .dtsMax = 24, .difVersion = 44, .threeDs = true, .md3Version = 15, .stripPngTextures = false,
+			.dtsMin = 0, .dtsMax = 24, .difVersion = 44, .threeDs = true, .md3Version = 15, .stripPngTextures = false,
 			.downloadRefused = kRefuseScriptsTer, .bigdata = true, .bigdataChunkMax = 191, .terrainChunkMax = 1023,
 			.udpPortOffset = 1,
 			.assumed = capMask({ F::PhasesOptional, F::ControlObjects, F::ChunkCache, F::TerrainTexture,
@@ -101,7 +101,7 @@ namespace graal3d
 								F::ChunkCache }),
 		};
 
-		constexpr std::array<Capabilities, 9> kRows{
+		constexpr std::array<Capabilities, 10> kRows{
 			k304,
 			k3153,
 			k404,
@@ -111,6 +111,11 @@ namespace graal3d
 			k500,
 			with(k500, "5.12", "G3D14097", 0),
 			with(k500, "5.12 Mac", "G3D15097", kAllCapFields),
+			// Linux 4.20r6 and 4.20r8: protocol 24, 5.12's row except what the
+			// 2026-11-25 world lab read. Its loader takes DTS 17, but a version-17
+			// shape froze it: serve DTS 24.
+			with(k500, "4.20 Linux", "G3D22126",
+				 allBut({ F::Protocol, F::Game, F::GameLayer, F::MissionPhases, F::ThreeDs, F::DtsMin, F::DtsMax, F::DifVersion })),
 		};
 
 		bool endsWithNoCase(std::string_view s, std::string_view suffix)

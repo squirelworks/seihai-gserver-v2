@@ -216,9 +216,10 @@ When a 3D connect request is accepted, the server picks the client's capability 
 |---|---|---|---|---|
 | 3.153 | TGE | not sent (its TerrainBlock and WaterBlock are stock TGE) | runs | not run against this server |
 | 4.04r2 (Win, Mac) | TGE | not sent | none | never downloads `.dso`, `.cs`, `.ter`; Mac row all assumed |
-| 4.20r6, 4.20r8 | GameObject | sent | none | 4.20r8's protocol (21) is assumed |
+| 4.20r6 Mac, 4.20r8 Win | GameObject | sent | none | 4.20r8's protocol (21) is assumed |
 | 5.00r7 | GameObject | sent | none | class set and file rules assumed from 5.12 |
 | 5.12 (Win, Mac) | GameObject | sent | none | strips `.png` from texture names: serve textures under their bare name too; Mac row all assumed |
+| 4.20 Linux (`G3D22126`) | GameObject | sent | none | links as protocol 24; 5.12's row except what a 2026-11-25 lab read. A DTS 17 shape froze it: serve DTS 24. It crashes on a broken `.3ds`. |
 
 Only the objects the `terrain` and `water` lines build are gated; lab `rawobject` lines still go to every client. A `TerrainRequestUpdatesEvent` from a build without the 5.x terrain layout is logged and not answered.
 
