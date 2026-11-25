@@ -164,7 +164,11 @@ What the server does when more than one 3D client is on at once:
 | Joining | Each client gets its own 3D link, matched to its own TCP login by account and address, so several clients on one machine are fine. | the same |
 | Seeing the others | Every other linked player appears as a `GameObject` named `G3DPlayer_<account>`, with the world's player shape and the player's nickname. Every other linked player appears as a stock TGE `Player` on the world's `tgeplayershape`, at that player's position and facing. This needs `tgecontrol player` and a `tgeplayershape`; with a Camera as the control object, these clients get no other players. |
 | What is passed on | What each client reports for its own object: position, rotation, scale, `chat`, shape, skin, attributes, and nickname with its colour. Move type, velocity and attachment are not sent yet. On the Sharp3D route, a player moves only through `g3dpos`. | The position and facing of the client's Player, as the server runs its moves. The other builds see this as that player's `GameObject`. |
-| TCP side | Every 3D client is also an ordinary TCP player, so the gserver sends the usual other-player props, chat and PMs, as it would to 2D clients in the same level. | the same |
+| Starting point | The first player starts on the world's `spawn`. Each later one takes the first free point of 8 around it, 2 units out, then 16 at 4 units, and so on, so two players never stand on one point. | the same |
+| Moving with `g3dpos` | The server moves the object, passes it on and traces it. The client goes on reporting where it was before; those reports are set aside until it reports somewhere else. | the same |
+| Leaving | The player's object is deleted on the other clients, and the trace says on how many. | the same |
+| 2D players | A TCP-only player in a 3D player's level appears on its screen as a `GameObject` named `G2DPlayer_<account>`, at its tile position as Torque (x, -y), at the spawn's height, with its nickname and chat. It goes when the player leaves the level. Checked 5 times a second. | as a stock TGE `Player`, under the same conditions as other 3D players |
+| TCP side | Every 3D client is also an ordinary TCP player, so the gserver sends the usual other-player props, chat and PMs, as it would to 2D clients in the same level. A 3D player's own `chat` becomes its chat prop, so 2D clients see it. | the same |
 | Position on the TCP side | The player's TCP position follows its 3D object: Torque (x, y) is map tile (x, -y). Serverside scripts see where the player is; without this, the script `player` stayed at the spawn while a 4.04r2 Player walked (lab, 2026-11-25). Positions off the map are left alone. | the same, from the Player the server runs |
 
 **Texture names:** a 3D client's request for an image with the wrong image extension also finds the same name with another one. 3.153 asks for Sky textures as `.gif`, never `.png` (lab, 2026-11-25), so a `.png` texture answers it. Whether 3.153 draws a PNG sent under a `.gif` name is not tested yet; ship `.gif` copies to be sure.
@@ -182,7 +186,10 @@ of these:
   it cannot;
 - each change in a client's control-object report;
 - each ghost the server writes to that client;
-- each time a player's object is passed on to the others.
+- each time a player's object is passed on to the others;
+- each TCP position set from a 3D object, or skipped as off the map;
+- each 2D player shown, updated or gone on a 3D client;
+- each leave, with the number of clients the object was deleted on.
 
 Each line holds: milliseconds, account (or object name), protocol (0 for the server's
 own relay lines), then what happened. Leave the setting empty to turn the trace off.

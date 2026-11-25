@@ -124,6 +124,8 @@ namespace graal3d
 			Endpoint endpoint;
 			PlayerID player;
 			std::unique_ptr<Connection> connection;
+			// The 2D players in this player's level, as last put on its screen.
+			std::map<PlayerID, GhostObject> tcpShown;
 		};
 
 		void handleDatagram(const Endpoint& from, std::string_view data, uint64_t nowMs);
@@ -139,7 +141,7 @@ namespace graal3d
 		// GameObject itself (protocols 21 and 24), or a stock TGE Player with the
 		// world's tgeplayershape (protocol 19, when that client's own control
 		// object is a Player too).
-		void ghostAvatar(Connection& connection, PlayerID who, const GhostObject& avatar) const;
+		void ghostAvatar(Connection& connection, ObjectKey key, const GhostObject& avatar) const;
 		[[nodiscard]] bool tgeOthers() const;
 		// A protocol 19 client moves its Player itself: pass that on to the others.
 		void relayTgeMoves();
@@ -149,6 +151,14 @@ namespace graal3d
 		static ObjectKey avatarKey(PlayerID player) { return 0x10000u + player; }
 		static ObjectKey cameraKey(PlayerID player) { return 0x20000u + player; }
 		static ObjectKey skyKey() { return 0x30000u; } // protocol 19's plain Sky, when the world has none
+		static ObjectKey tcpKey(PlayerID player) { return 0x40000u + player; }
+		// Where a new 3D player starts: the world's spawn for the first, then the
+		// nearest free point on rings 2 units apart around it.
+		[[nodiscard]] std::array<float, 3> spawnPosition() const;
+		// Puts the 2D (TCP only) players of each 3D player's level on its screen
+		// as GameObjects, and takes them off when they leave the level.
+		void relayTcpPlayers(uint64_t now);
+		uint64_t m_nextTcpRelay = 0;
 		void sendInitialFlags(PlayerID player, Connection& connection);
 		// Lab: the world's rawevent lines (`late`: the ones for after the mission
 		// start) and, for protocol 19, its rawobject lines.
@@ -176,9 +186,11 @@ namespace graal3d
 		bool m_packetStrings = true;
 		bool m_sharp3d = false;
 		std::map<PlayerID, GhostObject> m_avatars;
-		// Until when the client's own reports of its position are ignored, after
-		// moveAvatar: an older report would put the object back.
-		std::map<PlayerID, uint64_t> m_movedUntil;
+		// What each client last reported as its own position, and, after a g3dpos
+		// move, the report from before it: the client keeps sending that until it
+		// moves itself, and those reports must not undo the server's move.
+		std::map<PlayerID, std::array<float, 3>> m_lastReport;
+		std::map<PlayerID, std::array<float, 3>> m_staleReport;
 		std::unique_ptr<std::ofstream> m_trace;
 		Mutation m_mutation = Mutation::None;
 		uint32_t m_mutationSeed = 1;
