@@ -379,13 +379,17 @@ the `gpaks` packages, before the 3D mission starts, and that works: on a real 5.
 an empty cache, grass drew on the very first frame (lab, 2026-11-26). Only native `replicator` lines are pushed: a `rawobject`
 grass line names its texture in raw fields the server does not read. Cover grew only
 around the spawn in that run because only the camera moved: 5.12 re-centres the grid
-on the control object every tick (static read, Graal_analysis `torque/replicators-512.md`). Every name on the line must be
+on the control object every tick (static read, Graal_analysis `torque/replicators-512.md`).
+Seen live (lab, 2026-11-26): with the avatar itself walking 1700 units across a
+2048-unit streamed terrain, at 10 and 40 units a second, a radius-8 `DynamicGrass`
+stayed centred on it the whole way. Cells came and went one at a time at the rim of
+the patch, the ground by the avatar was never bare, and neither side logged anything. Every name on the line must be
 a bare file name: one with `/`, `\`, `:` or `..` fails the line, since the client
 stores a file under the name it is sent. 4.20r8 takes the ghost
 without a crash but grows no cover, under GDI or Mesa, even with the camera pitched
 down over the cells (lab, Graal_analysis PR #951), so its row has `groundCover` false
 and it gets no replicator and no grass push. The layout is from a static read of the real 5.12 client
-(Graal_analysis `torque/replicators-512.md`) and has not been seen live yet. The other
+(Graal_analysis `torque/replicators-512.md`); 5.12 has drawn it live (above). The other
 fields are fixed: any rotation about z, terrain only, slopes up to 90 degrees,
 no alignment, shown. Only clients that take streamed
 terrain and grow ground cover (`groundCover`) get it.
