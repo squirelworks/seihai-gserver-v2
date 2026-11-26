@@ -79,6 +79,13 @@ namespace graal3d
 		bool operator==(const Transform&) const = default;
 	};
 
+	// The largest world coordinate a client may report for its own object.
+	// Positions are client-authoritative and passed on to every other client,
+	// so a NaN, an infinity or an astronomical value is dropped (T3D-146).
+	inline constexpr float kMaxWorldCoord = 1.0e6f;
+	[[nodiscard]] bool saneVector(const std::array<float, 3>& v, float limit = kMaxWorldCoord);
+	[[nodiscard]] bool saneTransform(const Transform& t);
+
 	struct GameObjectState
 	{
 		std::string name;

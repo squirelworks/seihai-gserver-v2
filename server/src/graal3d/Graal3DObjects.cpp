@@ -1200,6 +1200,21 @@ namespace graal3d
 		return std::nullopt;
 	}
 
+	bool saneVector(const std::array<float, 3>& v, float limit)
+	{
+		for (const float c : v)
+			if (!std::isfinite(c) || std::fabs(c) > limit)
+				return false;
+		return true;
+	}
+
+	bool saneTransform(const graal3d::Transform& t)
+	{
+		// The rotation axis is a direction and the angle is in radians: both
+		// stay small in anything a real client sends.
+		return saneVector(t.position) && saneVector(t.axis, 1.0e3f) && std::isfinite(t.angle) && std::fabs(t.angle) <= 1.0e3f;
+	}
+
 	std::optional<uint32_t> difVersion(std::string_view data)
 	{
 		if (data.size() < 4)

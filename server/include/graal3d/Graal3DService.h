@@ -124,6 +124,13 @@ namespace graal3d
 		// and, with graal3dpushterrain, heights.info and its textures.
 		[[nodiscard]] const std::vector<std::string>* loginFiles() const { return m_loginFiles.empty() ? nullptr : &m_loginFiles; }
 		[[nodiscard]] uint16_t port() const { return m_port; }
+		// Robustness counters (T3D-142 to T3D-146), for logs and tests.
+		[[nodiscard]] uint64_t droppedDatagrams() const { return m_droppedDatagrams; }
+		[[nodiscard]] uint64_t droppedReports() const { return m_droppedReports; }
+		[[nodiscard]] size_t sessionCount() const { return m_sessions.size(); }
+		// Datagrams a second one address may send before the rest are dropped.
+		static constexpr uint32_t kLinkedDatagramsPerSecond = 256;
+		static constexpr uint32_t kUnlinkedDatagramsPerSecond = 32;
 
 		// Reads waiting datagrams and runs every connection. Called each server frame.
 		void update();
@@ -231,6 +238,16 @@ namespace graal3d
 		// moves itself, and those reports must not undo the server's move.
 		std::map<PlayerID, std::array<float, 3>> m_lastReport;
 		std::map<PlayerID, std::array<float, 3>> m_staleReport;
+		std::set<PlayerID> m_insaneReported; // players whose bad position was logged
+		struct Rate
+		{
+			uint64_t windowStartMs = 0;
+			uint32_t count = 0;
+			bool warned = false;
+		};
+		std::map<Endpoint, Rate> m_rate;
+		uint64_t m_droppedDatagrams = 0;
+		uint64_t m_droppedReports = 0;
 		std::unique_ptr<std::ofstream> m_trace;
 		Mutation m_mutation = Mutation::None;
 		uint32_t m_mutationSeed = 1;

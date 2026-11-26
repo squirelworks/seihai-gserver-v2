@@ -5,6 +5,7 @@
 #include "catch2/catch_all.hpp"
 
 #include <cmath>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -1949,4 +1950,20 @@ SCENARIO("A .dif interior's version is read from its first word")
 	REQUIRE_FALSE(difVersion(std::string_view("\x2c\0\0", 3)));
 	REQUIRE(difVersion(std::string_view("\x2c\0\0\0\x01", 5)) == kDifVersion);
 	REQUIRE(difVersion(std::string_view("\x2b\x01\0\0", 4)) == 0x12bu);
+}
+
+SCENARIO("A client's reported position must be a finite world coordinate")
+{
+	REQUIRE(saneVector({1.0f, -2.0f, 3.0f}));
+	REQUIRE(saneVector({kMaxWorldCoord, -kMaxWorldCoord, 0.0f}));
+	REQUIRE_FALSE(saneVector({std::numeric_limits<float>::quiet_NaN(), 0.0f, 0.0f}));
+	REQUIRE_FALSE(saneVector({0.0f, std::numeric_limits<float>::infinity(), 0.0f}));
+	REQUIRE_FALSE(saneVector({0.0f, 0.0f, 1.0e9f}));
+	Transform t;
+	REQUIRE(saneTransform(t));
+	t.angle = std::numeric_limits<float>::quiet_NaN();
+	REQUIRE_FALSE(saneTransform(t));
+	t.angle = 0.0f;
+	t.axis = {0.0f, 1.0e30f, 0.0f};
+	REQUIRE_FALSE(saneTransform(t));
 }

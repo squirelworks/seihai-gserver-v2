@@ -200,6 +200,10 @@ namespace graal3d
 			handleDatagram(Endpoint{from.sin_addr.s_addr, from.sin_port}, std::string_view(buffer, static_cast<size_t>(got)), now);
 		}
 
+		// The per-address budgets of addresses gone quiet.
+		if (m_rate.size() > 1024)
+			std::erase_if(m_rate, [&](const auto& r) { return now - r.second.windowStartMs > 10000 && !m_sessions.contains(r.first); });
+
 		std::vector<Endpoint> dead;
 		for (auto& [endpoint, session] : m_sessions)
 		{
@@ -421,6 +425,30 @@ namespace graal3d
 	{
 		if (data.empty())
 			return;
+
+		// Per-address budget a second (T3D-142 to T3D-144): a linked client
+		// sends a few packets a second, a handshake a handful; anything far
+		// above that is a flood or a probe and is dropped unread.
+		{
+			auto& rate = m_rate[from];
+			if (now - rate.windowStartMs >= 1000)
+			{
+				rate.windowStartMs = now;
+				rate.count = 0;
+			}
+			const bool linked = m_sessions.contains(from);
+			if (++rate.count > (linked ? kLinkedDatagramsPerSecond : kUnlinkedDatagramsPerSecond))
+			{
+				++m_droppedDatagrams;
+				if (!rate.warned)
+				{
+					rate.warned = true;
+					log::printLine(log::server, "** [Warning] Graal3D: {} sent more than {} datagrams in a second; the rest of that second is dropped (logged once per address).",
+								   ipString(from), linked ? kLinkedDatagramsPerSecond : kUnlinkedDatagramsPerSecond);
+				}
+				return;
+			}
+		}
 
 		const auto type = static_cast<uint8_t>(data[0]);
 		if ((type & 1u) != 0)
@@ -693,6 +721,7 @@ namespace graal3d
 			m_avatars.erase(playerId);
 			m_lastReport.erase(playerId);
 			m_staleReport.erase(playerId);
+			m_insaneReported.erase(playerId);
 			size_t removed = 0;
 			forEachOtherConnection(playerId, [&](Connection& other) {
 				if (other.ghostIndex(avatarKey(playerId)).has_value())
@@ -1367,6 +1396,17 @@ namespace graal3d
 		{
 			if (auto s = m_sessions.find(e->second); s != m_sessions.end() && s->second.connection->profile().ghostAlwaysWorld)
 				return;
+		}
+
+		// A position is passed on to every other client as reported, so a NaN,
+		// an infinity or a huge value is dropped here (T3D-146).
+		if (!saneVector(state.position) || (state.controlling && (state.changed & GameObjectBits::Transform) && !saneTransform(state.object.transform)))
+		{
+			if (m_insaneReported.insert(playerId).second)
+				log::printLine(log::server, "** [Warning] Graal3D: {} reported a position that is not a finite world coordinate ({}, {}, {}); dropped (logged once).",
+							   it->second.object.name, state.position[0], state.position[1], state.position[2]);
+			++m_droppedReports;
+			return;
 		}
 
 		// The client owns its object: take what it reports, and pass it on to

@@ -5,6 +5,14 @@
 
 #include <atomic>
 #include <optional>
+#include <string>
+
+#ifndef _WIN32
+	#include <arpa/inet.h>
+	#include <netinet/in.h>
+	#include <sys/socket.h>
+	#include <unistd.h>
+#endif
 
 #include <BabyDI.h>
 #include <IEnums.h>
@@ -65,6 +73,30 @@ TEST_CASE("the Graal 3D add-on runs only with graal3d = true", "[graal3d][addons
 			CHECK(needs.bareNameExtensions.empty());
 			CHECK(needs.loginFiles == nullptr);
 		}
+
+#ifndef _WIN32
+		// Junk and floods on the 3D port (T3D-142 to T3D-144): nothing links,
+		// nothing crashes, and past the per-address budget datagrams are dropped.
+		{
+			const int s = socket(AF_INET, SOCK_DGRAM, 0);
+			REQUIRE(s >= 0);
+			sockaddr_in to{};
+			to.sin_family = AF_INET;
+			to.sin_port = htons(47311);
+			to.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+			const auto send = [&](const std::string& d) { sendto(s, d.data(), d.size(), 0, reinterpret_cast<sockaddr*>(&to), sizeof(to)); };
+			send(std::string(1, '\x1a'));                    // a connect request with nothing after its type
+			send(std::string("\x1a\xff\xff\xff\xff", 5)); // a connect request cut short
+			send(std::string(1400, '\xff'));                  // an odd type from an address with no link
+			for (int i = 0; i < 300; ++i)
+				send(std::string(1, static_cast<char>((i * 2) & 0xfe)) + std::string(static_cast<size_t>(i % 64), static_cast<char>(i)));
+			for (int i = 0; i < 4; ++i)
+				addon->service().update();
+			close(s);
+			CHECK(addon->service().sessionCount() == 0);
+			CHECK(addon->service().droppedDatagrams() >= 200);
+		}
+#endif
 
 		server->getAddons().clear();
 		CHECK(server->getAddons().empty());

@@ -218,6 +218,29 @@ own relay lines), then what happened. Leave the setting empty to turn the trace 
 | From the client: `TerrainRequestUpdatesEvent` | logged: its length, how many of its 256 stamps are set, the first eight `(x,y)=stamp`, and the payload as hex. Other events the server does not decode are logged with their length and first 64 bytes. |
 | 3.15x and 4.04r2 game packets | done up to a walking `Player` control object and a `Sky`. A real 4.04r2 runs a `Camera` session with the `Sky`, and a `Player` session once `tgeplayershape` names a loadable TGE `.dts` (lab 2026-11-19). See "Protocol 19" below. |
 
+## Hostile and broken clients
+
+The 3D port is open to anyone who can reach it, so the server guards it
+(board rows T3D-142 to T3D-146):
+
+- **Floods and probes.** Each address may send 256 datagrams a second once it
+  has a 3D link and 32 before. A linked 5.12 sends a few a second, and a
+  handshake only a handful. Past the budget, the rest of that second is
+  dropped unread and logged once per address. Junk, cut-short connect requests
+  and data packets from an address with no link are ignored. A connect request
+  must carry the challenge digest for its address before the server does any
+  work for it.
+- **Reconnects.** A new connect request from a linked address closes the old
+  link first. A player gets one 3D link: a second one closes the first. Closing
+  a link removes the player's object from every other client and clears its
+  per-player state.
+- **Impossible positions.** Clients own their objects' positions and the server
+  passes them on to everyone else (T3D-128). A report with a NaN, an infinity
+  or a coordinate beyond 1,000,000, or a rotation that is not finite, is
+  dropped, so it never reaches another client. It is logged once per player.
+
+A lab run against real clients is still open for each of these.
+
 ## What each client build is offered
 
 When a 3D connect request is accepted, the server picks the client's capability row by its login token and Torque protocol (`server/include/graal3d/Graal3DCapabilities.h`; an unknown token gets the protocol's default build: 19 4.04r2, 21 4.20r6, 24 5.12). The rows mirror Seihai's version profile (`VersionProfile::three_d` in seihai-core), whose source is Graal_analysis `version-profiles/three-d.toml`. The log line `Graal3D: <account> is a <build> client: ...` names the row, and says when the protocol or every value is assumed rather than read.
