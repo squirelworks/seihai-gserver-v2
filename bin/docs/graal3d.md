@@ -327,10 +327,13 @@ used, picked per copy; two 5.12 clients see identical cover for the same seed;
 (e.g. `lp_white.png`) as `<shapes>` they draw many small flat pieces on the ground,
 denser at 50 a cell, so the server refuses a grass line whose list is not all images
 (`.png`, `.jpg`, `.jpeg`, `.bmp`) and a `DynamicShapeReplicator` line whose list is
-not all `.3ds`/`.dts`; a nearly transparent texture showed nothing under GDI. 4.20r8
-takes the ghost without a crash but grew no cover under GDI, even with the camera
-pitched down over the cells (GDI on 4.20r8 draws no textures either, so this is not yet
-settled for Mesa). The layout is from a static read of the real 5.12 client
+not all `.3ds`/`.dts`; a nearly transparent texture showed nothing under GDI. 5.12
+never asks the server for a grass texture, so it must already have it (lab, Mesa,
+2026-11-26): the server sends every grass texture the replicator lines name over TCP
+right after the 3D link, once per account per server run, unless the start-up check
+refused it (`graal3dpushgrass = false` turns this off). 4.20r8 takes the ghost
+without a crash but grows no cover, under GDI or Mesa, even with the camera pitched
+down over the cells, so it gets no grass push. The layout is from a static read of the real 5.12 client
 (Graal_analysis `torque/replicators-512.md`) and has not been seen live yet. The other
 fields are fixed: any rotation about z, terrain only, slopes up to 90 degrees,
 no alignment, shown. Only clients that take streamed
@@ -442,6 +445,7 @@ client yet; the 2026-11-25 terrain lab is the first user.
 ```
 graal3dterrainall = true    # the 5.x TerrainBlock, WaterBlock and chunks to every 4.20r6 and 5.x client
 graal3dpushterrain = true   # heights.info and its textures over TCP right after the 3D link
+graal3dpushgrass = false    # stop sending grass replicator textures on link (on by default)
 ```
 
 `graal3dterrainall` ignores the capability rows that keep streamed terrain from
@@ -465,7 +469,10 @@ with a spawn just above the ground (z 17.5 on a native terrain): the same
 near-terrain crash as before, under GDI GL. A TerrainBlock alone is enough, with no
 chunks. A height sweep on the lab VM's software GL found the line: 4.20r8 crashes
 when its camera starts 150 units or less above the ground, and survives from 180 up,
-on a hilly and on a flat block. So 4.20r8 gets no terrain by default.
+on a hilly and on a flat block. That crash is the GDI driver's: under Mesa, 4.20r8
+ran fine 80 units above the ground (Graal_analysis PR #951), so its row now gets
+terrain, and only a client on software GL (GDI Generic OpenGL 1.1) still needs a
+high spawn.
 
 The push sends each texture name once, however often `heights.info` lists it, and
 never a texture the start-up check found unsafe (a PNG header of 30000x30000 or

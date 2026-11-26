@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-14, 2026-11-19, 2026-11-20, 2026-11-25: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-14, 2026-11-19, 2026-11-20, 2026-11-25, 2026-11-26: see CHANGES-SEIHAI.md.
 // New file: the gserver's Graal 3D UDP side. See Graal3DService.h.
 
 #include <graal3d/Graal3DService.h>
@@ -577,6 +577,16 @@ namespace graal3d
 				player->sendFile(name);
 			trace(account, profile->protocol, std::format("pushed {} terrain files over TCP (graal3dpushterrain)", m_terrainFiles.size()));
 		}
+		// Grass textures: 5.12 draws grass only from a texture it already has
+		// and never fetches one (lab, Mesa, 2026-11-26). 4.20r8 grows no cover
+		// at all, so it gets none.
+		if (m_pushGrassTextures && !m_grassTextures.empty() && readsTerrainFiles && takesTerrain(caps, static_cast<int>(profile->protocol)) &&
+			m_grassPushedTo.insert(account).second)
+		{
+			for (const auto& name : m_grassTextures)
+				player->sendFile(name);
+			trace(account, profile->protocol, std::format("pushed {} grass textures over TCP (graal3dpushgrass)", m_grassTextures.size()));
+		}
 
 		// The player's own object, on every screen; the world and the other
 		// players on theirs. Ghosts go out once the connection is up.
@@ -690,6 +700,7 @@ namespace graal3d
 		// drop them when they ask (bin/docs/graal3d.md, "Shipping a 3D world").
 		const auto& files = m_server.getFileSystem();
 		m_terrainFiles.clear();
+		m_grassTextures.clear();
 		m_refusedFiles.clear();
 		const auto refuse = [&](const std::filesystem::path& file) {
 			auto name = file.filename().string();
@@ -860,9 +871,18 @@ namespace graal3d
 					if (skip)
 						refuse(info->file);
 				}
-			// The grass classes take a texture (lab, 5.12).
+			// The grass classes take a texture (lab, 5.12). 5.12 never asks the
+			// server for it (lab, Mesa, 2026-11-26), so it is pushed on link
+			// unless the check refused it.
 			if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp")
+			{
 				checkImage(*info);
+				auto lower = info->file.filename().string();
+				for (auto& ch : lower)
+					ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+				if (!m_refusedFiles.contains(lower) && std::ranges::find(m_grassTextures, shape) == m_grassTextures.end())
+					m_grassTextures.push_back(shape);
+			}
 		}
 
 		// Streamed terrain: the client asks for heights.info over TCP, then for
