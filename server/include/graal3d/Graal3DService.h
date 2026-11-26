@@ -110,6 +110,9 @@ namespace graal3d
 		// = skip): a 3D client asking for one is answered as if the server did
 		// not have it, which it survives.
 		[[nodiscard]] const std::set<std::string>& refusedFiles() const { return m_refusedFiles; }
+		// Sent to every 3D-capable client at TCP login (graal3dpushgrass): the
+		// grass textures, so they are cached before the 3D mission loads.
+		[[nodiscard]] const std::vector<std::string>* loginFiles() const { return m_pushGrassTextures && !m_grassTextures.empty() ? &m_grassTextures : nullptr; }
 		[[nodiscard]] uint16_t port() const { return m_port; }
 
 		// Reads waiting datagrams and runs every connection. Called each server frame.

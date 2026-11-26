@@ -36,6 +36,8 @@ through `Server::getAddons()` (`server/include/addons/ServerAddons.h`).
 | `answerMissingChecksumFiles` | `PLI_UPDATEFILE` handler | A missing file gets `PLO_FILESENDFAILED` instead of no answer (a 3D login waits on every answer) |
 | `alwaysServerListConnected` | login (`PlayerClient`) | `PLO_SERVERLISTCONNECTED` is sent even with no listserver (5.x keeps its "Connecting..." window over the 3D view until it gets it) |
 | `bareNameExtensions` | `Player::sendFile` | Extensions tried for a request with no extension (5.x asks for Torque textures that way) |
+| `refusedFiles` | `Player::findClientFile` | Files answered as missing (ones the add-on found would crash the client) |
+| `loginFiles` | login (`PlayerClient`) | Files sent unasked after the `gpaks` packages (the Graal 3D grass textures, which 5.12 never asks for) |
 
 An add-on may also call into the server as any subsystem does (players, flags,
 weapons, the NPC server). The hooks are only what the core must call.
