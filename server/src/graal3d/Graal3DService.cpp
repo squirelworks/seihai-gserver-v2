@@ -579,8 +579,9 @@ namespace graal3d
 		}
 		// Grass textures: 5.12 draws grass only from a texture it already has
 		// and never fetches one (lab, Mesa, 2026-11-26). 4.20r8 grows no cover
-		// at all, so it gets none.
-		if (m_pushGrassTextures && !m_grassTextures.empty() && readsTerrainFiles && takesTerrain(caps, static_cast<int>(profile->protocol)) &&
+		// at all (groundCover false), so it gets none.
+		const bool growsCover = !caps || caps->groundCover;
+		if (m_pushGrassTextures && !m_grassTextures.empty() && growsCover && takesTerrain(caps, static_cast<int>(profile->protocol)) &&
 			m_grassPushedTo.insert(account).second)
 		{
 			for (const auto& name : m_grassTextures)

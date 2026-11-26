@@ -65,6 +65,7 @@ namespace graal3d
 		Sees2dPlayers,
 		Takes2dChat,
 		TerrainTextures,
+		GroundCover,
 		DropsUnknownGhost,
 		Count,
 	};
@@ -149,6 +150,7 @@ namespace graal3d
 		bool sees2dPlayers;     // draws 2D players in its level (5.12 does not, lab)
 		bool takes2dChat;       // gets 2D players' chat as onRemotePlayerChats (5.12 lab)
 		bool terrainTextures;  // fetches terrain textures and heights.info; 4.20r8 draws streamed terrain untextured (lab T3D-117)
+		bool groundCover;      // grows cover from a replicator ghost; 4.20r8 takes the ghost and draws nothing (lab, GDI and Mesa)
 		bool dropsUnknownGhost; // logs and drops an update to an uncreated ghost; 4.04r2 crashes (fuzz tier 1)
 		uint64_t assumed; // capMask of the fields that are assumed, not read
 
