@@ -328,13 +328,13 @@ used, picked per copy; two 5.12 clients see identical cover for the same seed;
 denser at 50 a cell, so the server refuses a grass line whose list is not all images
 (`.png`, `.jpg`, `.jpeg`, `.bmp`) and a `DynamicShapeReplicator` line whose list is
 not all `.3ds`/`.dts`; a nearly transparent texture showed nothing under GDI. 4.20r8
-takes the ghost without a crash but grew no cover under GDI, even with the camera
-pitched down over the cells (GDI on 4.20r8 draws no textures either, so this is not yet
-settled for Mesa). The layout is from a static read of the real 5.12 client
+takes the ghost without a crash but grows no cover, under GDI and under Mesa alike
+(lab, Graal_analysis PR #951), so its row has `groundCover` false and it is sent no
+replicator. The layout is from a static read of the real 5.12 client
 (Graal_analysis `torque/replicators-512.md`) and has not been seen live yet. The other
 fields are fixed: any rotation about z, terrain only, slopes up to 90 degrees,
 no alignment, shown. Only clients that take streamed
-terrain get it.
+terrain and grow ground cover (`groundCover`) get it.
 
 ## Terrain (4.20r6 and 5.x)
 
