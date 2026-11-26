@@ -105,6 +105,11 @@ namespace graal3d
 		return version >= CLVER_3_151_LINUX && version < CLVER_6_015;
 	}
 
+	bool Service::takesLoginFiles(int version)
+	{
+		return clientHasGraal3D(version) && version != CLVER_4_208;
+	}
+
 	Service::Service(Server& server)
 		: m_server(server)
 	{

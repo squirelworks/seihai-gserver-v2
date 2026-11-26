@@ -498,8 +498,10 @@ first-visit grass draw), and again when its 3D link opens, once per account per 
 run. On a real 5.12 with an empty cache (lab, 2026-11-26, Mesa) the terrain was then
 textured on the very first frame, with `heights.info` and all four textures logged
 before `MissionStartPhase1`; with it off, the first frame was white. A build
-whose row has `terrainTextures` false (4.20r8, which never fetches them) gets no
-push. On a real
+whose row has `terrainTextures` false (Windows 4.20r8, which never fetches them)
+gets neither push. Under Mesa it takes the 256 chunks and the WaterBlock and still
+never applies a terrain or water texture (lab, 2026-11-26), so nothing a server
+sends fixes that. On a real
 5.12 (lab, 2026-11-25) the first visit then had `heights.info` and all four
 textures before the terrain loaded, with no "Missing terrain texture" line; whether
 it draws them on that visit still needs a run under Mesa. The client stores the
