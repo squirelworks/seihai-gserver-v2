@@ -1,0 +1,91 @@
+diff --git a/src/compiler/GS2Context.cpp b/src/compiler/GS2Context.cpp
+index 464a14b..a7b392e 100644
+--- a/src/compiler/GS2Context.cpp
++++ b/src/compiler/GS2Context.cpp
+@@ -17,11 +17,17 @@ void GS2Context::handleError(GS2CompilerError& error)
+ }
+ 
+ CompilerResponse GS2Context::compile(const std::string& script)
++{
++	return compile(script, 0);
++}
++
++CompilerResponse GS2Context::compile(const std::string& script, uint32_t lambdaId)
+ {
+ 	errors.clear();
+ 
+ 	// Parse the script into an AST tree
+ 	ParserContext parserContext(errorService);
++	parserContext.setLambdaId(lambdaId);
+ 	bool success = parserContext.parse(script);
+ 
+ 	// Check for parser errors
+diff --git a/src/compiler/GS2Context.h b/src/compiler/GS2Context.h
+index 8fb0699..ba45b2b 100644
+--- a/src/compiler/GS2Context.h
++++ b/src/compiler/GS2Context.h
+@@ -3,6 +3,7 @@
+ #ifndef GS2CONTEXT_H
+ #define GS2CONTEXT_H
+ 
++#include <cstdint>
+ #include <set>
+ #include <vector>
+ #include "gs2compiler_export.h"
+@@ -25,6 +26,8 @@ class GS2COMPILER_EXPORT GS2Context
+ 		GS2Context();
+ 
+ 		CompilerResponse compile(const std::string& script);
++		// Seihai: names this compile's lambdas function_<lambdaId>_<n>.
++		CompilerResponse compile(const std::string& script, uint32_t lambdaId);
+ 		CompilerResponse compile(const std::string& script, const std::string& scriptType, const std::string& scriptName, bool saveToDisk);
+ 
+ 		static Buffer CreateHeader(const Buffer& bytecode, const std::string& scriptType, const std::string& scriptName, bool saveToDisk);
+diff --git a/src/parser/Parser.cpp b/src/parser/Parser.cpp
+index 413fa1a..eab41ae 100644
+--- a/src/parser/Parser.cpp
++++ b/src/parser/Parser.cpp
+@@ -132,7 +132,9 @@ std::string* ParserContext::saveString(const char* str, int length, bool unquote
+ 
+ std::string * ParserContext::generateLambdaFuncName()
+ {
+-	const std::string fnName = std::format("function_{}_1", 100 + lambdaFunctionCount);
++	const std::string fnName = lambdaId
++		? std::format("function_{}_{}", lambdaId, lambdaFunctionCount + 1)
++		: std::format("function_{}_1", 100 + lambdaFunctionCount);
+ 	lambdaFunctionCount++;
+ 	return saveString(fnName.c_str(), static_cast<int>(fnName.length()));
+ }
+diff --git a/src/parser/Parser.h b/src/parser/Parser.h
+index f993c5b..1ba59b5 100644
+--- a/src/parser/Parser.h
++++ b/src/parser/Parser.h
+@@ -3,6 +3,7 @@
+ #ifndef MYPARSER_H
+ #define MYPARSER_H
+ 
++#include <cstdint>
+ #include <memory>
+ #include <optional>
+ #include <string>
+@@ -73,6 +74,12 @@ class ParserContext
+ 		std::string * saveString(const char* str, int length, bool unquote = false);
+ 		std::string * generateLambdaFuncName();
+ 
++		/*
++		 * Seihai: the number the official server puts in its lambda names,
++		 * function_<id>_<n>. 0 keeps the old function_<100+n>_1 names.
++		 */
++		void setLambdaId(uint32_t id) { lambdaId = id; }
++
+ 		/*
+ 		 * Add/get constants - used by bison during parsing
+ 		 */
+@@ -130,6 +137,7 @@ class ParserContext
+ 		bool failed;
+ 		const std::string *inputStringPtr;
+ 		size_t lambdaFunctionCount;
++		uint32_t lambdaId = 0;
+ 		std::unordered_map<std::string, ExpressionNode *> constantsTable;
+ 		std::unordered_map<std::string, std::shared_ptr<std::string>> stringTable;
+ 		std::stack<SwitchCaseState> switchCases;
