@@ -700,7 +700,9 @@ namespace graal3d
 		return best;
 	}
 
-	void Service::closeSession(const Endpoint& endpoint, std::string_view reason, bool notifyClient)
+	// The endpoint is taken by value: callers pass m_byPlayer's own entry, which
+	// this erases before it logs the address.
+	void Service::closeSession(Endpoint endpoint, std::string_view reason, bool notifyClient)
 	{
 		auto it = m_sessions.find(endpoint);
 		if (it == m_sessions.end())
