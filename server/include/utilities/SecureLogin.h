@@ -1,4 +1,4 @@
-// Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
+// Seihai project, 2026-11-12, 2026-11-26: see CHANGES-SEIHAI.md.
 //
 // The SEI00001 secure login (Seihai's own protocol, not part of any Graal build).
 // Written from seihai/documentation/secure-login.md, revision 1, with libsodium.
@@ -83,6 +83,9 @@ struct ClientHello
 	/// nullopt when the line does not carry the token after `prefixLength` bytes.
 	/// Sets `malformed` when it does but the rest is not a valid C1.
 	static std::optional<ClientHello> parse(std::string_view line, size_t prefixLength, bool& malformed);
+	/// Where the token would start in a login line: 1 for a 1.x client (no key
+	/// byte) whose line has the token there, otherwise 2. Safe on any length.
+	static size_t prefixLengthOf(std::string_view line, bool oneXClient);
 };
 
 /// The server's half after S1: opens C2 once.

@@ -69,6 +69,13 @@ namespace graal3d
 		// 4.20r8 never applies terrain textures and grows no cover (lab, GDI and
 		// Mesa), so it is not sent them.
 		static bool takesLoginFiles(int version);
+		// A TCP login from this build may join a 3D link: every build
+		// clientHasGraal3D names, and the two 6.03r7 (6.037) builds. Stock 6.03r7
+		// is a 2D client and opens no UDP link, so for it nothing changes; the
+		// Frankenstein 6.037 lab build logs in with the 6.03r7 token and opens the
+		// 5.12 protocol-24 link beside it. Only the link follows this: the add-on's
+		// login needs still follow clientHasGraal3D.
+		static bool mayLinkGraal3D(int version);
 
 		// The objects every client is sent. `packetStrings`: see TorqueBitStream.h
 		// (the option graal3dstringprefix). Call before start().
