@@ -772,6 +772,7 @@ namespace graal3d
 
 		// A texture cannot be left out the way an object can, so a bad one is
 		// only logged (lab, 2026-11-25: a PNG claiming 30000x30000 crashed 5.12).
+		std::set<std::string> checkedShapes; // .3ds files whose textures were checked
 		const auto checkImage = [&](const preagonal::fs::FileData& info) {
 			if (m_shapeCheck == ShapeCheck::Off)
 				return;
@@ -855,7 +856,24 @@ namespace graal3d
 			}
 			if ((ext != ".3ds" && ext != ".dts") || m_shapeCheck == ShapeCheck::Off)
 				return false;
-			const auto why = unsafeAsset(ext, readAll(info->file));
+			const auto bytes = readAll(info->file);
+			// A .3ds material's texture is fetched by the client like any other:
+			// a PNG claiming 30000x30000 crashed 5.12 as a Sky face, and the same
+			// file as a material texture was not checked (offline check, 2026-11-26).
+			if (ext == ".3ds" && checkedShapes.insert(info->file.string()).second)
+				for (const auto& texture : threeDsTextures(bytes))
+				{
+					if (hasPath(texture))
+					{
+						log::printLine(log::server, "** [Warning] Graal3D: {} names the texture {}, which is not a bare file name; the client may not find it.", shape, texture);
+						continue;
+					}
+					if (const auto tex = find(texture))
+						checkImage(*tex);
+					else
+						log::printLine(log::server, "** [Warning] Graal3D: {}'s texture {} is not in the file folders.", shape, texture);
+				}
+			const auto why = unsafeAsset(ext, bytes);
 			if (!why)
 				return false;
 			if (m_shapeCheck == ShapeCheck::Warn)

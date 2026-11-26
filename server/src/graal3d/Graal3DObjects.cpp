@@ -1200,6 +1200,42 @@ namespace graal3d
 		return std::nullopt;
 	}
 
+	std::vector<std::string> threeDsTextures(std::string_view data)
+	{
+		std::vector<std::string> names;
+		const auto u16 = [&](size_t at) { return static_cast<uint32_t>(static_cast<uint8_t>(data[at]) | static_cast<uint8_t>(data[at + 1]) << 8); };
+		const auto u32 = [&](size_t at) { return u16(at) | u16(at + 2) << 16; };
+		std::function<void(size_t, size_t, int)> walk = [&](size_t start, size_t end, int depth) {
+			for (size_t at = start; at + 6 <= end && depth < 8;)
+			{
+				const uint32_t id = u16(at), length = u32(at + 2);
+				if (length < 6 || length > end - at)
+					return;
+				const size_t body = at + 6, stop = at + length;
+				if (id == 0xA300)
+				{
+					const auto nul = data.find('\0', body);
+					if (nul != std::string_view::npos && nul < stop && nul > body)
+					{
+						std::string name(data.substr(body, nul - body));
+						if (std::ranges::find(names, name) == names.end())
+							names.push_back(std::move(name));
+					}
+				}
+				// The main chunk, the editor chunk, a material, and the texture
+				// maps (diffuse, second, opacity, bump, specular, shininess,
+				// self-illumination, reflection).
+				else if (id == 0x4D4D || id == 0x3D3D || id == 0xAFFF || id == 0xA200 || id == 0xA33A || id == 0xA210 || id == 0xA230 ||
+						 id == 0xA204 || id == 0xA33C || id == 0xA33D || id == 0xA220)
+					walk(body, stop, depth + 1);
+				at = stop;
+			}
+		};
+		if (data.size() >= 6)
+			walk(0, data.size(), 0);
+		return names;
+	}
+
 	bool saneVector(const std::array<float, 3>& v, float limit)
 	{
 		for (const float c : v)

@@ -265,6 +265,11 @@ namespace graal3d
 	// client (lab, 2026-11-25): no materials, a cut file, a chunk length past its
 	// parent. Returns why the file is unsafe, or nothing.
 	std::optional<std::string> unsafe3ds(std::string_view data);
+	// The texture file names a .3ds file's materials name (chunk 0xA300 in a
+	// texture map, 0xA200), in file order, once each. The client fetches each
+	// one, so each gets the image checks. A file unsafe3ds refuses may give a
+	// partial list.
+	std::vector<std::string> threeDsTextures(std::string_view data);
 
 	// Checks a .dts shape's header: it must be version 24, the only one the real
 	// 5.12 draws, and the memory buffer it claims must fit the file.
