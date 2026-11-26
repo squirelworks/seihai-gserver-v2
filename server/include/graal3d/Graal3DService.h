@@ -94,9 +94,10 @@ namespace graal3d
 		// Lab: graal3dterrainall = true sends the 5.x TerrainBlock, WaterBlock and
 		// chunks to every GameObject-era client, whatever its capability row says.
 		void setTerrainForAll(bool on) { m_terrainForAll = on; }
-		// graal3dpushterrain = true: right after a 3D link, heights.info and its
-		// textures go to the client over TCP unasked (5.12 fetches the textures
-		// only on its second visit, so a first visit drew the terrain white).
+		// graal3dpushterrain (default true): at TCP login and right after a 3D
+		// link, heights.info and its textures go to the client over TCP unasked
+		// (5.12 fetches the textures only on its second visit, so a first visit
+		// drew the terrain white; sent at login it drew textured, lab 2026-11-26).
 		void setPushTerrainFiles(bool on)
 		{
 			m_pushTerrainFiles = on;
@@ -123,6 +124,13 @@ namespace graal3d
 		// and, with graal3dpushterrain, heights.info and its textures.
 		[[nodiscard]] const std::vector<std::string>* loginFiles() const { return m_loginFiles.empty() ? nullptr : &m_loginFiles; }
 		[[nodiscard]] uint16_t port() const { return m_port; }
+		// Robustness counters (T3D-142 to T3D-146), for logs and tests.
+		[[nodiscard]] uint64_t droppedDatagrams() const { return m_droppedDatagrams; }
+		[[nodiscard]] uint64_t droppedReports() const { return m_droppedReports; }
+		[[nodiscard]] size_t sessionCount() const { return m_sessions.size(); }
+		// Datagrams a second one address may send before the rest are dropped.
+		static constexpr uint32_t kLinkedDatagramsPerSecond = 256;
+		static constexpr uint32_t kUnlinkedDatagramsPerSecond = 32;
 
 		// Reads waiting datagrams and runs every connection. Called each server frame.
 		void update();
@@ -230,11 +238,21 @@ namespace graal3d
 		// moves itself, and those reports must not undo the server's move.
 		std::map<PlayerID, std::array<float, 3>> m_lastReport;
 		std::map<PlayerID, std::array<float, 3>> m_staleReport;
+		std::set<PlayerID> m_insaneReported; // players whose bad position was logged
+		struct Rate
+		{
+			uint64_t windowStartMs = 0;
+			uint32_t count = 0;
+			bool warned = false;
+		};
+		std::map<Endpoint, Rate> m_rate;
+		uint64_t m_droppedDatagrams = 0;
+		uint64_t m_droppedReports = 0;
 		std::unique_ptr<std::ofstream> m_trace;
 		Mutation m_mutation = Mutation::None;
 		uint32_t m_mutationSeed = 1;
 		bool m_terrainForAll = false;
-		bool m_pushTerrainFiles = false;
+		bool m_pushTerrainFiles = true;
 		std::vector<std::string> m_terrainFiles; // heights.info, then its textures, as found at start-up
 		std::set<std::string> m_refusedFiles;   // lower-cased file names the start-up check found would crash a client
 		std::set<std::string> m_terrainPushedTo; // accounts already sent m_terrainFiles (graal3dpushterrain)

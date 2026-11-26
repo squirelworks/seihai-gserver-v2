@@ -5,6 +5,7 @@
 #include "catch2/catch_all.hpp"
 
 #include <cmath>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -1949,4 +1950,40 @@ SCENARIO("A .dif interior's version is read from its first word")
 	REQUIRE_FALSE(difVersion(std::string_view("\x2c\0\0", 3)));
 	REQUIRE(difVersion(std::string_view("\x2c\0\0\0\x01", 5)) == kDifVersion);
 	REQUIRE(difVersion(std::string_view("\x2b\x01\0\0", 4)) == 0x12bu);
+}
+
+SCENARIO("A client's reported position must be a finite world coordinate")
+{
+	REQUIRE(saneVector({1.0f, -2.0f, 3.0f}));
+	REQUIRE(saneVector({kMaxWorldCoord, -kMaxWorldCoord, 0.0f}));
+	REQUIRE_FALSE(saneVector({std::numeric_limits<float>::quiet_NaN(), 0.0f, 0.0f}));
+	REQUIRE_FALSE(saneVector({0.0f, std::numeric_limits<float>::infinity(), 0.0f}));
+	REQUIRE_FALSE(saneVector({0.0f, 0.0f, 1.0e9f}));
+	Transform t;
+	REQUIRE(saneTransform(t));
+	t.angle = std::numeric_limits<float>::quiet_NaN();
+	REQUIRE_FALSE(saneTransform(t));
+	t.angle = 0.0f;
+	t.axis = {0.0f, 1.0e30f, 0.0f};
+	REQUIRE_FALSE(saneTransform(t));
+}
+
+SCENARIO("A .3ds file's material textures are listed for the image checks")
+{
+	// 4D4D > 3D3D > AFFF > A200 > A300 "grass.png", twice, and a bare A300.
+	const auto chunk = [](uint16_t id, const std::string& body) {
+		std::string c;
+		const uint32_t length = static_cast<uint32_t>(body.size() + 6);
+		c += static_cast<char>(id & 0xff);
+		c += static_cast<char>(id >> 8);
+		for (int i = 0; i < 4; ++i)
+			c += static_cast<char>((length >> (8 * i)) & 0xff);
+		return c + body;
+	};
+	const std::string tex = chunk(0xA200, chunk(0xA300, std::string("grass.png") + '\0'));
+	const std::string other = chunk(0xA33A, chunk(0xA300, std::string("alpha.png") + '\0'));
+	const std::string file = chunk(0x4D4D, chunk(0x3D3D, chunk(0xAFFF, tex + other) + chunk(0xAFFF, tex)));
+	REQUIRE(threeDsTextures(file) == std::vector<std::string>{"grass.png", "alpha.png"});
+	REQUIRE(threeDsTextures(file.substr(0, file.size() / 2)).empty());
+	REQUIRE(threeDsTextures("").empty());
 }

@@ -1,4 +1,4 @@
-// Seihai project, 2026-11-25: see CHANGES-SEIHAI.md.
+// Seihai project, 2026-11-25, 2026-11-26: see CHANGES-SEIHAI.md.
 // New file: the Graal 3D add-on. See Graal3DAddon.h.
 
 #include <graal3d/Graal3DAddon.h>
@@ -60,9 +60,9 @@ namespace graal3d
 		m_service->setTrace(settings.get<std::string>("graal3dtrace").value_or(""s));
 		// graal3dmutate = <kind>[:<seed>]: lab fuzzing only (see bin/docs/graal3d.md).
 		m_service->setMutation(settings.get<std::string>("graal3dmutate").value_or(""s));
-		// graal3dterrainall, graal3dpushterrain: lab switches for streamed terrain (see bin/docs/graal3d.md).
+		// graal3dterrainall: lab switch; graal3dpushterrain (default on): terrain files at login and link (see bin/docs/graal3d.md).
 		m_service->setTerrainForAll(settings.get<bool>("graal3dterrainall").value_or(false));
-		m_service->setPushTerrainFiles(settings.get<bool>("graal3dpushterrain").value_or(false));
+		m_service->setPushTerrainFiles(settings.get<bool>("graal3dpushterrain").value_or(true));
 		// graal3dpushgrass = false stops the grass-texture push (see bin/docs/graal3d.md).
 		m_service->setPushGrassTextures(settings.get<bool>("graal3dpushgrass").value_or(true));
 		// graal3dgrassdelay = <ms>: lab, ghost grass that long after the world (0 to 60000).

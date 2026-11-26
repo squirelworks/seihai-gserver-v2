@@ -218,6 +218,29 @@ own relay lines), then what happened. Leave the setting empty to turn the trace 
 | From the client: `TerrainRequestUpdatesEvent` | logged: its length, how many of its 256 stamps are set, the first eight `(x,y)=stamp`, and the payload as hex. Other events the server does not decode are logged with their length and first 64 bytes. |
 | 3.15x and 4.04r2 game packets | done up to a walking `Player` control object and a `Sky`. A real 4.04r2 runs a `Camera` session with the `Sky`, and a `Player` session once `tgeplayershape` names a loadable TGE `.dts` (lab 2026-11-19). See "Protocol 19" below. |
 
+## Hostile and broken clients
+
+The 3D port is open to anyone who can reach it, so the server guards it
+(board rows T3D-142 to T3D-146):
+
+- **Floods and probes.** Each address may send 256 datagrams a second once it
+  has a 3D link and 32 before. A linked 5.12 sends a few a second, and a
+  handshake only a handful. Past the budget, the rest of that second is
+  dropped unread and logged once per address. Junk, cut-short connect requests
+  and data packets from an address with no link are ignored. A connect request
+  must carry the challenge digest for its address before the server does any
+  work for it.
+- **Reconnects.** A new connect request from a linked address closes the old
+  link first. A player gets one 3D link: a second one closes the first. Closing
+  a link removes the player's object from every other client and clears its
+  per-player state.
+- **Impossible positions.** Clients own their objects' positions and the server
+  passes them on to everyone else (T3D-128). A report with a NaN, an infinity
+  or a coordinate beyond 1,000,000, or a rotation that is not finite, is
+  dropped, so it never reaches another client. It is logged once per player.
+
+A lab run against real clients is still open for each of these.
+
 ## What each client build is offered
 
 When a 3D connect request is accepted, the server picks the client's capability row by its login token and Torque protocol (`server/include/graal3d/Graal3DCapabilities.h`; an unknown token gets the protocol's default build: 19 4.04r2, 21 4.20r6, 24 5.12). The rows mirror Seihai's version profile (`VersionProfile::three_d` in seihai-core), whose source is Graal_analysis `version-profiles/three-d.toml`. The log line `Graal3D: <account> is a <build> client: ...` names the row, and says when the protocol or every value is assumed rather than read.
@@ -290,7 +313,7 @@ world/3d/                        any folder the file folders cover
 - **Texture formats.** Only 8-bit PNG, JPEG and GIF draw on 5.12. BMP, TGA, DDS and 16-bit PNG draw white.
 - **Lower-case names** are safest, because the clients lower-case what they ask for. The server's lookup ignores case, so mixed case still works.
 - **Start-up check.** At start-up the server looks up every shape and Sky texture the world file names, and with a `terrain` line, `heights.info` and every texture it lists (a client that cannot fetch them draws the terrain white). It logs any that are missing, and any found only without an extension.
-- **Unsafe shapes and textures.** Every `.3ds` and `.dts` shape is checked for the faults that crashed a real client. For a `.3ds` these are: no materials, a cut file, a chunk longer than its parent, a vertex or face list claiming more entries than it holds, or a face using a vertex the mesh does not have. A `.dts` must be version 24, the only version the real 5.12 drew (it trusts the version word: other versions were refused, hung, crashed or drew nothing), and the memory buffer its header claims must fit the file; a cut file or a huge size word crashed 5.12. Its node, object, decal and sub-shape counts must not exceed the buffer. A `.dif` interior whose first word (the InteriorResource version) is not 44, the only version any Graal 3D build was read to take, gets a warning; it is still sent, because a real 5.12 refuses it safely (lab, 2026-11-26): versions 43, 45 and 0xFFFFFFFF gave "InteriorResource::read: incompatible file version found", a file cut to 4 bytes, 50% or 90% gave "Unable to read detail level 0", and in every case the client kept the link and drew the rest. A file short by only its last 16 bytes is dropped with no console line, and the server does not catch a cut file with a good version word. The player shapes (`playershape`, `tgeplayershape`) are checked too: a bad one crashed 4.04r2 at login, so with `skip` it is not used (protocol 19 then controls a Camera). Sky and terrain textures that are PNGs must claim a width and height from 1 to 8192; one claiming 30000x30000 crashed 5.12 (content fuzzing, lab, 2026-11-25). A bad texture is logged as an error, since it cannot be left out. With `skip`, every file the check finds unsafe (a shape, a player shape, a replicator shape or a texture) is also refused when a 3D client asks for it by name: the client is told the server does not have it, which it survives, where the file itself crashed 5.12 (an oversized terrain PNG fetched by name, lab 2026-11-25). A 16-bit PNG, a BMP, an empty file, or an image over 1024 a side gets a warning too, since 5.12 draws none of them (it drew 1024; 2048 and 4096 came out white). 8-bit PNG, JPEG and GIF draw. Terrain textures should be 256x256 24-bit; the client draws its default texture for any other size, and the server warns about it. With `graal3dshapecheck = skip` (the default), an object with such a shape is left out of the world and logged. Labs that send broken shapes on purpose set `warn`, which logs and sends them anyway; `off` skips the check.
+- **Unsafe shapes and textures.** Every `.3ds` and `.dts` shape is checked for the faults that crashed a real client. For a `.3ds` these are: no materials, a cut file, a chunk longer than its parent, a vertex or face list claiming more entries than it holds, or a face using a vertex the mesh does not have. A `.dts` must be version 24, the only version the real 5.12 drew (it trusts the version word: other versions were refused, hung, crashed or drew nothing), and the memory buffer its header claims must fit the file; a cut file or a huge size word crashed 5.12. Its node, object, decal and sub-shape counts must not exceed the buffer. A `.dif` interior whose first word (the InteriorResource version) is not 44, the only version any Graal 3D build was read to take, gets a warning; it is still sent, because a real 5.12 refuses it safely (lab, 2026-11-26): versions 43, 45 and 0xFFFFFFFF gave "InteriorResource::read: incompatible file version found", a file cut to 4 bytes, 50% or 90% gave "Unable to read detail level 0", and in every case the client kept the link and drew the rest. A file short by only its last 16 bytes is dropped with no console line, and the server does not catch a cut file with a good version word. The player shapes (`playershape`, `tgeplayershape`) are checked too: a bad one crashed 4.04r2 at login, so with `skip` it is not used (protocol 19 then controls a Camera). Sky, terrain, grass and `.3ds` material textures (chunk `0xA300`) that are PNGs must claim a width and height from 1 to 8192; one claiming 30000x30000 crashed 5.12 (content fuzzing, lab, 2026-11-25). A bad texture is logged as an error, since it cannot be left out. With `skip`, every file the check finds unsafe (a shape, a player shape, a replicator shape or a texture) is also refused when a 3D client asks for it by name: the client is told the server does not have it, which it survives, where the file itself crashed 5.12 (an oversized terrain PNG fetched by name, lab 2026-11-25). A 16-bit PNG, a BMP, an empty file, or an image over 1024 a side gets a warning too, since 5.12 draws none of them (it drew 1024; 2048 and 4096 came out white). 8-bit PNG, JPEG and GIF draw. Terrain textures should be 256x256 24-bit; the client draws its default texture for any other size, and the server warns about it. With `graal3dshapecheck = skip` (the default), an object with such a shape is left out of the world and logged. Labs that send broken shapes on purpose set `warn`, which logs and sends them anyway; `off` skips the check.
 
 - **Folders config.** A file folder covers only its own files, not its subfolders. `config/foldersconfig.txt` needs `file 3d/*` and a line for each streamed terrain folder, such as `file 3d/island_terrain/*`; without them the world's files are not found (lab, 2026-11-25). The default and modern servers have `file 3d/*`.
 
@@ -453,11 +476,11 @@ client whose class table has its class: 4.20r6 and 5.x list `TerrainBlock` and
 the other ghosts, after the datablocks. Nothing here has been run with a real
 client yet; the 2026-11-25 terrain lab is the first user.
 
-## Lab: terrain switches
+## Terrain switches
 
 ```
-graal3dterrainall = true    # the 5.x TerrainBlock, WaterBlock and chunks to every 4.20r6 and 5.x client
-graal3dpushterrain = true   # heights.info and its textures over TCP right after the 3D link
+graal3dterrainall = true    # lab: the 5.x TerrainBlock, WaterBlock and chunks to every 4.20r6 and 5.x client
+graal3dpushterrain = false  # stop sending heights.info and its textures at login and on link (on by default)
 graal3dpushgrass = false    # stop sending grass replicator textures on link (on by default)
 graal3dgrassdelay = 3000    # lab: ghost grass replicators this many ms after the rest of the world (0 to 60000)
 ```
@@ -466,12 +489,15 @@ graal3dgrassdelay = 3000    # lab: ghost grass replicators this many ms after th
 builds such as 4.20r8, so a lab can see what those builds do with it. Real
 players' servers leave it off.
 
-`graal3dpushterrain` answers 5.12's first visit, which fetches only `heights.info`
-and draws the terrain white; its textures come on the next visit. With it on, the
+`graal3dpushterrain` (on by default since 2026-11-26) answers 5.12's first visit,
+which fetches only `heights.info` and draws the terrain white; its textures come on
+the next visit. With it on, the
 server sends `heights.info` and every texture it lists (as found at start-up) to the
 client unasked at its TCP login, before the 3D mission loads (the timing that made
 first-visit grass draw), and again when its 3D link opens, once per account per server
-run. A build
+run. On a real 5.12 with an empty cache (lab, 2026-11-26, Mesa) the terrain was then
+textured on the very first frame, with `heights.info` and all four textures logged
+before `MissionStartPhase1`; with it off, the first frame was white. A build
 whose row has `terrainTextures` false (4.20r8, which never fetches them) gets no
 push. On a real
 5.12 (lab, 2026-11-25) the first visit then had `heights.info` and all four
