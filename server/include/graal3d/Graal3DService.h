@@ -102,6 +102,9 @@ namespace graal3d
 		// the grass replicator lines name go to the client over TCP unasked,
 		// once per account (5.12 never fetches them itself).
 		void setPushGrassTextures(bool on) { m_pushGrassTextures = on; }
+		// Lab: graal3dgrassdelay = <ms> ghosts the grass replicators that long
+		// after the rest of the world (0, the default: with the rest).
+		void setGrassDelay(uint32_t ms) { m_grassDelayMs = ms; }
 
 		// Files the start-up check found would crash a client (graal3dshapecheck
 		// = skip): a 3D client asking for one is answered as if the server did
@@ -145,6 +148,8 @@ namespace graal3d
 			const Capabilities* caps = nullptr;
 			// The 2D players in this player's level, as last put on its screen.
 			std::map<PlayerID, GhostObject> tcpShown;
+			// graal3dgrassdelay: when the held grass objects are ghosted (0: none held).
+			uint64_t grassDueMs = 0;
 		};
 
 		void handleDatagram(const Endpoint& from, std::string_view data, uint64_t nowMs);
@@ -221,6 +226,8 @@ namespace graal3d
 		std::set<std::string> m_refusedFiles;   // lower-cased file names the start-up check found would crash a client
 		std::set<std::string> m_terrainPushedTo; // accounts already sent m_terrainFiles (graal3dpushterrain)
 		bool m_pushGrassTextures = true;
+		uint32_t m_grassDelayMs = 0;
+		static bool isGrass(const GhostObject& o) { return o.rawClass == "DynamicGrass" || o.rawClass == "DynamicGrassReplicator"; }
 		std::vector<std::string> m_grassTextures; // replicator textures found and not refused at start-up
 		std::set<std::string> m_grassPushedTo;   // accounts already sent m_grassTextures (graal3dpushgrass)
 		[[nodiscard]] bool offers(const Capabilities* caps, const GhostObject& object, int protocol) const;

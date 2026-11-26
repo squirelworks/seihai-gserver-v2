@@ -331,7 +331,11 @@ not all `.3ds`/`.dts`; a nearly transparent texture showed nothing under GDI. 5.
 never asks the server for a grass texture, so it must already have it (lab, Mesa,
 2026-11-26): the server sends every grass texture the replicator lines name over TCP
 right after the 3D link, once per account per server run, unless the start-up check
-refused it (`graal3dpushgrass = false` turns this off). Every name on the line must be
+refused it (`graal3dpushgrass = false` turns this off). On a real 5.12 (lab, 2026-11-26)
+the push arrived at link time ("File download: lp_white.png done") and filled the cache,
+but grass still did not draw on that first visit, only on later ones. The lab switch
+`graal3dgrassdelay` holds the grass ghosts back so the texture lands first; whether that
+makes grass draw on a first visit is not yet tested. Every name on the line must be
 a bare file name: one with `/`, `\`, `:` or `..` fails the line, since the client
 stores a file under the name it is sent. 4.20r8 takes the ghost
 without a crash but grows no cover, under GDI or Mesa, even with the camera pitched
@@ -449,6 +453,7 @@ client yet; the 2026-11-25 terrain lab is the first user.
 graal3dterrainall = true    # the 5.x TerrainBlock, WaterBlock and chunks to every 4.20r6 and 5.x client
 graal3dpushterrain = true   # heights.info and its textures over TCP right after the 3D link
 graal3dpushgrass = false    # stop sending grass replicator textures on link (on by default)
+graal3dgrassdelay = 3000    # lab: ghost grass replicators this many ms after the rest of the world (0 to 60000)
 ```
 
 `graal3dterrainall` ignores the capability rows that keep streamed terrain from
