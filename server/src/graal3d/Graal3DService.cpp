@@ -817,6 +817,13 @@ namespace graal3d
 			auto ext = info->file.extension().string();
 			for (auto& ch : ext)
 				ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+			if (ext == ".dif" && m_shapeCheck != ShapeCheck::Off)
+			{
+				const auto version = difVersion(readAll(info->file));
+				if (!version || *version != kDifVersion)
+					log::printLine(log::server, "** [Warning] Graal3D: interior {} is {}; Graal 3D clients read InteriorResource version {}, so it may not draw.", shape,
+								   version ? std::format("version {}", *version) : std::string("shorter than its header"), kDifVersion);
+			}
 			if ((ext != ".3ds" && ext != ".dts") || m_shapeCheck == ShapeCheck::Off)
 				return false;
 			const auto why = unsafeAsset(ext, readAll(info->file));

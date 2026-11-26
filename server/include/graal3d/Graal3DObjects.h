@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-20, 2026-11-25: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-20, 2026-11-25, 2026-11-26: see CHANGES-SEIHAI.md.
 // New file: the ghosted objects of a Graal 3D world in the GameObject era (4.20r6
 // and 5.x): GameObject, the Graal class every 3D thing is, and Sun. Their update
 // layouts come from a static read of the 5.00r7 Graal3DEngine.dll (protocol 24,
@@ -272,6 +272,13 @@ namespace graal3d
 	// The largest side 5.12 drew; 2048 and 4096 drew white (live, 2026-11-25).
 	inline constexpr uint32_t kMaxDrawnImageSide = 1024;
 	std::optional<std::string> unsafeImage(std::string_view data);
+
+	// A .dif interior's InteriorResource version (its first 4 bytes, little
+	// endian), or nothing if the file is shorter. Every Graal 3D build read
+	// checks for 44 (Graal_analysis); what one does with another is not yet
+	// seen live, so the start-up check only warns.
+	inline constexpr uint32_t kDifVersion = 44;
+	std::optional<uint32_t> difVersion(std::string_view data);
 
 	// unsafe3ds, unsafeDts or unsafeImage, by the file's extension.
 	std::optional<std::string> unsafeAsset(std::string_view extension, std::string_view data);

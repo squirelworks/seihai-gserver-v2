@@ -1943,3 +1943,10 @@ SCENARIO("Lab mutations (graal3dmutate) are parsed, seeded and sent once")
 		}
 	}
 }
+
+SCENARIO("A .dif interior's version is read from its first word")
+{
+	REQUIRE_FALSE(difVersion(std::string_view("\x2c\0\0", 3)));
+	REQUIRE(difVersion(std::string_view("\x2c\0\0\0\x01", 5)) == kDifVersion);
+	REQUIRE(difVersion(std::string_view("\x2b\x01\0\0", 4)) == 0x12bu);
+}
