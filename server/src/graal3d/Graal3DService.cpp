@@ -94,7 +94,6 @@ namespace graal3d
 			return ip;
 		}
 
-		bool hasGraal3D(int version) { return Service::clientHasGraal3D(version); }
 	} // namespace
 
 	// 3.04 speaks the stock TGE demo protocol and is refused by the game string check.
@@ -103,6 +102,11 @@ namespace graal3d
 	bool Service::clientHasGraal3D(int version)
 	{
 		return version >= CLVER_3_151_LINUX && version < CLVER_6_015;
+	}
+
+	bool Service::mayLinkGraal3D(int version)
+	{
+		return clientHasGraal3D(version) || version == CLVER_6_037 || version == CLVER_6_037_LINUX;
 	}
 
 	bool Service::takesLoginFiles(int version)
@@ -526,7 +530,7 @@ namespace graal3d
 		}
 		const std::string account = player->account.name;
 
-		if (!hasGraal3D(player->getVersion()))
+		if (!Service::mayLinkGraal3D(player->getVersion()))
 		{
 			sendTo(from, buildConnectReject(req->sequence, "CHR_PROTOCOL"));
 			return;
@@ -690,7 +694,7 @@ namespace graal3d
 		std::shared_ptr<Player> best;
 		for (const auto& [id, p] : m_server.getPlayerList())
 		{
-			if (!fromThere(p) || !p->isGuest() || !hasGraal3D(p->getVersion()))
+			if (!fromThere(p) || !p->isGuest() || !Service::mayLinkGraal3D(p->getVersion()))
 				continue;
 			const bool linked = m_byPlayer.contains(id);
 			const bool bestLinked = best != nullptr && m_byPlayer.contains(best->getId());

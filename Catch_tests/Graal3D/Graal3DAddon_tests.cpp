@@ -52,6 +52,17 @@ TEST_CASE("the Graal 3D add-on runs only with graal3d = true", "[graal3d][addons
 			CHECK(graal3d::Service::takesLoginFiles(v));
 		for (const int v : {CLVER_2_31, CLVER_6_015})
 			CHECK_FALSE(graal3d::Service::takesLoginFiles(v));
+		// 6.037 may link (Frankenstein 6.037) but is not offered the 3D login needs.
+		for (const int v : {CLVER_6_037, CLVER_6_037_LINUX})
+		{
+			CHECK(graal3d::Service::mayLinkGraal3D(v));
+			CHECK_FALSE(graal3d::Service::clientHasGraal3D(v));
+			CHECK_FALSE(server->getAddons().clientNeeds(v).answerMissingChecksumFiles);
+		}
+		for (const int v : {CLVER_3_153, CLVER_5_12})
+			CHECK(graal3d::Service::mayLinkGraal3D(v));
+		for (const int v : {CLVER_2_31, CLVER_6_015, CLVER_6_034})
+			CHECK_FALSE(graal3d::Service::mayLinkGraal3D(v));
 	}
 
 	SECTION("on")

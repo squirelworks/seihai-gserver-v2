@@ -256,6 +256,13 @@ A lab run (2026-11-26) checked each of these against a server with two real
 - A `.3ds` naming a PNG that claims to be 100000x100000 is refused at start-up
   with an error. The client draws that shape white and keeps running.
 
+A TCP login from 6.037 (the 6.03r7 token, Windows or Linux) may also join a 3D link.
+Stock 6.03r7 is a 2D client and never opens one, so for it nothing changes. The
+Frankenstein 6.037 lab build logs in with that token and opens the 5.12 protocol-24
+link beside it. It is linked with the 5.12 row's capabilities. The 3D login needs
+(answered checksum requests, bare-name textures, login files) still go only to the
+builds listed below.
+
 ## What each client build is offered
 
 When a 3D connect request is accepted, the server picks the client's capability row by its login token and Torque protocol (`server/include/graal3d/Graal3DCapabilities.h`; an unknown token gets the protocol's default build: 19 4.04r2, 21 4.20r6, 24 5.12). The rows mirror Seihai's version profile (`VersionProfile::three_d` in seihai-core), whose source is Graal_analysis `version-profiles/three-d.toml`. The log line `Graal3D: <account> is a <build> client: ...` names the row, and says when the protocol or every value is assumed rather than read.

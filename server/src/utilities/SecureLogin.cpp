@@ -1,4 +1,4 @@
-// Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
+// Seihai project, 2026-11-12, 2026-11-26: see CHANGES-SEIHAI.md.
 // The SEI00001 secure login, from seihai/documentation/secure-login.md (revision 1).
 
 #include <algorithm>
@@ -286,6 +286,11 @@ Signature ServerIdentity::sign(std::span<const uint8_t> message) const
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+
+size_t ClientHello::prefixLengthOf(std::string_view line, bool oneXClient)
+{
+	return oneXClient && line.size() > 1 && line.substr(1).starts_with(TOKEN) ? 1 : 2;
+}
 
 std::optional<ClientHello> ClientHello::parse(std::string_view line, size_t prefixLength, bool& malformed)
 {

@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-12, 2026-11-18: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-12, 2026-11-18, 2026-11-26: see CHANGES-SEIHAI.md.
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -83,6 +83,13 @@ HandlePacketResult PlayerLogin::msgLoginPacket(CString& pPacket)
 	if (m_secureLogin)
 		return msgSecureSealed(pPacket);
 
+	// Every login line has its type byte and more. A shorter frame is junk.
+	if (pPacket.length() < 2)
+	{
+		log::printLine(log::server, "New login from {}: a {}-byte login frame, closing.", whoAmI(), pPacket.length());
+		return HandlePacketResult::Failed;
+	}
+
 	const auto type = (1 << pPacket.readGChar());
 	if (type & PLTYPE_ANYCLIENT)
 	{
@@ -98,9 +105,7 @@ std::optional<HandlePacketResult> PlayerLogin::msgSecureHello(CString& pPacket, 
 
 	// The token sits where the version token does: after the type, or after the type and
 	// the key byte. Only 1.x clients (PLTYPE_CLIENT) send no key byte.
-	size_t prefixLength = 2;
-	if (type == PLTYPE_CLIENT && line.substr(1).starts_with(seclogin::TOKEN))
-		prefixLength = 1;
+	const size_t prefixLength = seclogin::ClientHello::prefixLengthOf(line, type == PLTYPE_CLIENT);
 
 	bool malformed = false;
 	auto hello = seclogin::ClientHello::parse(line, prefixLength, malformed);

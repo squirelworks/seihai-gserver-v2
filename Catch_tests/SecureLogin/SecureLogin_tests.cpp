@@ -1,4 +1,4 @@
-// Seihai project, 2026-11-12: see CHANGES-SEIHAI.md.
+// Seihai project, 2026-11-12, 2026-11-26: see CHANGES-SEIHAI.md.
 // SEI00001 secure login (seihai/documentation/secure-login.md, revision 1).
 //
 // The "fixed vector" was made independently from the document with Python's
@@ -339,4 +339,20 @@ TEST_CASE("SEI00001 server key file", "[seclogin]")
 	CHECK_FALSE(error.empty());
 
 	std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("SEI00001 hello offsets are safe on junk login lines", "[seclogin]")
+{
+	// A junk connection's empty or one-byte frame once threw out of the hello check.
+	for (const std::string_view line : {std::string_view{}, std::string_view{"\x21", 1}, std::string_view{"\x20\x00", 2}})
+	{
+		CHECK(ClientHello::prefixLengthOf(line, true) == 2);
+		CHECK(ClientHello::prefixLengthOf(line, false) == 2);
+		bool malformed = true;
+		CHECK_FALSE(ClientHello::parse(line, 2, malformed).has_value());
+		CHECK_FALSE(malformed);
+	}
+	const std::string oneX = std::string("\x20") + std::string(TOKEN) + "GNW03014";
+	CHECK(ClientHello::prefixLengthOf(oneX, true) == 1);
+	CHECK(ClientHello::prefixLengthOf(oneX, false) == 2);
 }
