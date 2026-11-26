@@ -65,6 +65,10 @@ namespace graal3d
 		bool start(std::string_view interfaceIp, uint16_t port);
 		// A client build with a Torque 3D side: 3.153 to 5.x.
 		static bool clientHasGraal3D(int version);
+		// The build uses the terrain and grass files sent at TCP login. Windows
+		// 4.20r8 never applies terrain textures and grows no cover (lab, GDI and
+		// Mesa), so it is not sent them.
+		static bool takesLoginFiles(int version);
 
 		// The objects every client is sent. `packetStrings`: see TorqueBitStream.h
 		// (the option graal3dstringprefix). Call before start().
@@ -214,7 +218,7 @@ namespace graal3d
 		void sendWorldWeapons(Connection& connection);
 		std::string compileClientScript(const std::string& name, std::string_view source);
 		void sendTo(const Endpoint& to, std::string_view data);
-		void closeSession(const Endpoint& endpoint, std::string_view reason, bool notifyClient);
+		void closeSession(Endpoint endpoint, std::string_view reason, bool notifyClient);
 		Digest digestFor(const Endpoint& from, uint32_t sequence) const;
 		static std::string ipString(const Endpoint& endpoint);
 		static uint64_t nowMs();

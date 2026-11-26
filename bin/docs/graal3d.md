@@ -239,7 +239,22 @@ The 3D port is open to anyone who can reach it, so the server guards it
   or a coordinate beyond 1,000,000, or a rotation that is not finite, is
   dropped, so it never reaches another client. It is logged once per player.
 
-A lab run against real clients is still open for each of these.
+A lab run (2026-11-26) checked each of these against a server with two real
+5.12 clients linked, one of them walking the whole time:
+
+- 1000 random datagrams of 0 to 1500 bytes, cut-short connect requests at every
+  length, and datagrams up to 65,507 bytes: nothing logged, CPU at most 2%,
+  memory flat.
+- 5000 datagrams a second for 20 seconds from one address: one warning, exactly
+  32 replies a second to the flooder, and every probe from another address
+  answered. CPU peaked at 1.9%.
+- 500 rounds of bad handshakes: a bad digest or too many arguments gets no
+  reply, and a bad protocol, game string or class name gets the matching refusal.
+- 60 link-and-drop cycles on one account: the session count never grew, and
+  memory rose by 0.2 MB and then stayed flat. The walking client stayed
+  connected, kept drawing terrain and grass, and kept seeing the other player.
+- A `.3ds` naming a PNG that claims to be 100000x100000 is refused at start-up
+  with an error. The client draws that shape white and keeps running.
 
 ## What each client build is offered
 
@@ -498,8 +513,10 @@ first-visit grass draw), and again when its 3D link opens, once per account per 
 run. On a real 5.12 with an empty cache (lab, 2026-11-26, Mesa) the terrain was then
 textured on the very first frame, with `heights.info` and all four textures logged
 before `MissionStartPhase1`; with it off, the first frame was white. A build
-whose row has `terrainTextures` false (4.20r8, which never fetches them) gets no
-push. On a real
+whose row has `terrainTextures` false (Windows 4.20r8, which never fetches them)
+gets neither push. Under Mesa it takes the 256 chunks and the WaterBlock and still
+never applies a terrain or water texture (lab, 2026-11-26), so nothing a server
+sends fixes that. On a real
 5.12 (lab, 2026-11-25) the first visit then had `heights.info` and all four
 textures before the terrain loaded, with no "Missing terrain texture" line; whether
 it draws them on that visit still needs a run under Mesa. The client stores the

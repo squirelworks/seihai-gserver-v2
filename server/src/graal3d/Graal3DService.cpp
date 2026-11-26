@@ -105,6 +105,11 @@ namespace graal3d
 		return version >= CLVER_3_151_LINUX && version < CLVER_6_015;
 	}
 
+	bool Service::takesLoginFiles(int version)
+	{
+		return clientHasGraal3D(version) && version != CLVER_4_208;
+	}
+
 	Service::Service(Server& server)
 		: m_server(server)
 	{
@@ -695,7 +700,9 @@ namespace graal3d
 		return best;
 	}
 
-	void Service::closeSession(const Endpoint& endpoint, std::string_view reason, bool notifyClient)
+	// The endpoint is taken by value: callers pass m_byPlayer's own entry, which
+	// this erases before it logs the address.
+	void Service::closeSession(Endpoint endpoint, std::string_view reason, bool notifyClient)
 	{
 		auto it = m_sessions.find(endpoint);
 		if (it == m_sessions.end())

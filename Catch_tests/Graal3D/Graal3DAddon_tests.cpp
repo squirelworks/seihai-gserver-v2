@@ -19,6 +19,7 @@
 #include <IUtil.h>
 #include <Server.h>
 #include <graal3d/Graal3DAddon.h>
+#include <graal3d/Graal3DCapabilities.h>
 #include <graal3d/Graal3DService.h>
 
 using namespace preagonal;
@@ -37,6 +38,20 @@ TEST_CASE("the Graal 3D add-on runs only with graal3d = true", "[graal3d][addons
 		CHECK(graal3d::Addon::create(*server) == nullptr);
 		server->getAddons().start(*server, "");
 		CHECK(server->getAddons().find<graal3d::Addon>() == nullptr);
+	}
+
+	SECTION("login files skip 4.20r8")
+	{
+		// Windows 4.20r8 draws terrain untextured and grows no cover, so the
+		// terrain and grass files are not pushed to it; its capability row agrees.
+		CHECK_FALSE(graal3d::Service::takesLoginFiles(CLVER_4_208));
+		REQUIRE(graal3d::capabilitiesForToken("G3D20126") != nullptr);
+		CHECK_FALSE(graal3d::capabilitiesForToken("G3D20126")->terrainTextures);
+		CHECK_FALSE(graal3d::capabilitiesForToken("G3D20126")->groundCover);
+		for (const int v : {CLVER_3_153, CLVER_4_208_LINUX, CLVER_5_12, CLVER_5_12_MAC, CLVER_5_24})
+			CHECK(graal3d::Service::takesLoginFiles(v));
+		for (const int v : {CLVER_2_31, CLVER_6_015})
+			CHECK_FALSE(graal3d::Service::takesLoginFiles(v));
 	}
 
 	SECTION("on")
