@@ -1200,6 +1200,14 @@ namespace graal3d
 		return std::nullopt;
 	}
 
+	std::optional<uint32_t> difVersion(std::string_view data)
+	{
+		if (data.size() < 4)
+			return std::nullopt;
+		const auto b = [&](size_t i) { return static_cast<uint32_t>(static_cast<uint8_t>(data[i])); };
+		return b(0) | b(1) << 8 | b(2) << 16 | b(3) << 24;
+	}
+
 	std::optional<std::string> unsafeAsset(std::string_view extension, std::string_view data)
 	{
 		std::string ext(extension);
