@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-25, 2026-11-26: see CHANGES-SEIHAI.md.
 // New file: one Graal 3D (Torque) UDP connection, server side. See Graal3DConnection.h.
 // The notify protocol follows Torque's ConnectionProtocol::processRawPacket and
 // NetConnection's event code (MIT-licensed Torque3D source), with Graal's 12-bit
@@ -132,6 +132,8 @@ namespace graal3d
 		const auto sinceSend = nowMs - m_lastSend;
 		if (m_profile.tgePackets && m_established)
 			advanceTge();
+		if (releasePhase2(nowMs) && m_cb.onMission)
+			m_cb.onMission(m_mission);
 		if (m_mutation != Mutation::None && !isAcceptMutation(m_mutation) && !m_mutationDone && m_mutationAt == 0 && m_mission == MissionState::Done)
 			m_mutationAt = nowMs + 2000;
 		if (sendsEvents() && m_established)
@@ -226,7 +228,65 @@ namespace graal3d
 		payload.writeU32(stamp);
 		payload.writeInt(static_cast<uint32_t>(packed.size()), 10);
 		payload.writeBytes(packed);
-		postEvent("TerrainChunkEvent", std::move(payload));
+		if (postEvent("TerrainChunkEvent", std::move(payload)) && m_terrainAsked && !m_terrainAnswered)
+			m_chunkSeqs.push_back(m_nextSendEventSeq - 1);
+		return true;
+	}
+
+	bool Connection::lightsTheMission(const GhostObject& object)
+	{
+		return object.kind == GhostObject::Kind::Sun ||
+			   (object.kind == GhostObject::Kind::Raw && (object.rawClass == "TerrainBlock" || object.rawClass == "WaterBlock"));
+	}
+
+	bool Connection::releasePhase2(uint64_t nowMs)
+	{
+		// A 5.x client lights the mission when phase 2 arrives ("Mission
+		// Lighting"), from the TerrainBlock, WaterBlock, Sun and terrain chunks it
+		// has by then. A TerrainBlock created later drew with no slope shading all
+		// session, and chunks that came later were lit from the old heights: a
+		// hard-edged dark patch until relog (lab T3D-162, Graal_analysis
+		// torque/terrain-512.md; seihai-gserver #223, lab-checked on a real 5.12).
+		// So phase 2 waits until the client has acked the create of every such
+		// ghost and, with a TerrainBlock, every TerrainChunkEvent of the answer to
+		// its terrain request (even an answer of no chunks), or Phase2HoldMs.
+		if (!m_phase2Held || m_mission != MissionState::Phase1Sent)
+			return false;
+		if (nowMs != 0 && m_phase2HeldSince == 0)
+			m_phase2HeldSince = nowMs;
+
+		size_t waiting = 0;
+		bool terrain = false;
+		for (const auto& [key, g] : m_ghosts)
+		{
+			if (g.kill || !lightsTheMission(g.object))
+				continue;
+			if (g.object.kind == GhostObject::Kind::Raw && g.object.rawClass == "TerrainBlock")
+				terrain = true;
+			if (!g.created)
+				++waiting;
+		}
+		// Only a client that can be sent chunks is waited for.
+		const bool chunked = terrain && eventClassId(m_profile, "TerrainChunkEvent").has_value();
+		size_t chunksLeft = 0;
+		if (chunked && m_terrainAnswered)
+			for (auto seq : m_chunkSeqs)
+				if (m_events.contains(seq))
+					++chunksLeft;
+		const bool chunksDone = !chunked || (m_terrainAnswered && chunksLeft == 0);
+		const bool late = m_phase2HeldSince != 0 && nowMs - m_phase2HeldSince >= Phase2HoldMs;
+		if ((waiting > 0 || !chunksDone) && !late)
+			return false;
+
+		if (waiting > 0)
+			log("phase 2 sent with " + std::to_string(waiting) + " lighting ghosts not yet created; the terrain may draw unshaded");
+		if (!chunksDone)
+			log(std::string("phase 2 sent with ") +
+				(m_terrainAnswered ? std::to_string(chunksLeft) + " terrain chunks not yet acked" : std::string("no terrain request answered yet")) +
+				"; the terrain may draw wrongly lit");
+		m_phase2Held = false;
+		sendCommand("MissionStartPhase2");
+		m_mission = MissionState::Phase2Sent;
 		return true;
 	}
 
@@ -864,7 +924,16 @@ namespace graal3d
 		if (!w.writeFlag(!todo.empty()))
 			return;
 
-		std::stable_sort(todo.begin(), todo.end(), [](const Candidate& a, const Candidate& b) { return a.order < b.order; });
+		// Creates: the client's own Camera and control object first (a 5.12 draws
+		// nothing until it has its Camera), then what lights the mission, so that
+		// phase 2 (releasePhase2) is not held behind a big world, then the rest.
+		const auto rank = [this](const Candidate& c) {
+			if (m_cameraKey == c.key || m_controlKey == c.key)
+				return 0;
+			return lightsTheMission(c.ghost->object) ? 1 : 2;
+		};
+		std::stable_sort(todo.begin(), todo.end(),
+						 [&rank](const Candidate& a, const Candidate& b) { return a.order != b.order ? a.order < b.order : rank(a) < rank(b); });
 
 		uint32_t idBits = 1;
 		while ((maxIndex >> idBits) != 0)
@@ -1311,8 +1380,11 @@ namespace graal3d
 			if (command == "MissionStartPhase1Ack" && m_mission == MissionState::Phase1Sent)
 			{
 				m_ghostingAllowed = true; // see ghostsMayGo
-				sendCommand("MissionStartPhase2");
-				m_mission = MissionState::Phase2Sent;
+				// Phase 2 waits for the terrain (releasePhase2); a second ack of
+				// phase 1 does not restart the wait.
+				m_phase2Held = true;
+				if (!releasePhase2(0))
+					return;
 			}
 			else if (command == "MissionStartPhase2Ack" && m_mission == MissionState::Phase2Sent)
 			{
@@ -1395,8 +1467,12 @@ namespace graal3d
 			log("TerrainRequestUpdatesEvent: " + std::to_string(ev.payloadBits) + " bits, " + std::to_string(nonZero) +
 				" chunks with a stamp" + held + (nonZero > 8 ? " ..." : ""));
 			log("  payload " + hexPreview(ev.payload, 1024));
+			// The service answers at once (sendTerrain posts the chunks the
+			// client lacks, maybe none); phase 2 waits for them (releasePhase2).
+			m_terrainAsked = true;
 			if (m_cb.onTerrainRequest)
 				m_cb.onTerrainRequest(stamps);
+			m_terrainAnswered = true;
 			return;
 		}
 

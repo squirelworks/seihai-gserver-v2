@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-25, 2026-11-26: see CHANGES-SEIHAI.md.
 // New file: one accepted Graal 3D (Torque) UDP connection, server side. It keeps
 // Torque's notify protocol (sequence numbers, acks, pings), resends guaranteed
 // events that were lost, drives the mission start phases and carries Graal's
@@ -91,6 +91,9 @@ namespace graal3d
 		static constexpr size_t MaxPacketBytes = 400; // the clients accept up to 450
 		static constexpr size_t MaxEventBits = (1u << 14) - 1; // an event's or ghost update's int14 length
 		static constexpr uint32_t MaxGhosts = 4096;   // the client's ghost table
+		// GameObject era: how long MissionStartPhase2 may wait for the terrain
+		// (see releasePhase2).
+		static constexpr uint64_t Phase2HoldMs = 15000;
 
 		Connection(const Profile& profile, uint32_t connectSequence, uint64_t nowMs, Callbacks callbacks);
 
@@ -234,6 +237,12 @@ namespace graal3d
 		// Class id (12 bits), the body's exact length (int14), the body.
 		static void writeSized(BitWriter& w, uint32_t classId, const BitWriter& body);
 		[[nodiscard]] bool ghostsMayGo() const;
+		// A TerrainBlock, WaterBlock or Sun: 5.x lights the mission at phase 2
+		// from what it has then.
+		[[nodiscard]] static bool lightsTheMission(const GhostObject& object);
+		// Sends MissionStartPhase2 once the terrain is in, or once Phase2HoldMs
+		// has passed. True when it went out. nowMs 0: not from update().
+		bool releasePhase2(uint64_t nowMs);
 		[[nodiscard]] bool ghostWorkPending() const;
 		[[nodiscard]] bool controlPending() const;
 		std::optional<uint32_t> allocateGhostIndex();
@@ -305,6 +314,13 @@ namespace graal3d
 		bool m_datablocksSent = false;
 		bool m_ghostingAllowed = false; // see ghostsMayGo
 		bool m_phase2Acked = false;
+		// GameObject era: phase 1 is acked and phase 2 waits for the terrain
+		// (releasePhase2). Since: the first update() after the ack, 0 until then.
+		bool m_phase2Held = false;
+		uint64_t m_phase2HeldSince = 0;
+		bool m_terrainAsked = false;    // the client sent TerrainRequestUpdatesEvent
+		bool m_terrainAnswered = false; // and the service answered it
+		std::vector<int32_t> m_chunkSeqs; // the TerrainChunkEvents of that answer
 		// Sharp3D route: the GhostAlwaysObjectEvent that creates each ghost, by
 		// event sequence; its ack marks the ghost created.
 		std::map<int32_t, ObjectKey> m_ghostAlwaysEvents;
