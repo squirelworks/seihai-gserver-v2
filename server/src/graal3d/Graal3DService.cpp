@@ -203,6 +203,17 @@ namespace graal3d
 		std::vector<Endpoint> dead;
 		for (auto& [endpoint, session] : m_sessions)
 		{
+			if (session.grassDueMs != 0 && now >= session.grassDueMs)
+			{
+				session.grassDueMs = 0;
+				ObjectKey key = 1;
+				for (const auto& object : m_world.objects)
+				{
+					if (isGrass(object) && offers(session.caps, object, static_cast<int>(session.connection->profile().protocol)))
+						session.connection->setGhost(key, object);
+					++key;
+				}
+			}
 			if (!session.connection->update(now))
 				dead.push_back(endpoint);
 		}
@@ -587,6 +598,7 @@ namespace graal3d
 			for (const auto& name : m_grassTextures)
 				player->sendFile(name);
 			trace(account, profile->protocol, std::format("pushed {} grass textures over TCP (graal3dpushgrass)", m_grassTextures.size()));
+			log::printLine(log::server, "Graal3D: {} is sent {} grass textures (graal3dpushgrass).", account, m_grassTextures.size());
 		}
 
 		// The player's own object, on every screen; the world and the other
@@ -1227,13 +1239,25 @@ namespace graal3d
 		ObjectKey key = 1;
 		const Capabilities* caps = capabilitiesOf(playerId);
 		bool sky = false;
+		size_t held = 0;
 		for (const auto& object : m_world.objects)
 		{
-			if (offers(caps, object, static_cast<int>(connection.profile().protocol)))
+			// Lab: graal3dgrassdelay holds grass back so the pushed texture can
+			// land first (5.12 drew no grass on a first visit, lab 2026-11-26).
+			if (m_grassDelayMs > 0 && isGrass(object) && offers(caps, object, static_cast<int>(connection.profile().protocol)))
+				++held;
+			else if (offers(caps, object, static_cast<int>(connection.profile().protocol)))
 				connection.setGhost(key, object);
 			sky = sky || object.kind == GhostObject::Kind::Sky;
 			++key;
 		}
+		if (held > 0)
+			if (const auto it = m_byPlayer.find(playerId); it != m_byPlayer.end())
+				if (const auto session = m_sessions.find(it->second); session != m_sessions.end())
+				{
+					session->second.grassDueMs = nowMs() + m_grassDelayMs;
+					log::printLine(log::server, "Graal3D: {} gets {} grass objects in {} ms (graal3dgrassdelay).", account, held, m_grassDelayMs);
+				}
 		if (caps && caps->requiresSky && !sky)
 			log::printLine(log::server, "Graal3D: {}'s build ({}) crashes without a Sky, and graal3dworld.txt has no sky line.", account,
 						   caps->label);
