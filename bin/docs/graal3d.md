@@ -337,8 +337,8 @@ but grass still did not draw on that first visit, only on later ones. The lab sw
 `graal3dgrassdelay` held the grass ghosts back 0, 3 and 10 s: the first frame was the
 same each time (lab, 2026-11-26), so 5.12 seems to build its grass once, at mission
 load. The textures therefore also go to every 3D-capable client at its TCP login, after
-the `gpaks` packages, before the 3D mission starts; whether that draws grass on a first
-visit is not yet tested. Only native `replicator` lines are pushed: a `rawobject`
+the `gpaks` packages, before the 3D mission starts, and that works: on a real 5.12 with
+an empty cache, grass drew on the very first frame (lab, 2026-11-26). Only native `replicator` lines are pushed: a `rawobject`
 grass line names its texture in raw fields the server does not read. Cover grew only
 around the spawn in that run because only the camera moved: 5.12 re-centres the grid
 on the control object every tick (static read, Graal_analysis `torque/replicators-512.md`). Every name on the line must be
@@ -469,7 +469,9 @@ players' servers leave it off.
 `graal3dpushterrain` answers 5.12's first visit, which fetches only `heights.info`
 and draws the terrain white; its textures come on the next visit. With it on, the
 server sends `heights.info` and every texture it lists (as found at start-up) to the
-client unasked when its 3D link opens, once per account per server run. A build
+client unasked at its TCP login, before the 3D mission loads (the timing that made
+first-visit grass draw), and again when its 3D link opens, once per account per server
+run. A build
 whose row has `terrainTextures` false (4.20r8, which never fetches them) gets no
 push. On a real
 5.12 (lab, 2026-11-25) the first visit then had `heights.info` and all four

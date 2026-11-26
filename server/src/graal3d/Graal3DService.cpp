@@ -989,6 +989,21 @@ namespace graal3d
 		}
 		log::printLine(log::server, "Graal3D: the world names {} files the folders have, {} they do not{}.", found, missing,
 					   dropped ? std::format(", and {} objects with unsafe shapes were left out", dropped) : std::string{});
+		rebuildLoginFiles();
+	}
+
+	void Service::rebuildLoginFiles()
+	{
+		// Sent at TCP login, before the 3D mission loads: a texture pushed at
+		// link time reached the cache too late for grass, while one sent at
+		// login drew on the first visit (lab, 2026-11-26).
+		m_loginFiles.clear();
+		if (m_pushTerrainFiles)
+			m_loginFiles = m_terrainFiles;
+		if (m_pushGrassTextures)
+			for (const auto& name : m_grassTextures)
+				if (std::ranges::find(m_loginFiles, name) == m_loginFiles.end())
+					m_loginFiles.push_back(name);
 	}
 
 	void Service::setWorld(World world, bool packetStrings)

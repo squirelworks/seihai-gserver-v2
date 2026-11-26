@@ -97,11 +97,19 @@ namespace graal3d
 		// graal3dpushterrain = true: right after a 3D link, heights.info and its
 		// textures go to the client over TCP unasked (5.12 fetches the textures
 		// only on its second visit, so a first visit drew the terrain white).
-		void setPushTerrainFiles(bool on) { m_pushTerrainFiles = on; }
+		void setPushTerrainFiles(bool on)
+		{
+			m_pushTerrainFiles = on;
+			rebuildLoginFiles();
+		}
 		// graal3dpushgrass (default true): right after a 3D link, the textures
 		// the grass replicator lines name go to the client over TCP unasked,
 		// once per account (5.12 never fetches them itself).
-		void setPushGrassTextures(bool on) { m_pushGrassTextures = on; }
+		void setPushGrassTextures(bool on)
+		{
+			m_pushGrassTextures = on;
+			rebuildLoginFiles();
+		}
 		// Lab: graal3dgrassdelay = <ms> ghosts the grass replicators that long
 		// after the rest of the world (0, the default: with the rest).
 		void setGrassDelay(uint32_t ms) { m_grassDelayMs = ms; }
@@ -110,9 +118,10 @@ namespace graal3d
 		// = skip): a 3D client asking for one is answered as if the server did
 		// not have it, which it survives.
 		[[nodiscard]] const std::set<std::string>& refusedFiles() const { return m_refusedFiles; }
-		// Sent to every 3D-capable client at TCP login (graal3dpushgrass): the
-		// grass textures, so they are cached before the 3D mission loads.
-		[[nodiscard]] const std::vector<std::string>* loginFiles() const { return m_pushGrassTextures && !m_grassTextures.empty() ? &m_grassTextures : nullptr; }
+		// Sent to every 3D-capable client at TCP login, so they are cached
+		// before the 3D mission loads: the grass textures (graal3dpushgrass)
+		// and, with graal3dpushterrain, heights.info and its textures.
+		[[nodiscard]] const std::vector<std::string>* loginFiles() const { return m_loginFiles.empty() ? nullptr : &m_loginFiles; }
 		[[nodiscard]] uint16_t port() const { return m_port; }
 
 		// Reads waiting datagrams and runs every connection. Called each server frame.
@@ -212,6 +221,7 @@ namespace graal3d
 		World m_world;
 		ShapeCheck m_shapeCheck = ShapeCheck::Skip;
 		void checkWorldFiles();
+		void rebuildLoginFiles();
 		bool m_packetStrings = true;
 		bool m_sharp3d = false;
 		std::map<PlayerID, GhostObject> m_avatars;
@@ -233,6 +243,7 @@ namespace graal3d
 		static bool isGrass(const GhostObject& o) { return o.rawClass == "DynamicGrass" || o.rawClass == "DynamicGrassReplicator"; }
 		std::vector<std::string> m_grassTextures; // replicator textures found and not refused at start-up
 		std::set<std::string> m_grassPushedTo;   // accounts already sent m_grassTextures (graal3dpushgrass)
+		std::vector<std::string> m_loginFiles;   // sent at every 3D-capable client's TCP login
 		[[nodiscard]] bool offers(const Capabilities* caps, const GhostObject& object, int protocol) const;
 		[[nodiscard]] bool takesTerrain(const Capabilities* caps, int protocol) const;
 		void trace(std::string_view account, int protocol, std::string_view what);
