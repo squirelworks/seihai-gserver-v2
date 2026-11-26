@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-07, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-18, 2026-11-19, 2026-11-22, 2026-11-25: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-10-31, 2026-11-06, 2026-11-07, 2026-11-12, 2026-11-13, 2026-11-16, 2026-11-18, 2026-11-19, 2026-11-22, 2026-11-25, 2026-11-26: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -540,6 +540,13 @@ bool PlayerClient::sendLogin()
 			if (preagonal::clientLoadsGpak(m_versionId, preagonal::gpakKind(name)) && preagonal::gpakKind(name) != preagonal::GpakKind::None)
 				sendFile(std::filesystem::path{std::string{name}});
 		}
+
+		// Seihai: files an add-on's client side needs cached before it starts
+		// (5.12 builds its grass once at mission load from textures it never
+		// asks for, lab 2026-11-26).
+		if (const auto needs = addonNeeds(); needs.loginFiles != nullptr)
+			for (const auto& name : *needs.loginFiles)
+				sendFile(std::filesystem::path{name});
 
 		// Send out RPG Window greeting.
 		if (m_versionId >= CLVER_2_1)

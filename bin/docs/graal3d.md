@@ -334,8 +334,13 @@ right after the 3D link, once per account per server run, unless the start-up ch
 refused it (`graal3dpushgrass = false` turns this off). On a real 5.12 (lab, 2026-11-26)
 the push arrived at link time ("File download: lp_white.png done") and filled the cache,
 but grass still did not draw on that first visit, only on later ones. The lab switch
-`graal3dgrassdelay` holds the grass ghosts back so the texture lands first; whether that
-makes grass draw on a first visit is not yet tested. Every name on the line must be
+`graal3dgrassdelay` held the grass ghosts back 0, 3 and 10 s: the first frame was the
+same each time (lab, 2026-11-26), so 5.12 seems to build its grass once, at mission
+load. The textures therefore also go to every 3D-capable client at its TCP login, after
+the `gpaks` packages, before the 3D mission starts; whether that draws grass on a first
+visit is not yet tested. Only native `replicator` lines are pushed: a `rawobject`
+grass line names its texture in raw fields the server does not read. Cover grew only
+around the spawn in that run, not where the control object later moved. Every name on the line must be
 a bare file name: one with `/`, `\`, `:` or `..` fails the line, since the client
 stores a file under the name it is sent. 4.20r8 takes the ghost
 without a crash but grows no cover, under GDI or Mesa, even with the camera pitched

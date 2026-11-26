@@ -128,6 +128,7 @@ namespace graal3d
 		// stores what it gets under that name.
 		needs.bareNameExtensions = kImageExtensions;
 		needs.refusedFiles = &m_service->refusedFiles();
+		needs.loginFiles = m_service->loginFiles();
 		return needs;
 	}
 

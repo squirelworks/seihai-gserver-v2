@@ -1,4 +1,4 @@
-// Seihai project, 2026-11-25: see CHANGES-SEIHAI.md.
+// Seihai project, 2026-11-25, 2026-11-26: see CHANGES-SEIHAI.md.
 // The Graal 3D side as an add-on: off unless `graal3d = true`, and then the core
 // hooks give the 3.151 to 5.x clients what they need and list the server at HQ 4.
 #include "catch2/catch_all.hpp"
@@ -54,6 +54,7 @@ TEST_CASE("the Graal 3D add-on runs only with graal3d = true", "[graal3d][addons
 			CHECK(needs.answerMissingChecksumFiles);
 			CHECK(needs.alwaysServerListConnected);
 			CHECK_FALSE(needs.bareNameExtensions.empty());
+			CHECK(needs.loginFiles == nullptr); // no grass in this world
 		}
 		for (const int v : {CLVER_2_31, CLVER_6_015, CLVER_6_037})
 		{
@@ -62,6 +63,7 @@ TEST_CASE("the Graal 3D add-on runs only with graal3d = true", "[graal3d][addons
 			CHECK_FALSE(needs.answerMissingChecksumFiles);
 			CHECK_FALSE(needs.alwaysServerListConnected);
 			CHECK(needs.bareNameExtensions.empty());
+			CHECK(needs.loginFiles == nullptr);
 		}
 
 		server->getAddons().clear();

@@ -14,6 +14,7 @@
 #include <string>
 #include <span>
 #include <string_view>
+#include <vector>
 
 #include <CString.h>
 
@@ -44,6 +45,10 @@ namespace preagonal
 		/// server did not have them: files the add-on found would crash it.
 		const std::set<std::string>* refusedFiles = nullptr;
 
+		/// Files sent to the client unasked at login, after the gpaks option's
+		/// packages: files its add-on side reads from its cache but never asks for.
+		const std::vector<std::string>* loginFiles = nullptr;
+
 		AddonClientNeeds& operator|=(const AddonClientNeeds& o)
 		{
 			answerMissingChecksumFiles |= o.answerMissingChecksumFiles;
@@ -52,6 +57,8 @@ namespace preagonal
 				bareNameExtensions = o.bareNameExtensions;
 			if (refusedFiles == nullptr)
 				refusedFiles = o.refusedFiles;
+			if (loginFiles == nullptr)
+				loginFiles = o.loginFiles;
 			return *this;
 		}
 	};
