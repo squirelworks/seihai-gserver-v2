@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-19, 2026-11-25, 2026-11-26: see CHANGES-SEIHAI.md.
 // New file: the gserver's Graal 3D side. A Graal 3D server is two servers on one
 // host: this gserver on TCP port P, and a Torque UDP server on port P + 1, which the
 // 3.153 to 5.x clients open when the server's listed name starts with "3 ". This
@@ -98,6 +98,10 @@ namespace graal3d
 		// textures go to the client over TCP unasked (5.12 fetches the textures
 		// only on its second visit, so a first visit drew the terrain white).
 		void setPushTerrainFiles(bool on) { m_pushTerrainFiles = on; }
+		// graal3dpushgrass (default true): right after a 3D link, the textures
+		// the grass replicator lines name go to the client over TCP unasked,
+		// once per account (5.12 never fetches them itself).
+		void setPushGrassTextures(bool on) { m_pushGrassTextures = on; }
 
 		// Files the start-up check found would crash a client (graal3dshapecheck
 		// = skip): a 3D client asking for one is answered as if the server did
@@ -216,6 +220,9 @@ namespace graal3d
 		std::vector<std::string> m_terrainFiles; // heights.info, then its textures, as found at start-up
 		std::set<std::string> m_refusedFiles;   // lower-cased file names the start-up check found would crash a client
 		std::set<std::string> m_terrainPushedTo; // accounts already sent m_terrainFiles (graal3dpushterrain)
+		bool m_pushGrassTextures = true;
+		std::vector<std::string> m_grassTextures; // replicator textures found and not refused at start-up
+		std::set<std::string> m_grassPushedTo;   // accounts already sent m_grassTextures (graal3dpushgrass)
 		[[nodiscard]] bool offers(const Capabilities* caps, const GhostObject& object, int protocol) const;
 		[[nodiscard]] bool takesTerrain(const Capabilities* caps, int protocol) const;
 		void trace(std::string_view account, int protocol, std::string_view what);
