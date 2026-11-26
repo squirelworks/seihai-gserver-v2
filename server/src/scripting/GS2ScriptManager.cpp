@@ -1,3 +1,5 @@
+// Modified by the Seihai project, 2026-11-26: see CHANGES-SEIHAI.md.
+#include <atomic>
 #include <cstdint>
 #include <future>
 #include <queue>
@@ -38,7 +40,7 @@ std::future<CompilerResponse> GS2ScriptManager::queueCompileJob(const std::strin
 
 	if constexpr (THREADPOOL_WORKERS == 0)
 	{
-		auto response = _context.compile(script);
+		auto response = _context.compile(script, nextCompileNumber());
 
 		if (finishedCb)
 			finishedCb(response);
@@ -48,10 +50,11 @@ std::future<CompilerResponse> GS2ScriptManager::queueCompileJob(const std::strin
 	}
 
 	// Worker job
-	auto threadFunction = [&promise, script, finishedCb, this](CompiledWithCallbackThreadJob::thread_context& context, CompiledWithCallbackThreadJob::promise_type& badPromise)
+	auto compileNumber = nextCompileNumber();
+	auto threadFunction = [&promise, script, finishedCb, compileNumber, this](CompiledWithCallbackThreadJob::thread_context& context, CompiledWithCallbackThreadJob::promise_type& badPromise)
 	{
 		// Compile code
-		auto result = context.gs2context.compile(script);
+		auto result = context.gs2context.compile(script, compileNumber);
 
 		// Call the user-defined callback after we insert the bytecode into the cache
 		auto completedFunc = [&promise, &finishedCb](CompilerResponse& response)
@@ -70,6 +73,12 @@ std::future<CompilerResponse> GS2ScriptManager::queueCompileJob(const std::strin
 	// Don't use the future returned by the compiler because it is bad and horrible.
 	m_compilerThreadPool.queue(CompiledWithCallbackThreadJob{ std::move(threadFunction) });
 	return promise.get_future();
+}
+
+uint32_t GS2ScriptManager::nextCompileNumber()
+{
+	static std::atomic<uint32_t> count{ 1 };
+	return count.fetch_add(1, std::memory_order_relaxed);
 }
 
 void GS2ScriptManager::runQueue()

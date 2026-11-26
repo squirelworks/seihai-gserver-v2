@@ -1,4 +1,4 @@
-# Modified by the Seihai project, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-18, 2026-11-19, 2026-11-20, 2026-11-25: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-18, 2026-11-19, 2026-11-20, 2026-11-25, 2026-11-26: see CHANGES-SEIHAI.md.
 #
 #  server/src/CMakeLists.txt
 #
@@ -273,6 +273,9 @@ FetchContent_Declare(gs2parser
 	GIT_REPOSITORY https://github.com/xtjoeytx/gs2-parser.git
 	GIT_SHALLOW    OFF
 	GIT_TAG        73e7ea8d6ed88112967547c5e6941bfa035fec6c		# main 2026-07-02
+	# Seihai: a compile can name its lambdas function_<id>_<n> with the
+	# server's compile count, as the official server does (CHANGES-SEIHAI.md).
+	PATCH_COMMAND  ${CMAKE_COMMAND} -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/patches/gs2-parser-lambda-id.patch -P ${CMAKE_CURRENT_SOURCE_DIR}/patches/apply_patch.cmake
 )
 FetchContent_MakeAvailable(gs2parser)
 target_link_libraries(${TARGET_NAME} PUBLIC gs2parser::gs2compiler)

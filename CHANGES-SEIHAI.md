@@ -1,4 +1,4 @@
-<!-- Modified by the Seihai project, 2026-11-25: see change entries below. -->
+<!-- Modified by the Seihai project, 2026-11-25, 2026-11-26: see change entries below. -->
 # Seihai changes to GServer-v2
 
 This is the Seihai fork of [GServer-v2](https://github.com/xtjoeytx/GServer-v2),
@@ -9,6 +9,12 @@ are credited in `README.md`.
 Validation is recorded per change below. Historical lab entries include real Graal
 clients and the [Seihai](https://github.com/squirelworks/seihai) client; a regression test does not imply a client run.
 Each file we changed carries a one-line notice at its top.
+
+## 2026-11-26
+
+| Change | Files | Validation |
+|---|---|---|
+| GS2 lambdas are numbered from the server's compile count. The official server names a script's lambdas `function_<count>_<n>`, where `count` is its running number of compiles (the same for every lambda of one compile; the same script captured twice got two numbers) and `n` counts them in source order (Graal_analysis `npc-library/gs2-official-emit-spec-2026-11-26.md`, "Lambda names"). gs2-parser named them `function_<100+n>_1`, starting again at 100 in every script, so two scripts gave two lambdas the same name. A small patch to the pinned gs2-parser (`server/patches/gs2-parser-lambda-id.patch`, applied by FetchContent's `PATCH_COMMAND`) adds `GS2Context::compile(script, lambdaId)`, which names them `function_<lambdaId>_<n>`; `compile(script)` is unchanged. `GS2ScriptManager` keeps a process-wide count from 1 (`nextCompileNumber`) and passes it to every compile. The GS1-to-GS2 path is unchanged (GS1 has no lambdas). | `server/CMakeLists.txt`, `server/patches/gs2-parser-lambda-id.patch` (new), `server/patches/apply_patch.cmake` (new), `server/include/scripting/GS2ScriptManager.h`, `server/src/scripting/GS2ScriptManager.cpp`, `Catch_tests/Scripting/GS2ScriptManager_tests.cpp` (new), `CHANGES-SEIHAI.md` | New `Scripting` Catch test: two lambdas of one compile share a number and are `_1` and `_2`; the next compile takes a later number. Checked locally against gs2-parser `73e7ea8` with the patch (GCC 13); full suite in CI. No real client run. |
 
 ## 2026-11-25
 

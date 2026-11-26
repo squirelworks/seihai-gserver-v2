@@ -1,3 +1,4 @@
+// Modified by the Seihai project, 2026-11-26: see CHANGES-SEIHAI.md.
 #ifndef GS2SCRIPTMANAGER_H
 #define GS2SCRIPTMANAGER_H
 
@@ -80,6 +81,12 @@ public:
 
 	std::future<CompilerResponse> compileScript(const std::string& script, user_callback_type finishedCb = {});
 	void runQueue();
+
+	// Seihai: the number for the next GS2 compile. The official server names
+	// a script's lambdas function_<count>_<n> with its running count of
+	// compiles, so two scripts never share a lambda name. Counts from 1 and
+	// is shared by every manager in the process.
+	static uint32_t nextCompileNumber();
 
 private:
 	std::future<CompilerResponse> queueCompileJob(const std::string& script, user_callback_type& finishedCb);
