@@ -94,9 +94,10 @@ namespace graal3d
 		// Lab: graal3dterrainall = true sends the 5.x TerrainBlock, WaterBlock and
 		// chunks to every GameObject-era client, whatever its capability row says.
 		void setTerrainForAll(bool on) { m_terrainForAll = on; }
-		// graal3dpushterrain = true: right after a 3D link, heights.info and its
-		// textures go to the client over TCP unasked (5.12 fetches the textures
-		// only on its second visit, so a first visit drew the terrain white).
+		// graal3dpushterrain (default true): at TCP login and right after a 3D
+		// link, heights.info and its textures go to the client over TCP unasked
+		// (5.12 fetches the textures only on its second visit, so a first visit
+		// drew the terrain white; sent at login it drew textured, lab 2026-11-26).
 		void setPushTerrainFiles(bool on)
 		{
 			m_pushTerrainFiles = on;
@@ -234,7 +235,7 @@ namespace graal3d
 		Mutation m_mutation = Mutation::None;
 		uint32_t m_mutationSeed = 1;
 		bool m_terrainForAll = false;
-		bool m_pushTerrainFiles = false;
+		bool m_pushTerrainFiles = true;
 		std::vector<std::string> m_terrainFiles; // heights.info, then its textures, as found at start-up
 		std::set<std::string> m_refusedFiles;   // lower-cased file names the start-up check found would crash a client
 		std::set<std::string> m_terrainPushedTo; // accounts already sent m_terrainFiles (graal3dpushterrain)

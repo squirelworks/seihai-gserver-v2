@@ -453,11 +453,11 @@ client whose class table has its class: 4.20r6 and 5.x list `TerrainBlock` and
 the other ghosts, after the datablocks. Nothing here has been run with a real
 client yet; the 2026-11-25 terrain lab is the first user.
 
-## Lab: terrain switches
+## Terrain switches
 
 ```
-graal3dterrainall = true    # the 5.x TerrainBlock, WaterBlock and chunks to every 4.20r6 and 5.x client
-graal3dpushterrain = true   # heights.info and its textures over TCP right after the 3D link
+graal3dterrainall = true    # lab: the 5.x TerrainBlock, WaterBlock and chunks to every 4.20r6 and 5.x client
+graal3dpushterrain = false  # stop sending heights.info and its textures at login and on link (on by default)
 graal3dpushgrass = false    # stop sending grass replicator textures on link (on by default)
 graal3dgrassdelay = 3000    # lab: ghost grass replicators this many ms after the rest of the world (0 to 60000)
 ```
@@ -466,12 +466,15 @@ graal3dgrassdelay = 3000    # lab: ghost grass replicators this many ms after th
 builds such as 4.20r8, so a lab can see what those builds do with it. Real
 players' servers leave it off.
 
-`graal3dpushterrain` answers 5.12's first visit, which fetches only `heights.info`
-and draws the terrain white; its textures come on the next visit. With it on, the
+`graal3dpushterrain` (on by default since 2026-11-26) answers 5.12's first visit,
+which fetches only `heights.info` and draws the terrain white; its textures come on
+the next visit. With it on, the
 server sends `heights.info` and every texture it lists (as found at start-up) to the
 client unasked at its TCP login, before the 3D mission loads (the timing that made
 first-visit grass draw), and again when its 3D link opens, once per account per server
-run. A build
+run. On a real 5.12 with an empty cache (lab, 2026-11-26, Mesa) the terrain was then
+textured on the very first frame, with `heights.info` and all four textures logged
+before `MissionStartPhase1`; with it off, the first frame was white. A build
 whose row has `terrainTextures` false (4.20r8, which never fetches them) gets no
 push. On a real
 5.12 (lab, 2026-11-25) the first visit then had `heights.info` and all four
