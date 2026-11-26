@@ -62,6 +62,8 @@ namespace graal3d
 		// graal3dterrainall, graal3dpushterrain: lab switches for streamed terrain (see bin/docs/graal3d.md).
 		m_service->setTerrainForAll(settings.get<bool>("graal3dterrainall").value_or(false));
 		m_service->setPushTerrainFiles(settings.get<bool>("graal3dpushterrain").value_or(false));
+		// graal3dpushgrass = false stops the grass-texture push (see bin/docs/graal3d.md).
+		m_service->setPushGrassTextures(settings.get<bool>("graal3dpushgrass").value_or(true));
 		m_service->setWorld(std::move(world), settings.get<bool>("graal3dstringprefix").value_or(true));
 		// graal3droute = sharp3d: the route of a server real 5.12 joined (see bin/docs/graal3d.md).
 		const auto route = settings.get<std::string>("graal3droute").value_or("mission"s);
