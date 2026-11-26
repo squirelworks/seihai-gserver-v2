@@ -335,11 +335,12 @@ refused it (`graal3dpushgrass = false` turns this off). Every name on the line m
 a bare file name: one with `/`, `\`, `:` or `..` fails the line, since the client
 stores a file under the name it is sent. 4.20r8 takes the ghost
 without a crash but grows no cover, under GDI or Mesa, even with the camera pitched
-down over the cells, so it gets no grass push. The layout is from a static read of the real 5.12 client
+down over the cells (lab, Graal_analysis PR #951), so its row has `groundCover` false
+and it gets no replicator and no grass push. The layout is from a static read of the real 5.12 client
 (Graal_analysis `torque/replicators-512.md`) and has not been seen live yet. The other
 fields are fixed: any rotation about z, terrain only, slopes up to 90 degrees,
 no alignment, shown. Only clients that take streamed
-terrain get it.
+terrain and grow ground cover (`groundCover`) get it.
 
 ## Terrain (4.20r6 and 5.x)
 
