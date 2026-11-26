@@ -331,7 +331,9 @@ not all `.3ds`/`.dts`; a nearly transparent texture showed nothing under GDI. 5.
 never asks the server for a grass texture, so it must already have it (lab, Mesa,
 2026-11-26): the server sends every grass texture the replicator lines name over TCP
 right after the 3D link, once per account per server run, unless the start-up check
-refused it (`graal3dpushgrass = false` turns this off). 4.20r8 takes the ghost
+refused it (`graal3dpushgrass = false` turns this off). Every name on the line must be
+a bare file name: one with `/`, `\`, `:` or `..` fails the line, since the client
+stores a file under the name it is sent. 4.20r8 takes the ghost
 without a crash but grows no cover, under GDI or Mesa, even with the camera pitched
 down over the cells, so it gets no grass push. The layout is from a static read of the real 5.12 client
 (Graal_analysis `torque/replicators-512.md`) and has not been seen live yet. The other
@@ -474,7 +476,9 @@ ran fine 80 units above the ground (Graal_analysis PR #951), so its row now gets
 terrain, and only a client on software GL (GDI Generic OpenGL 1.1) still needs a
 high spawn.
 
-The push sends each texture name once, however often `heights.info` lists it, and
+The push sends each texture name once, however often `heights.info` lists it, never a
+`heights.info` line with `/`, `\`, `:` or `..` in it (the client stores a pushed file under
+the name it is sent, so only bare file names go out), and
 never a texture the start-up check found unsafe (a PNG header of 30000x30000 or
 65536x1 crashed 5.12). `heights.info` takes one texture name per line: 5.12 asks for a
 whole line as one file name, so the server warns about a line with spaces or commas.

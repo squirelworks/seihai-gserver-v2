@@ -708,6 +708,12 @@ namespace graal3d
 				ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
 			m_refusedFiles.insert(std::move(name));
 		};
+		// A name the server pushes unasked must be a bare file name: the client
+		// stores what it gets under the name it is sent, so a folder part or
+		// ".." would be written wherever the client resolves it.
+		const auto hasPath = [](std::string_view name) {
+			return name.find_first_of("/\\:") != std::string_view::npos || name.find("..") != std::string_view::npos;
+		};
 		const auto find = [&](const std::string& name) -> preagonal::fs::FileData* {
 			const std::filesystem::path path{name};
 			auto info = files.infoi(preagonal::fs::FileCategory::ALL, path.filename());
@@ -851,6 +857,11 @@ namespace graal3d
 		// many times over, so a bad one is as dangerous as a world object's.
 		for (const auto& shape : m_world.replicatorShapes)
 		{
+			if (hasPath(shape))
+			{
+				log::printLine(log::server, "** [Error] Graal3D: the replicator file {} is not a bare file name; it is not checked or pushed.", shape);
+				continue;
+			}
 			const auto info = find(shape);
 			if (info == nullptr)
 			{
@@ -928,6 +939,11 @@ namespace graal3d
 					// push it once (1000 repeats made the push about 60 MB).
 					if (std::ranges::find(m_terrainFiles, line) != m_terrainFiles.end())
 						continue;
+					if (hasPath(line))
+					{
+						log::printLine(log::server, "** [Error] Graal3D: heights.info line \"{}\" is not a bare file name; it is not pushed.", line);
+						continue;
+					}
 					if (const auto texture = find(line); texture == nullptr)
 					{
 						++missing;

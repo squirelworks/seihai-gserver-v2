@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-20, 2026-11-25: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-20, 2026-11-25, 2026-11-26: see CHANGES-SEIHAI.md.
 // New file: GameObject and Sun updates for the Graal 3D world, and the lab's raw
 // objects and events. See Graal3DObjects.h.
 
@@ -890,7 +890,9 @@ namespace graal3d
 						ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
 					const bool isShape = ext == ".3ds" || ext == ".dts";
 					const bool isImage = ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp";
-					ok = ok && (wantShape ? isShape : isImage);
+					// A bare file name: the client looks it up and stores it by name.
+					const bool bare = name.find_first_of("/\\:") == std::string::npos && name.find("..") == std::string::npos;
+					ok = ok && bare && (wantShape ? isShape : isImage);
 				}
 				ok = ok && !names.empty();
 				if (ok)
