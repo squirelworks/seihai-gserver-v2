@@ -340,7 +340,8 @@ load. The textures therefore also go to every 3D-capable client at its TCP login
 the `gpaks` packages, before the 3D mission starts; whether that draws grass on a first
 visit is not yet tested. Only native `replicator` lines are pushed: a `rawobject`
 grass line names its texture in raw fields the server does not read. Cover grew only
-around the spawn in that run, not where the control object later moved. Every name on the line must be
+around the spawn in that run because only the camera moved: 5.12 re-centres the grid
+on the control object every tick (static read, Graal_analysis `torque/replicators-512.md`). Every name on the line must be
 a bare file name: one with `/`, `\`, `:` or `..` fails the line, since the client
 stores a file under the name it is sent. 4.20r8 takes the ghost
 without a crash but grows no cover, under GDI or Mesa, even with the camera pitched
