@@ -88,8 +88,14 @@ TEST_CASE("the Graal 3D add-on runs only with graal3d = true", "[graal3d][addons
 			send(std::string(1, '\x1a'));                    // a connect request with nothing after its type
 			send(std::string("\x1a\xff\xff\xff\xff", 5)); // a connect request cut short
 			send(std::string(1400, '\xff'));                  // an odd type from an address with no link
+			// In batches the server reads between, so the kernel's receive
+			// buffer never overflows (it did on a CI runner: 83 of 303 lost).
 			for (int i = 0; i < 300; ++i)
+			{
 				send(std::string(1, static_cast<char>((i * 2) & 0xfe)) + std::string(static_cast<size_t>(i % 64), static_cast<char>(i)));
+				if (i % 20 == 19)
+					addon->service().update();
+			}
 			for (int i = 0; i < 4; ++i)
 				addon->service().update();
 			close(s);
