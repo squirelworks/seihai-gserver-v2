@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-20, 2026-11-25: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-20, 2026-11-25, 2026-11-26: see CHANGES-SEIHAI.md.
 // New file: tests for the Graal 3D (Torque) UDP side. The client bytes are from the
 // 2026-10-30 Wine lab, where the real 5.12 client joined a test 3D server
 // (Graal_analysis torque/network.md, "The full handshake, live").
@@ -1269,9 +1269,12 @@ SCENARIO("A replicator line ghosts ground cover in the 5.12 layout")
 								  "replicator DynamicGrass 0 0 0 4 1 3 grass.dts\n"
 								  "replicator DynamicShapeReplicator 0 0 0 4 1 3 a.png\n"
 								  "replicator DynamicShapeReplicator 0 0 0 4 1 3 a.3ds,noext\n"
-								  "replicator DynamicShapeReplicator 0 0 0 4 1 3 ,\n");
+								  "replicator DynamicShapeReplicator 0 0 0 4 1 3 ,\n"
+								  "replicator DynamicGrass 0 0 0 4 1 3 ../grass.png\n"
+								  "replicator DynamicGrass 0 0 0 4 1 3 sub/grass.png\n"
+								  "replicator DynamicShapeReplicator 0 0 0 4 1 3 a.3ds,c:\\\\b.3ds\n");
 	REQUIRE(kinds.objects.size() == 1);
-	REQUIRE(kinds.errors.size() == 4);
+	REQUIRE(kinds.errors.size() == 7);
 	REQUIRE(kinds.replicatorShapes == std::vector<std::string>{"GRASS.PNG", "b.jpg"});
 	const auto& object = world.objects[0];
 	REQUIRE(object.className() == "DynamicGrass");
