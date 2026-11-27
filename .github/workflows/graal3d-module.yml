@@ -27,6 +27,11 @@ on:
         description: 'Module version to draft (must match addons/graal3d/VERSION). Leave empty to build only.'
         required: false
         default: ''
+      publish:
+        description: 'Publish the release (and make its tag) once the files are attached, instead of leaving a draft.'
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -156,3 +161,13 @@ jobs:
             gh release create "$TAG" dist/* --draft --target "$GITHUB_SHA" --title "seihai-graal3d $v" --notes-file "$NOTES"
           fi
           echo "Draft: $(gh release view "$TAG" --json url -q .url)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish the release
+        if: ${{ inputs.publish }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=graal3d-v$(head -n1 addons/graal3d/VERSION)
+          if [ "$(gh release view "$TAG" --json isDraft -q .isDraft)" = true ]; then
+            gh release edit "$TAG" --draft=false --latest=false
+          fi
+          echo "Published: $(gh release view "$TAG" --json url -q .url)" >> "$GITHUB_STEP_SUMMARY"
