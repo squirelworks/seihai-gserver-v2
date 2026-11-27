@@ -102,7 +102,8 @@ namespace graal3d
 							   const ScopeOptions& opts, size_t budget)
 	{
 		ScopePlan out;
-		std::vector<std::pair<float, size_t>> near;
+		// Not `near`: <windows.h> defines near and far as empty macros (MSVC C2059).
+		std::vector<std::pair<float, size_t>> inRange;
 		size_t kept = 0;
 		for (const auto& o : objects)
 		{
@@ -115,12 +116,12 @@ namespace graal3d
 					++kept;
 			}
 			else if (d <= opts.radius)
-				near.emplace_back(d, o.index);
+				inRange.emplace_back(d, o.index);
 		}
-		std::sort(near.begin(), near.end());
+		std::sort(inRange.begin(), inRange.end());
 		const size_t room = budget > kept ? budget - kept : 0;
-		for (size_t i = 0; i < near.size() && i < room; ++i)
-			out.add.push_back(near[i].second);
+		for (size_t i = 0; i < inRange.size() && i < room; ++i)
+			out.add.push_back(inRange[i].second);
 		return out;
 	}
 
