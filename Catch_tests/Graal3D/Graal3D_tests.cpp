@@ -228,13 +228,19 @@ namespace
 		std::vector<ClientState> states;
 		std::vector<std::string> logs;
 		std::vector<std::array<uint32_t, 256>> terrainRequests;
+		// Chunks (x, y) the "service" posts in answer to a terrain request.
+		std::vector<std::pair<uint32_t, uint32_t>> chunkAnswer;
 		Connection conn{profile, 0x400, now, Connection::Callbacks{
 												  [this](std::string_view d) { sent.emplace_back(d); },
 												  [this](const TextMessage& m) { texts.push_back(m); },
 												  [this](std::string_view l) { logs.emplace_back(l); },
 												  [this](MissionState s) { mission.push_back(s); },
 												  [this](const ClientState& c) { states.push_back(c); },
-												  [this](const std::array<uint32_t, 256>& s) { terrainRequests.push_back(s); },
+												  [this](const std::array<uint32_t, 256>& s) {
+													  terrainRequests.push_back(s);
+													  for (const auto& [x, y] : chunkAnswer)
+														  conn.postTerrainChunk(x, y, 7, std::string("\x78\x9c\x03\x00\x00\x00\x00\x01", 8));
+												  },
 											  }};
 
 		void tick(uint64_t ms)
@@ -741,25 +747,29 @@ SCENARIO("Ghosting a world and handing the client its control object")
 	REQUIRE(readServerPacket(h.sent[0]).ghosts.empty());
 	h.phase1Ack();
 	REQUIRE(h.sent.size() == 2);
-	REQUIRE(h.mission.back() == MissionState::Phase2Sent);
+	// Phase 2 waits until the client has the Sun, which lights the mission
+	// (T3D-162).
+	REQUIRE(h.mission.back() == MissionState::Phase1Sent);
 	const auto first = readServerPacket(h.sent[1]);
 	REQUIRE(first.header.sequence == 2);
 
-	THEN("the first packet creates every ghost, with its class id and a full update")
+	THEN("the first packet creates every ghost, the client's own object first, then the Sun")
 	{
 		REQUIRE_FALSE(first.control); // not before the client has the ghost
 		REQUIRE(first.ghosts.size() == 3);
 		REQUIRE(first.ghostIdBits == 2); // highest index 2
-		REQUIRE(first.ghosts[0].index == 0);
+		REQUIRE(first.ghosts[0].index == 2);
 		REQUIRE(first.ghosts[0].classId == *objectClassId(profile, "GameObject"));
 		REQUIRE(first.ghosts[1].classId == *objectClassId(profile, "Sun"));
+		REQUIRE(first.ghosts[2].index == 0);
+		REQUIRE(first.ghosts[2].classId == *objectClassId(profile, "GameObject"));
 
-		PayloadReader p(first.ghosts[2].payload);
+		PayloadReader p(first.ghosts[0].payload);
 		GameObjectState got;
 		std::string moveType;
 		readGameObjectUpdate(p.r, got, moveType);
 		REQUIRE(got == me.object);
-		REQUIRE(p.r.bitPosition() == first.ghosts[2].bits);
+		REQUIRE(p.r.bitPosition() == first.ghosts[0].bits);
 
 		PayloadReader ps(first.ghosts[1].payload);
 		REQUIRE(readSunUpdate(ps.r) == sun.sun);
@@ -772,8 +782,9 @@ SCENARIO("Ghosting a world and handing the client its control object")
 		h.tick(60);
 		h.tick(1000);
 
-		THEN("the ghosts are in, and the control object waits")
+		THEN("the ghosts are in, phase 2 goes out, and the control object waits")
 		{
+			REQUIRE(h.mission.back() == MissionState::Phase2Sent);
 			REQUIRE(h.conn.ghostDelivered(3));
 			REQUIRE_FALSE(h.sent.empty());
 			for (const auto& data : h.sent)
@@ -785,10 +796,14 @@ SCENARIO("Ghosting a world and handing the client its control object")
 	{
 		REQUIRE_FALSE(first.control); // MissionStartPhase2 would undo login step 5
 
+		h.conn.receive(clientDataPacket(profile, 3, 2, 3, {}, 0), h.now);
+		h.tick(60);
+		REQUIRE(h.mission.back() == MissionState::Phase2Sent);
+
 		std::vector<OutEvent> phase2Ack;
 		phase2Ack.push_back({"RemoteCommandEvent", remoteCommandEvent({CommandArg{false, 0, "MissionStartPhase2Ack"}})});
 		h.sent.clear();
-		h.conn.receive(clientDataPacket(profile, 3, 2, 3, phase2Ack, 1), h.now);
+		h.conn.receive(clientDataPacket(profile, 4, 3, 7, phase2Ack, 1), h.now);
 		h.tick(60);
 
 		THEN("the control object follows the mission start, as 13 empty sections")
@@ -797,7 +812,7 @@ SCENARIO("Ghosting a world and handing the client its control object")
 			REQUIRE(h.conn.ghostDelivered(3));
 			REQUIRE_FALSE(h.sent.empty());
 			const auto pkt = readServerPacket(h.sent.back());
-			REQUIRE(pkt.header.sequence == 3);
+			REQUIRE(pkt.header.sequence == 4);
 			REQUIRE(pkt.control);
 			REQUIRE(pkt.controlIndex == *h.conn.ghostIndex(3));
 			REQUIRE(pkt.controlMask == 0);
@@ -806,7 +821,7 @@ SCENARIO("Ghosting a world and handing the client its control object")
 
 		AND_WHEN("that is acked and the client reports a move and a chat on its object")
 		{
-			h.conn.receive(clientDataPacket(profile, 4, 3, 7, {}, 0), h.now);
+			h.conn.receive(clientDataPacket(profile, 5, 4, 15, {}, 0), h.now);
 			REQUIRE(h.conn.controlObjectDelivered());
 
 			GameObjectState moved = me.object;
@@ -818,7 +833,7 @@ SCENARIO("Ghosting a world and handing the client its control object")
 			ClientControl control{{11.0f, 20.0f, 1.0f}, *h.conn.ghostIndex(3), &echo};
 			std::vector<OutEvent> evs;
 			evs.push_back({"RemoteCommandEvent", remoteCommandEvent({CommandArg{false, 0, "Hello"}})});
-			h.conn.receive(clientDataPacket(profile, 5, 3, 7, evs, 2, &control), h.now);
+			h.conn.receive(clientDataPacket(profile, 6, 4, 15, evs, 2, &control), h.now);
 
 			THEN("the server sees the new position and chat, and the events after them still read")
 			{
@@ -1495,6 +1510,85 @@ SCENARIO("Every event says its exact length")
 			}
 			REQUIRE(sawCommand);
 			REQUIRE(sawChunk);
+		}
+	}
+}
+
+namespace
+{
+	// The highest sequence the server has sent: a client packet acking it with
+	// mask 0xFF acks the last eight.
+	uint32_t lastServerSeq(const Harness& h) { return readServerPacket(h.sent.back()).header.sequence; }
+} // namespace
+
+SCENARIO("MissionStartPhase2 waits for the terrain and its chunks (T3D-162)")
+{
+	Harness h;
+	std::string error;
+	GhostObject terrain;
+	terrain.kind = GhostObject::Kind::Raw;
+	terrain.rawClass = "TerrainBlock";
+	terrain.raw = *parseRawFields({"f1", "str:lab.ter", "u32:256"}, error);
+	GhostObject me;
+	me.object.name = "G3DPlayer_guest";
+	me.object.shape = "player.dts";
+	h.conn.setGhost(1, terrain);
+	h.conn.setGhost(3, me);
+	h.conn.setControlObject(3);
+	h.chunkAnswer = {{0, 0}, {1, 0}};
+
+	h.conn.receive(kFirstData, h.now);
+	h.tick(60);
+	h.phase1Ack();
+	REQUIRE(h.mission.back() == MissionState::Phase1Sent);
+
+	// The client acks the creates: the TerrainBlock is in, but it has not asked
+	// for its chunks yet.
+	h.conn.receive(clientDataPacket(h.profile, 3, lastServerSeq(h), 0xFF, {}, 0), h.now);
+	h.tick(60);
+	h.tick(1000);
+	REQUIRE(h.conn.ghostDelivered(1));
+	REQUIRE(h.mission.back() == MissionState::Phase1Sent);
+
+	WHEN("the client asks for the terrain and the answer has chunks")
+	{
+		BitWriter payload;
+		for (int i = 0; i < 256; ++i)
+			payload.writeU32(0);
+		std::vector<OutEvent> events;
+		events.push_back(OutEvent{"TerrainRequestUpdatesEvent", std::move(payload)});
+		const auto acked = lastServerSeq(h);
+		h.sent.clear();
+		h.conn.receive(clientDataPacket(h.profile, 4, acked, 0xFF, events, 1), h.now);
+		h.tick(60);
+
+		THEN("phase 2 goes only once both chunks are acked")
+		{
+			REQUIRE(h.terrainRequests.size() == 1);
+			REQUIRE(h.mission.back() == MissionState::Phase1Sent);
+			REQUIRE(h.conn.unackedEvents() == 2); // the two chunks
+			h.conn.receive(clientDataPacket(h.profile, 5, lastServerSeq(h), 0xFF, {}, 0), h.now);
+			h.tick(60);
+			REQUIRE(h.mission.back() == MissionState::Phase2Sent);
+			REQUIRE(h.conn.unackedEvents() >= 1); // MissionStartPhase2 (and its string)
+			for (const auto& l : h.logs)
+				REQUIRE(l.find("phase 2 sent with") == std::string::npos);
+		}
+	}
+
+	WHEN("the client never asks for the terrain")
+	{
+		h.tick(Connection::Phase2HoldMs);
+		h.tick(60);
+
+		THEN("phase 2 goes after the hold, and the log says why the terrain may look wrong")
+		{
+			REQUIRE(h.mission.back() == MissionState::Phase2Sent);
+			bool logged = false;
+			for (const auto& l : h.logs)
+				if (l.find("phase 2 sent with no terrain request answered yet") != std::string::npos)
+					logged = true;
+			REQUIRE(logged);
 		}
 	}
 }

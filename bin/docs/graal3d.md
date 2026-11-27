@@ -202,7 +202,7 @@ own relay lines), then what happened. Leave the setting empty to turn the trace 
 | Who may connect | The first argument of the request is the account. It must be logged in over TCP, from the same IP address, with a 3.153 to 5.x client. A 5.x guest sends `guest`, while the gserver names guests `pc:<number>`, so `guest` matches the guest client logged in from that address. Until the TCP login is done the request is not answered (the client repeats it), and the log says once per address that no TCP client matched. |
 | Connect accept | done, with Graal's class-name table for that protocol. |
 | Keep-alive, acks, time-out (30 s) | done for every protocol. |
-| Mission start (`MissionStartPhase1`, `2`) | 5.x and 4.20r6. The client answers each phase and raises `onGraal3DLoginStep`. |
+| Mission start (`MissionStartPhase1`, `2`) | 5.x and 4.20r6. The client answers each phase and raises `onGraal3DLoginStep`. A 5.x client lights the mission when `MissionStartPhase2` arrives, from the TerrainBlock, WaterBlock, Sun and terrain chunks it has by then: a TerrainBlock created later draws with no slope shading all session, and chunks that come later are lit from the old heights, a hard-edged dark patch until relog (Graal_analysis T3D-162, `torque/terrain-512.md`). So phase 2 waits until the client has acked the create of each of those ghosts and, with a TerrainBlock, every `TerrainChunkEvent` the server sent in answer to its terrain request (an answer of no chunks counts). The wait is capped at 15 s; past that, phase 2 goes anyway and the log says what was missing (`phase 2 sent with ...`). Creates go out with the client's own Camera and control object first, then the lighting ghosts, then the rest, so a big world does not hold phase 2 up. Ported from seihai-gserver #223, which was checked on a real 5.12 with a cold and a warm terrain cache. |
 | Flags | sent at link time as one `events` text (`s name=value` lines), then every flag change as `set` / `unset`. |
 | From the client: `events` text | `s name=value` sets a flag or client variable (as `PLI_FLAGSET`), `w name` gives a weapon, `t weapon,name,params` runs a serverside triggeraction on that weapon. |
 | Ghosting (4.20r6, 5.x) | done. Objects are created, updated (only what changed) and deleted in the ghost section of each packet, and what a lost packet carried is sent again. `GameObject` (name, shape, skin, position and rotation, scale, chat, `attr[1..8]`, nickname and colour, the solid/shadow/collision flags) and `Sun`. |
@@ -387,7 +387,13 @@ an empty cache, grass drew on the very first frame (lab, 2026-11-26). Only nativ
 grass line names its texture in raw fields the server does not read. Cover grew only
 around the spawn in that run because only the camera moved: 5.12 re-centres the grid
 on the control object every tick (static read, Graal_analysis `torque/replicators-512.md`).
-Seen live (lab, 2026-11-26): with the avatar itself walking 1700 units across a
+Grass and radius (lab, 2026-11-26, still open): grass lines at radius 4 with 5 or 10
+a cell drew nothing on a real 5.12 while the same lines at radius 8 drew, but a
+conformance case at radius 4 with 40 to 60 a cell drew as much as radius 8
+(Graal_analysis `torque/conformance`, C035 to C037). So radius alone does not decide
+whether grass draws, and the cause is not pinned down yet. This server sends the radius
+as written; if a sparse grass line draws nothing, a larger radius or count is the first
+thing to try. Seen live (lab, 2026-11-26): with the avatar itself walking 1700 units across a
 2048-unit streamed terrain, at 10 and 40 units a second, a radius-8 `DynamicGrass`
 stayed centred on it the whole way. Cells came and went one at a time at the rim of
 the patch, the ground by the avatar was never bare, and neither side logged anything. Every name on the line must be
