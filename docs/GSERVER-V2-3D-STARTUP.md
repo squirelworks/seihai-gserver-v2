@@ -45,6 +45,13 @@ there, or install the Visual C++ 2015-2022 x64 redistributable.
 **macOS:** the builds are not signed, so clear the download flag once in each
 unpacked folder: `xattr -dr com.apple.quarantine .`
 
+**The module is optional.** The server needs no module to run: with no module in
+`addons/`, or with `graal3d = false` (the default in every shipped world), it starts
+and runs as a 2D server and looks for no module at all. Only `graal3d = true` makes it
+look for one; if none is found it logs one line saying so and runs on in 2D. A server
+release never needs a new module, and a module release never needs a new server, while
+both use the same add-on API (1 today).
+
 ## 1. Download and check
 
 Both releases name their checksum file `SHA256SUMS`, so keep each release's two
