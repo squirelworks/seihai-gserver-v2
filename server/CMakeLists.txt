@@ -415,6 +415,10 @@ if(GRAAL3D_MODULE)
 	if(WIN32)
 		set_target_properties(seihai-graal3d PROPERTIES PREFIX "")
 	endif()
+	# A CMake MODULE is "<name>.so" on macOS; the server looks for libseihai-graal3d.dylib.
+	if(APPLE)
+		set_target_properties(seihai-graal3d PROPERTIES SUFFIX ".dylib")
+	endif()
 	# Keep the module's own gs2lib and libstdc++ symbols to itself.
 	# (A sanitizer build leaves the sanitizer runtime to the program, so no --no-undefined there.)
 	if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
