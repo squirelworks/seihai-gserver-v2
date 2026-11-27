@@ -1,7 +1,7 @@
 # Seihai: build gs2emu for Linux, Windows and macOS. A tag push (v*), or a manual
 # run with a version, also makes a DRAFT GitHub release with the four archives and
 # the full source, as the GPL asks. The tag is made when the owner presses Publish.
-# Modified by the Seihai project, 2026-11-04, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-11-04, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-19, 2026-11-20, 2026-11-27: see CHANGES-SEIHAI.md.
 name: Seihai build and release
 
 on:
@@ -305,6 +305,7 @@ jobs:
           NOTES="docs/releases/$TAG.md"
           [ -f "$NOTES" ] || { echo "::error::No release notes: write $NOTES in a PR first"; exit 1; }
           git archive --format=tar.gz --prefix=seihai-gserver-v2-$TAG/ -o dist/seihai-gserver-v2-$TAG-source.tar.gz HEAD
+          (cd dist && rm -f SHA256SUMS && sha256sum -- * > SHA256SUMS && cat SHA256SUMS)
           if gh release view "$TAG" >/dev/null 2>&1; then
             if [ "$(gh release view "$TAG" --json isDraft -q .isDraft)" = true ]; then
               gh release upload "$TAG" dist/* --clobber
@@ -338,6 +339,14 @@ jobs:
           if ! ls dist/* > /dev/null 2>&1; then echo "No macOS archives were built."; exit 0; fi
           ls -l dist
           if [ "$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json isDraft -q .isDraft)" = true ]; then
+            # Add the macOS archives' lines to the draft's SHA256SUMS (a rerun replaces them).
+            mkdir -p sums
+            gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p SHA256SUMS -D sums || touch sums/SHA256SUMS
+            (cd dist && sha256sum -- *) > sums/mac
+            awk 'NR==FNR{n[$2]=1;next} !($2 in n)' sums/mac sums/SHA256SUMS > sums/new
+            cat sums/mac >> sums/new
+            sort -k2 sums/new > dist/SHA256SUMS
+            cat dist/SHA256SUMS
             gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber dist/*
           else
             echo "$TAG is already published; not adding files to it."
