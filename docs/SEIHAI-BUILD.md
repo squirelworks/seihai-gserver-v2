@@ -10,7 +10,7 @@ targets green.
 | Target | Runner | Compiler | Standard library | vcpkg triplet |
 |---|---|---|---|---|
 | Linux x86_64 | ubuntu-24.04 | GCC 14 | libstdc++ (has `<generator>`) | x64-linux |
-| Windows x86_64 | windows-latest | MSVC 14.51 (`/std:c++latest`) | MSVC STL (has `<generator>`) | x64-windows-static |
+| Windows x86_64 | windows-latest | MSVC 14.51 (`/std:c++latest`) | MSVC STL (has `<generator>`) | x64-windows-static-md (shared C++ runtime, bundled) |
 | macOS x86_64 | macos-15-intel | Homebrew LLVM | libc++ (no `std::generator`) | x64-osx |
 | macOS arm64 | macos-15-intel (cross-compiled, `CMAKE_OSX_ARCHITECTURES=arm64`) | Homebrew LLVM | libc++ (no `std::generator`) | arm64-osx |
 

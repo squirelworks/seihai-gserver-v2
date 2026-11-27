@@ -65,6 +65,9 @@ namespace preagonal
 	#if defined(_DEBUG)
 		s += "-debug"; // the debug CRT's containers have another layout
 	#endif
+	#if !defined(_DLL)
+		s += "-mt"; // its own static C++ runtime and heap: it cannot share objects with another module
+	#endif
 #else
 		s += "unknown-stdlib";
 #endif

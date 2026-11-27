@@ -366,6 +366,12 @@ FetchContent_Declare(gs2lib
 	GIT_TAG        2a05291243c38502ddd62a1ff7ca16a290a296ec
 )
 FetchContent_MakeAvailable(gs2lib)
+# Seihai, 2026-11-27: gs2lib sets the static C++ runtime (/MT) for itself; build it
+# with ours, which follows the vcpkg triplet (CMakeLists.txt), so a /MD server and
+# the /MD Graal 3D module link one runtime.
+if(MSVC)
+	set_target_properties(gs2lib PROPERTIES MSVC_RUNTIME_LIBRARY "${CMAKE_MSVC_RUNTIME_LIBRARY}")
+endif()
 add_dependencies(${TARGET_NAME} gs2lib)
 target_include_directories(${TARGET_NAME} PUBLIC "${gs2lib_SOURCE_DIR}/include")
 target_link_libraries(${TARGET_NAME} PUBLIC gs2lib)
@@ -408,6 +414,10 @@ if(GRAAL3D_MODULE)
 		DEBUG_POSTFIX "")
 	if(WIN32)
 		set_target_properties(seihai-graal3d PROPERTIES PREFIX "")
+	endif()
+	# A CMake MODULE is "<name>.so" on macOS; the server looks for libseihai-graal3d.dylib.
+	if(APPLE)
+		set_target_properties(seihai-graal3d PROPERTIES SUFFIX ".dylib")
 	endif()
 	# Keep the module's own gs2lib and libstdc++ symbols to itself.
 	# (A sanitizer build leaves the sanitizer runtime to the program, so no --no-undefined there.)

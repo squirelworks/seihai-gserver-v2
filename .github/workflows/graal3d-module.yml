@@ -115,6 +115,7 @@ jobs:
           cp bin/addons/libseihai-graal3d.so addons/graal3d/README.md LICENSE.md dist/$n/
           cp bin/docs/graal3d.md dist/$n/graal3d-reference.md
           cp docs/addons.md dist/$n/addons.md
+          cp docs/GSERVER-V2-3D-STARTUP.md dist/$n/
           (cd dist/$n && sha256sum libseihai-graal3d.so > SHA256SUMS)
           (cd dist && tar czf $n.tar.gz $n && sha256sum $n.tar.gz > $n.tar.gz.sha256)
           echo "NAME=$n" >> "$GITHUB_ENV"
@@ -125,9 +126,87 @@ jobs:
             dist/*.tar.gz
             dist/*.sha256
 
+  # Windows and macOS: built with vcpkg like the server releases (seihai-release.yml),
+  # with the same triplets, so a module loads into the server archive of its platform.
+  # The Apple Silicon module is cross-built on the Intel runner, as the server is.
+  other:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: windows-latest, plat: windows-x86_64, triplet: x64-windows-static-md, cross: ''}
+          - {os: macos-15-intel, plat: macos-x86_64, triplet: x64-osx, cross: ''}
+          - {os: macos-15-intel, plat: macos-aarch64, triplet: arm64-osx, cross: arm64}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    env:
+      VCPKG_DIR: ${{ github.workspace }}/vcpkg
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: macOS tools
+        if: runner.os == 'macOS'
+        run: brew install ninja llvm lld autoconf autoconf-archive automake libtool bison flex
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+      - name: vcpkg
+        shell: bash
+        run: |
+          git clone https://github.com/microsoft/vcpkg "$VCPKG_DIR"
+          if [ "$RUNNER_OS" = Windows ]; then "$VCPKG_DIR/bootstrap-vcpkg.bat" -disableMetrics; else "$VCPKG_DIR/bootstrap-vcpkg.sh" -disableMetrics; fi
+      - name: Configure
+        shell: bash
+        run: |
+          EXTRA=""
+          if [ "$RUNNER_OS" = macOS ]; then
+            LLVM="$(brew --prefix llvm)"; export CC="$LLVM/bin/clang" CXX="$LLVM/bin/clang++"
+            export PATH="$(brew --prefix bison)/bin:$(brew --prefix flex)/bin:$PATH"
+            LLD="-fuse-ld=$(brew --prefix lld)/bin/ld64.lld"
+            EXTRA="-DCMAKE_EXE_LINKER_FLAGS=$LLD -DCMAKE_MODULE_LINKER_FLAGS=$LLD -DCMAKE_SHARED_LINKER_FLAGS=$LLD"
+            if [ -n "${{ matrix.cross }}" ]; then EXTRA="$EXTRA -DCMAKE_OSX_ARCHITECTURES=${{ matrix.cross }}"; fi
+            EXTRA="$EXTRA -DVCPKG_OVERLAY_PORTS=$GITHUB_WORKSPACE/vcpkg-overlays/ports"
+          fi
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DTESTS=OFF -DUPNP=OFF -DGRAAL3D=OFF -DGRAAL3D_MODULE=ON \
+            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_DIR/scripts/buildsystems/vcpkg.cmake" \
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} $EXTRA
+      - name: Build the module
+        run: cmake --build build --target seihai-graal3d
+      - name: Package
+        shell: bash
+        run: |
+          v=$(head -n1 addons/graal3d/VERSION)
+          n=seihai-graal3d-$v-${{ matrix.plat }}
+          case "$RUNNER_OS" in Windows) f=seihai-graal3d.dll ;; *) f=libseihai-graal3d.dylib ;; esac
+          ls -l bin/addons
+          if [ -n "${{ matrix.cross }}" ]; then file bin/addons/$f | tee /dev/stderr | grep -q "${{ matrix.cross }}"; fi
+          mkdir -p dist/$n
+          cp bin/addons/$f addons/graal3d/README.md LICENSE.md dist/$n/
+          cp bin/docs/graal3d.md dist/$n/graal3d-reference.md
+          cp docs/addons.md dist/$n/addons.md
+          cp docs/GSERVER-V2-3D-STARTUP.md dist/$n/
+          if [ "$RUNNER_OS" = Windows ]; then
+            (cd dist/$n && sha256sum $f > SHA256SUMS)
+            (cd dist && 7z a $n.zip $n > /dev/null && sha256sum $n.zip > $n.zip.sha256)
+          else
+            (cd dist/$n && shasum -a 256 $f > SHA256SUMS)
+            (cd dist && tar czf $n.tar.gz $n && shasum -a 256 $n.tar.gz > $n.tar.gz.sha256)
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: seihai-graal3d-${{ matrix.plat }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sha256
+          if-no-files-found: ignore
+
   release:
-    if: startsWith(github.ref, 'refs/tags/graal3d-v') || inputs.version != ''
-    needs: linux
+    # Runs when a build fails too, so the modules that did build still reach the release.
+    if: ${{ !cancelled() && (startsWith(github.ref, 'refs/tags/graal3d-v') || inputs.version != '') }}
+    needs: [linux, other]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -149,7 +228,7 @@ jobs:
           case "$GITHUB_REF" in refs/tags/graal3d-v*) [ "${GITHUB_REF#refs/tags/}" = "$TAG" ] || { echo "tag does not match addons/graal3d/VERSION ($v)"; exit 1; } ;; esac
           # The module's full source, as the GPL asks, and one SHA256SUMS for every file.
           git archive --format=tar.gz --prefix=seihai-graal3d-$v-source/ -o dist/seihai-graal3d-$v-source.tar.gz HEAD
-          (cd dist && rm -f SHA256SUMS && sha256sum -- *.tar.gz > SHA256SUMS && cat SHA256SUMS)
+          (cd dist && rm -f SHA256SUMS && find . -maxdepth 1 \( -name '*.tar.gz' -o -name '*.zip' \) -printf '%f\n' | sort | xargs sha256sum -- > SHA256SUMS && cat SHA256SUMS)
           NOTES=$(mktemp)
           { echo "The Graal 3D add-on for Seihai GServer-v2 as its own module (add-on API 1). See addons/graal3d/README.md and docs/addons.md."; echo; \
             awk "/^### $v /{f=1;next} /^### /{f=0} f" addons/graal3d/README.md; } > "$NOTES"
