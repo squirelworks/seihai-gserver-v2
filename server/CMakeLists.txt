@@ -1,4 +1,4 @@
-# Modified by the Seihai project, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-18, 2026-11-19, 2026-11-20, 2026-11-25, 2026-11-26: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-18, 2026-11-19, 2026-11-20, 2026-11-25, 2026-11-26, 2026-11-27: see CHANGES-SEIHAI.md.
 #
 #  server/src/CMakeLists.txt
 #
@@ -27,7 +27,10 @@ set(
 	"include/BabyDI.h"
 	"include/IConfig.h.in"
 	"include/Server.h"
+	"include/addons/AddonHost.h"
+	"include/addons/AddonModule.h"
 	"include/addons/ServerAddon.h"
+	"include/addons/ServerAddonHost.h"
 	"include/addons/ServerAddons.h"
 	"include/ServerList.h"
 	"include/UpdatePackage.h"
@@ -119,6 +122,7 @@ set(
 	"include/utilities/std/inplace_vector.h"
 	"include/utilities/std/views_concat.h"
 	"src/Server.cpp"
+	"src/addons/ServerAddonHost.cpp"
 	"src/addons/ServerAddons.cpp"
 	"src/Server.Init.cpp"
 	"src/ServerList.cpp"
@@ -194,9 +198,14 @@ set(
 # Seihai add-ons (server/include/addons/ServerAddon.h, docs/addons.md). Each is
 # compiled in with its own option and run only when its server option is on.
 option(GRAAL3D "Build the Graal 3D add-on (the Torque UDP side for 3.151 to 5.x clients)." ON)
-if(GRAAL3D)
-	list(APPEND SOURCES
+# Seihai, 2026-11-27: GRAAL3D_MODULE builds the same add-on as its own module,
+# seihai-graal3d (bin/addons/libseihai-graal3d.so, seihai-graal3d.dll), which a
+# server built with GRAAL3D=OFF loads when `graal3d = true` (docs/addons.md).
+option(GRAAL3D_MODULE "Build the Graal 3D add-on as the separate module seihai-graal3d." OFF)
+set(GRAAL3D_SOURCES
 		"include/graal3d/Graal3DAddon.h"
+		"include/graal3d/Graal3DBigWorld.h"
+		"include/graal3d/Graal3DLog.h"
 		"include/graal3d/Graal3DCapabilities.h"
 		"include/graal3d/Graal3DConnection.h"
 		"include/graal3d/Graal3DMutation.h"
@@ -214,7 +223,9 @@ if(GRAAL3D)
 		"src/graal3d/Graal3DService.cpp"
 		"src/graal3d/Graal3DTge.cpp"
 		"src/graal3d/TorqueBitStream.cpp"
-	)
+)
+if(GRAAL3D)
+	list(APPEND SOURCES ${GRAAL3D_SOURCES})
 endif()
 
 # ----------------------------
@@ -358,6 +369,56 @@ FetchContent_MakeAvailable(gs2lib)
 add_dependencies(${TARGET_NAME} gs2lib)
 target_include_directories(${TARGET_NAME} PUBLIC "${gs2lib_SOURCE_DIR}/include")
 target_link_libraries(${TARGET_NAME} PUBLIC gs2lib)
+
+# ----------------------------
+# Seihai: the Graal 3D add-on as its own module (option GRAAL3D_MODULE). It is
+# compiled from the same sources as the built-in add-on, reaches the server only
+# through addons/AddonHost.h, and carries its own copy of gs2lib and zlib. Its
+# version is addons/graal3d/VERSION; it is released under graal3d-v<version> tags.
+if(GRAAL3D_MODULE)
+	file(STRINGS "${CMAKE_SOURCE_DIR}/addons/graal3d/VERSION" GRAAL3D_MODULE_VERSION LIMIT_COUNT 1)
+	set(GRAAL3D_BUILT_FROM "unknown")
+	find_package(Git QUIET)
+	if(GIT_FOUND)
+		execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse --short=8 HEAD WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+						OUTPUT_VARIABLE GRAAL3D_BUILT_FROM OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+		if(NOT GRAAL3D_BUILT_FROM)
+			set(GRAAL3D_BUILT_FROM "unknown")
+		endif()
+	endif()
+	set_target_properties(gs2lib PROPERTIES POSITION_INDEPENDENT_CODE ON)
+	add_library(seihai-graal3d MODULE ${GRAAL3D_SOURCES} "src/graal3d/Graal3DModule.cpp" "src/utilities/StringUtils.cpp")
+	target_include_directories(seihai-graal3d PRIVATE "include" "${PROJECT_BINARY_DIR}/server/include" "${gs2lib_SOURCE_DIR}/include")
+	target_compile_definitions(seihai-graal3d PRIVATE
+		SEIHAI_GRAAL3D_MODULE_VERSION="${GRAAL3D_MODULE_VERSION}"
+		SEIHAI_GRAAL3D_BUILT_FROM="${GRAAL3D_BUILT_FROM}")
+	add_dependencies(seihai-graal3d gs2lib)
+	find_package(ZLIB MODULE REQUIRED)
+	target_link_libraries(seihai-graal3d PRIVATE gs2lib ZLIB::ZLIB)
+	if(WIN32)
+		target_link_libraries(seihai-graal3d PRIVATE ws2_32)
+	endif()
+	set_default_compiler_options(seihai-graal3d FALSE)
+	set_target_properties(seihai-graal3d PROPERTIES
+		CXX_VISIBILITY_PRESET hidden
+		VISIBILITY_INLINES_HIDDEN ON
+		POSITION_INDEPENDENT_CODE ON
+		LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin/addons"
+		RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin/addons"
+		DEBUG_POSTFIX "")
+	if(WIN32)
+		set_target_properties(seihai-graal3d PROPERTIES PREFIX "")
+	endif()
+	# Keep the module's own gs2lib and libstdc++ symbols to itself.
+	# (A sanitizer build leaves the sanitizer runtime to the program, so no --no-undefined there.)
+	if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+		target_link_options(seihai-graal3d PRIVATE "-Wl,--exclude-libs,ALL")
+		if(NOT SANITIZE)
+			target_link_options(seihai-graal3d PRIVATE "-Wl,--no-undefined")
+		endif()
+	endif()
+	message(STATUS "Graal 3D module seihai-graal3d ${GRAAL3D_MODULE_VERSION} (from ${GRAAL3D_BUILT_FROM})")
+endif()
 
 # ----------------------------
 # Dependency: libtomcrypt (vcpkg). libtommath comes with it.

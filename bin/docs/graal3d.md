@@ -1,6 +1,6 @@
 # Graal 3D (Seihai)
 
-<!-- Modified by the Seihai project, 2026-11-14: reconcile recorded lab coverage; 2026-11-19: protocol 19 Sky and Player; 2026-11-20: default Camera facing the spawn; 2026-11-25: lab raw objects and events, the Sharp3D route; 2026-11-27: big worlds (distance scoping, ghost order, large terrains). -->
+<!-- Modified by the Seihai project, 2026-11-14: reconcile recorded lab coverage; 2026-11-19: protocol 19 Sky and Player; 2026-11-20: default Camera facing the spawn; 2026-11-25: lab raw objects and events, the Sharp3D route; 2026-11-27: big worlds (distance scoping, ghost order, large terrains); the add-on as a separate module. -->
 
 This file is part of the Seihai fork (GPL-3.0, see `LICENSE.md` and `CHANGES-SEIHAI.md`).
 
@@ -35,6 +35,13 @@ graal3d = true
 # graal3dscope = off        (or on, or auto: see "Big worlds")
 # graal3dsendms = 50        (least ms between two data packets to a client, 10 to 1000)
 ```
+
+The 3D side is built into this fork's server by default (`-DGRAAL3D=ON`). It can
+also be built on its own as the module `seihai-graal3d`
+(`libseihai-graal3d.so`, `seihai-graal3d.dll`) and dropped beside a server built
+with `-DGRAAL3D=OFF`, which then loads it when `graal3d = true` (`graal3dmodule =
+auto`, or a path). Everything in this file applies to both. See `docs/addons.md`,
+"Add-on modules", and `addons/graal3d/README.md`.
 
 `graal3dstringprefix` says whether strings inside game packets start with Torque's
 "shares a prefix with the last string" flag. The 5.00r7 `Graal3DEngine.dll` gives

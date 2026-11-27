@@ -1,4 +1,4 @@
-// Seihai project, 2026-11-25, 2026-11-26: see CHANGES-SEIHAI.md.
+// Seihai project, 2026-11-25, 2026-11-26, 2026-11-27: see CHANGES-SEIHAI.md.
 // The Graal 3D side as an add-on: off unless `graal3d = true`, and then the core
 // hooks give the 3.151 to 5.x clients what they need and list the server at HQ 4.
 #include "catch2/catch_all.hpp"
@@ -35,7 +35,7 @@ TEST_CASE("the Graal 3D add-on runs only with graal3d = true", "[graal3d][addons
 
 	SECTION("off by default")
 	{
-		CHECK(graal3d::Addon::create(*server) == nullptr);
+		CHECK(graal3d::Addon::create(server->getAddons().host(*server)) == nullptr);
 		server->getAddons().start(*server, "");
 		CHECK(server->getAddons().find<graal3d::Addon>() == nullptr);
 	}

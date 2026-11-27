@@ -7,28 +7,30 @@
 #include <cstdlib>
 #include <string>
 
-#include <Server.h>
+#include <CString.h>
+
+#include <addons/AddonHost.h>
 #include <graal3d/Graal3DObjects.h>
 #include <graal3d/Graal3DService.h>
-#include <utilities/Log.h>
+#include <graal3d/Graal3DLog.h>
 
 using namespace preagonal;
 using namespace std::string_literals;
 
 namespace graal3d
 {
-	Addon::Addon(Server& server)
-		: m_server(server), m_service(std::make_unique<Service>(server))
+	Addon::Addon(AddonHost& host)
+		: m_host(host), m_service(std::make_unique<Service>(host))
 	{
 	}
 
 	Addon::~Addon() = default;
 
-	ServerAddonPtr Addon::create(Server& server)
+	ServerAddonPtr Addon::create(AddonHost& host)
 	{
-		if (!server.getSettings().get<bool>("graal3d").value_or(false))
+		if (!host.settingBool("graal3d").value_or(false))
 			return nullptr;
-		return std::make_unique<Addon>(server);
+		return std::make_unique<Addon>(host);
 	}
 
 	// A Torque UDP server on the listed port + 1 (or `graal3dport`), for the 3.151
@@ -36,9 +38,9 @@ namespace graal3d
 	// bin/docs/graal3d.md).
 	bool Addon::start(std::string_view interfaceIp)
 	{
-		auto& settings = m_server.getSettings();
-		const int tcpPort = std::atoi(settings.get<std::string>("serverport").value_or("14802"s).c_str());
-		int udpPort = settings.get<int>("graal3dport").value_or(0);
+		auto& settings = m_host;
+		const int tcpPort = std::atoi(settings.settingString("serverport").value_or("14802"s).c_str());
+		int udpPort = settings.settingInt("graal3dport").value_or(0);
 		if (udpPort <= 0)
 			udpPort = tcpPort + 1;
 
@@ -47,63 +49,62 @@ namespace graal3d
 			worldText.append(line.text(), static_cast<size_t>(line.length())).push_back('\n');
 		auto world = parseWorld(worldText);
 		for (const auto& error : world.errors)
-			log::printLine(log::server, "** [Error] Graal3D: graal3dworld.txt {}", error);
+			logLine("** [Error] Graal3D: graal3dworld.txt {}", error);
 		// graal3dshapecheck = skip (default), warn or off: what to do with a world
 		// object whose .3ds would crash a client (see bin/docs/graal3d.md).
-		const auto shapeCheck = settings.get<std::string>("graal3dshapecheck").value_or("skip"s);
+		const auto shapeCheck = settings.settingString("graal3dshapecheck").value_or("skip"s);
 		m_service->setShapeCheck(shapeCheck == "warn" ? Service::ShapeCheck::Warn
 								 : shapeCheck == "off" ? Service::ShapeCheck::Off
 													   : Service::ShapeCheck::Skip);
 		if (shapeCheck != "skip" && shapeCheck != "warn" && shapeCheck != "off")
-			log::printLine(log::server, "** [Error] Graal3D: graal3dshapecheck {} is not skip, warn or off; using skip.", shapeCheck);
+			logLine("** [Error] Graal3D: graal3dshapecheck {} is not skip, warn or off; using skip.", shapeCheck);
 		// graal3dtrace = <file>: a line for everything each 3D client sends (see bin/docs/graal3d.md).
-		m_service->setTrace(settings.get<std::string>("graal3dtrace").value_or(""s));
+		m_service->setTrace(settings.settingString("graal3dtrace").value_or(""s));
 		// graal3dmutate = <kind>[:<seed>]: lab fuzzing only (see bin/docs/graal3d.md).
-		m_service->setMutation(settings.get<std::string>("graal3dmutate").value_or(""s));
+		m_service->setMutation(settings.settingString("graal3dmutate").value_or(""s));
 		// graal3dterrainall: lab switch; graal3dpushterrain (default on): terrain files at login and link (see bin/docs/graal3d.md).
-		m_service->setTerrainForAll(settings.get<bool>("graal3dterrainall").value_or(false));
-		m_service->setPushTerrainFiles(settings.get<bool>("graal3dpushterrain").value_or(true));
+		m_service->setTerrainForAll(settings.settingBool("graal3dterrainall").value_or(false));
+		m_service->setPushTerrainFiles(settings.settingBool("graal3dpushterrain").value_or(true));
 		// graal3dpushgrass = false stops the grass-texture push (see bin/docs/graal3d.md).
-		m_service->setPushGrassTextures(settings.get<bool>("graal3dpushgrass").value_or(true));
+		m_service->setPushGrassTextures(settings.settingBool("graal3dpushgrass").value_or(true));
 		// graal3dgrassdelay = <ms>: lab, ghost grass that long after the world (0 to 60000).
-		m_service->setGrassDelay(static_cast<uint32_t>(std::clamp(settings.get<int>("graal3dgrassdelay").value_or(0), 0, 60000)));
+		m_service->setGrassDelay(static_cast<uint32_t>(std::clamp(settings.settingInt("graal3dgrassdelay").value_or(0), 0, 60000)));
 		// graal3dscope = off (default), on or auto, with graal3dscoperadius (1100),
 		// graal3dscopehysteresis (200) and graal3dscopeauto (2000): world objects
 		// only near each player (see bin/docs/graal3d.md, "Big worlds").
 		{
 			ScopeOptions scope;
-			const auto mode = settings.get<std::string>("graal3dscope").value_or("off"s);
+			const auto mode = settings.settingString("graal3dscope").value_or("off"s);
 			if (const auto m = ScopeOptions::parseMode(mode))
 				scope.mode = *m;
 			else
-				log::printLine(log::server, "** [Error] Graal3D: graal3dscope {} is not off, on or auto; using off.", mode);
-			scope.radius = std::clamp(settings.get<float>("graal3dscoperadius").value_or(1100.0f), 1.0f, 100000.0f);
-			scope.hysteresis = std::clamp(settings.get<float>("graal3dscopehysteresis").value_or(200.0f), 0.0f, 100000.0f);
-			scope.autoAbove = static_cast<size_t>(std::max(0, settings.get<int>("graal3dscopeauto").value_or(2000)));
+				logLine("** [Error] Graal3D: graal3dscope {} is not off, on or auto; using off.", mode);
+			scope.radius = std::clamp(settings.settingFloat("graal3dscoperadius").value_or(1100.0f), 1.0f, 100000.0f);
+			scope.hysteresis = std::clamp(settings.settingFloat("graal3dscopehysteresis").value_or(200.0f), 0.0f, 100000.0f);
+			scope.autoAbove = static_cast<size_t>(std::max(0, settings.settingInt("graal3dscopeauto").value_or(2000)));
 			m_service->setScope(scope);
 			if (scope.mode != ScopeOptions::Mode::Off)
-				log::printLine(log::server, "Graal3D: world objects within {} units of each player, deleted past {} ({}).", scope.radius,
+				logLine("Graal3D: world objects within {} units of each player, deleted past {} ({}).", scope.radius,
 							   scope.radius + scope.hysteresis,
 							   scope.mode == ScopeOptions::Mode::On ? "every world"s : "worlds of more than "s + std::to_string(scope.autoAbove) + " objects");
 		}
 		// graal3dsendms = <ms>: the least time between two 3D data packets to a client (10 to 1000; default 50).
-		m_service->setSendInterval(static_cast<uint64_t>(std::clamp(settings.get<int>("graal3dsendms").value_or(50), 10, 1000)));
-		m_service->setWorld(std::move(world), settings.get<bool>("graal3dstringprefix").value_or(true));
+		m_service->setSendInterval(static_cast<uint64_t>(std::clamp(settings.settingInt("graal3dsendms").value_or(50), 10, 1000)));
+		m_service->setWorld(std::move(world), settings.settingBool("graal3dstringprefix").value_or(true));
 		// graal3droute = sharp3d: the route of a server real 5.12 joined (see bin/docs/graal3d.md).
-		const auto route = settings.get<std::string>("graal3droute").value_or("mission"s);
+		const auto route = settings.settingString("graal3droute").value_or("mission"s);
 		m_service->setSharp3DRoute(route == "sharp3d");
 		if (route != "mission" && route != "sharp3d")
-			log::printLine(log::server, "** [Error] Graal3D: graal3droute {} is not mission or sharp3d; using mission.", route);
+			logLine("** [Error] Graal3D: graal3droute {} is not mission or sharp3d; using mission.", route);
 		else if (route == "sharp3d")
-			log::printLine(log::server, "Graal3D: Sharp3D route for protocol 24 clients.");
+			logLine("Graal3D: Sharp3D route for protocol 24 clients.");
 
 		if (udpPort < 65536 && m_service->start(interfaceIp, static_cast<uint16_t>(udpPort)))
 		{
-			auto indent = log::server.indent();
-			log::printLine(log::server, "Graal3D: listening on UDP port {}.", udpPort);
+			logLine("  Graal3D: listening on UDP port {}.", udpPort);
 			return true;
 		}
-		log::printLine(log::server, "** [Error] Graal3D: could not open UDP port {}.", udpPort);
+		logLine("** [Error] Graal3D: could not open UDP port {}.", udpPort);
 		return false;
 	}
 
@@ -119,7 +120,7 @@ namespace graal3d
 	}
 
 	// A client in Graal 3D mode ignores flag packets on TCP; send them on its 3D link too.
-	void Addon::onPacketToPlayer(PlayerID player, const CString& packet)
+	void Addon::onPacketToPlayer(PlayerID player, std::string_view packet)
 	{
 		m_service->mirrorPacket(player, packet);
 	}

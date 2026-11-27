@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-01, 2026-11-04, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-18, 2026-11-19, 2026-11-25: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-01, 2026-11-04, 2026-11-06, 2026-11-07, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-16, 2026-11-18, 2026-11-19, 2026-11-25, 2026-11-27: see CHANGES-SEIHAI.md.
 #include <algorithm>
 #include <cctype>
 #include <array>
@@ -594,7 +594,7 @@ void Player::sendPacketUnchecked(const CString& packet, const PacketQueue channe
 	// An add-on holding a side link for this player sees its packets (a client in
 	// Graal 3D mode ignores flag packets on TCP; the add-on sends them on its 3D link).
 	if (m_addonLinked && m_server != nullptr)
-		m_server->getAddons().onPacketToPlayer(getId(), packet);
+		m_server->getAddons().onPacketToPlayer(getId(), std::string_view(packet.text(), static_cast<size_t>(packet.length())));
 
 	// append buffer
 	m_fileQueue.addPacket(channel, packet);

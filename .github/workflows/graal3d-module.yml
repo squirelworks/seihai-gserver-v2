@@ -1,0 +1,155 @@
+# Seihai project, 2026-11-27: see CHANGES-SEIHAI.md.
+# The Graal 3D add-on as its own module, seihai-graal3d (docs/addons.md, "Add-on
+# modules"). Builds a server with no 3D code (-DGRAAL3D=OFF) and the module apart,
+# checks the server loads the module and opens the 3D port, and runs the module
+# refusal checks. A graal3d-v* tag, or a manual run with a version, also makes a
+# DRAFT release with the module and its checksums; the owner presses Publish.
+# The server's own releases (v* tags) are seihai-release.yml.
+name: Graal 3D module
+
+on:
+  push:
+    branches: [seihai]
+    tags: ['graal3d-v*']
+  pull_request:
+    branches: [seihai]
+    paths:
+      - 'server/include/addons/**'
+      - 'server/src/addons/**'
+      - 'server/include/graal3d/**'
+      - 'server/src/graal3d/**'
+      - 'server/CMakeLists.txt'
+      - 'addons/**'
+      - '.github/workflows/graal3d-module.yml'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Module version to draft (must match addons/graal3d/VERSION). Leave empty to build only.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools and libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-14 g++-14 ninja-build openjdk-21-jre-headless \
+            libantlr4-runtime-dev libsodium-dev libtomcrypt-dev libtommath-dev \
+            libbz2-dev zlib1g-dev uuid-dev pkgconf bison flex
+      - name: Cache the ANTLR 4.10.1 tool
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/antlr-4.10.1
+          key: antlr-4.10.1-complete
+      - name: ANTLR 4.10.1 tool
+        run: |
+          jar=~/.cache/antlr-4.10.1/antlr.jar
+          if [ ! -s "$jar" ]; then
+            mkdir -p "$(dirname "$jar")"
+            curl -sSfL --retry 3 --retry-delay 20 --retry-all-errors -o "$jar" https://repo1.maven.org/maven2/org/antlr/antlr4/4.10.1/antlr4-4.10.1-complete.jar \
+              || curl -sSfL --retry 3 --retry-delay 20 --retry-all-errors -o "$jar" https://www.antlr.org/download/antlr-4.10.1-complete.jar
+          fi
+          cp "$jar" "$RUNNER_TEMP/antlr.jar"
+      # Two build trees: the server never sees the module's sources, and the
+      # module is built without the server being rebuilt.
+      - name: Build the server (no 3D code)
+        run: |
+          CC=gcc-14 CXX=g++-14 cmake -S . -B build-server -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DTESTS=OFF -DUPNP=OFF -DGRAAL3D=OFF -DANTLR4_JAR_LOCATION="$RUNNER_TEMP/antlr.jar"
+          cmake --build build-server --target gs2emu
+          if nm -C build-server/lib/liblibgs2emu*.a 2>/dev/null | grep -q "graal3d::"; then
+            echo "graal3d symbols found in the server with GRAAL3D=OFF"; exit 1
+          fi
+          mkdir -p dist/server && cp bin/gs2emu dist/server/
+      - name: Build the module
+        run: |
+          CC=gcc-14 CXX=g++-14 cmake -S . -B build-module -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DTESTS=OFF -DUPNP=OFF -DGRAAL3D=OFF -DGRAAL3D_MODULE=ON -DANTLR4_JAR_LOCATION="$RUNNER_TEMP/antlr.jar"
+          cmake --build build-module --target seihai-graal3d
+          # GCC's headers give some standard-library objects (typeinfo, inline
+          # variables) default visibility; those are not the module's own.
+          nm -D --defined-only bin/addons/libseihai-graal3d.so | grep -v ' [VWvwu] ' | awk '{print $3}' | c++filt \
+            | grep -Ev '^((typeinfo|typeinfo name|vtable|guard variable) for )?(std::|__gnu_cxx::)' | tee exports.txt
+          [ "$(grep -c seihai_addon_module_ exports.txt)" = 3 ]
+          [ "$(grep -vc seihai_addon_module_ exports.txt)" = 0 ] || { echo "the module exports more than its entry points"; exit 1; }
+      - name: The server loads the module and opens the 3D port
+        shell: bash
+        run: |
+          cp -r bin/servers/default /tmp/w3d
+          sed -i 's/^graal3d = false/graal3d = true/' /tmp/w3d/config/serveroptions.txt
+          mkdir -p /tmp/run/servers && cp dist/server/gs2emu /tmp/run/ && mv /tmp/w3d /tmp/run/servers/default
+          mkdir -p /tmp/run/addons && cp bin/addons/libseihai-graal3d.so /tmp/run/addons/
+          cp -r bin/docs bin/*.txt /tmp/run/ 2>/dev/null || true
+          cd /tmp/run
+          ./gs2emu --server default > out.txt 2>&1 & p=$!
+          ok=0
+          for i in $(seq 1 60); do grep -q "Graal3D: listening on UDP port 14803" out.txt && { ok=1; break; }; sleep 1; done
+          kill $p 2>/dev/null || true; wait $p 2>/dev/null || true
+          tail -n 40 out.txt
+          grep -q "Add-on graal3d: module libseihai-graal3d.so" out.txt
+          [ $ok = 1 ]
+      - name: A server with graal3d = true and no module says so and runs without it
+        shell: bash
+        run: |
+          cd /tmp/run && rm -rf addons
+          ./gs2emu --server default > out2.txt 2>&1 & p=$!
+          for i in $(seq 1 60); do (echo > /dev/tcp/127.0.0.1/14802) 2>/dev/null && break; sleep 1; done
+          kill $p 2>/dev/null || true; wait $p 2>/dev/null || true
+          grep "Add-on graal3d" out2.txt
+          grep -q "no libseihai-graal3d.so was found" out2.txt
+      - name: Package
+        run: |
+          v=$(head -n1 addons/graal3d/VERSION)
+          n=seihai-graal3d-$v-linux-x86_64
+          mkdir -p dist/$n
+          cp bin/addons/libseihai-graal3d.so addons/graal3d/README.md LICENSE.md dist/$n/
+          cp bin/docs/graal3d.md dist/$n/graal3d-reference.md
+          cp docs/addons.md dist/$n/addons.md
+          (cd dist/$n && sha256sum libseihai-graal3d.so > SHA256SUMS)
+          (cd dist && tar czf $n.tar.gz $n && sha256sum $n.tar.gz > $n.tar.gz.sha256)
+          echo "NAME=$n" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: seihai-graal3d-linux-x86_64
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/graal3d-v') || inputs.version != ''
+    needs: linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: seihai-graal3d-*
+          path: dist
+          merge-multiple: true
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          v=$(head -n1 addons/graal3d/VERSION)
+          if [ -n "$INPUT_VERSION" ] && [ "$INPUT_VERSION" != "$v" ]; then
+            echo "addons/graal3d/VERSION is $v, not $INPUT_VERSION"; exit 1
+          fi
+          TAG=graal3d-v$v
+          case "$GITHUB_REF" in refs/tags/graal3d-v*) [ "${GITHUB_REF#refs/tags/}" = "$TAG" ] || { echo "tag does not match addons/graal3d/VERSION ($v)"; exit 1; } ;; esac
+          NOTES=$(mktemp)
+          { echo "The Graal 3D add-on for Seihai GServer-v2 as its own module (add-on API 1). See addons/graal3d/README.md and docs/addons.md."; echo; \
+            awk "/^### $v /{f=1;next} /^### /{f=0} f" addons/graal3d/README.md; } > "$NOTES"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --draft --target "$GITHUB_SHA" --title "seihai-graal3d $v" --notes-file "$NOTES"
+          fi
+          echo "Draft: $(gh release view "$TAG" --json url -q .url)" >> "$GITHUB_STEP_SUMMARY"
