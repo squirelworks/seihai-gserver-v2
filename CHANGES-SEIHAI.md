@@ -1,4 +1,4 @@
-<!-- Modified by the Seihai project, 2026-11-25, 2026-11-26: see change entries below. -->
+<!-- Modified by the Seihai project, 2026-11-25, 2026-11-26, 2026-11-27: see change entries below. -->
 # Seihai changes to GServer-v2
 
 This is the Seihai fork of [GServer-v2](https://github.com/xtjoeytx/GServer-v2),
@@ -9,6 +9,12 @@ are credited in `README.md`.
 Validation is recorded per change below. Historical lab entries include real Graal
 clients and the [Seihai](https://github.com/squirelworks/seihai) client; a regression test does not imply a client run.
 Each file we changed carries a one-line notice at its top.
+
+## 2026-11-27
+
+| Change | Files | Validation |
+|---|---|---|
+| Graal 3D big worlds, ported from seihai-gserver #226 and #227. The player's own object and Camera are ghosted first, then the rest of the world but its objects, then the other players, then the world objects, so a world of 4094 or more objects can no longer fill the 4096-entry ghost table before the Camera (a real 5.12 drew a black view all session). `graal3dscope = off \| on \| auto` (with `graal3dscoperadius` 1100, `graal3dscopehysteresis` 200, `graal3dscopeauto` 2000) ghosts world objects only near each player, at most 3584 a client, nearest first; off by default. `graal3dsendms` (default 50) sets the least time between two data packets. `terrain <folder> <size> repeat <w>x<h>` declares a terrain of up to 256 x 256 chunks, streamed as a 16 x 16 window round the player: chunks entering it are sent as the player crosses a chunk boundary, then `MissionStartPhase2` again once they are acked, so the 5.12 lights them. | `server/include/graal3d/Graal3DBigWorld.h` (new), `Graal3DObjects.h/.cpp`, `Graal3DConnection.h/.cpp`, `Graal3DService.h/.cpp`, `Graal3DAddon.cpp`, `Catch_tests/Graal3D/Graal3DBigWorld_tests.cpp` (new), `Catch_tests/Graal3D/Graal3D_tests.cpp`, `bin/docs/graal3d.md` | Catch tests: scope planning (radius, hysteresis, a walk out and back, the budget, auto), slot mapping, the window, 16 and 31 chunks a crossing, edge folding, the terrain line and loading a large terrain, and the relight waiting for the chunk acks. The behaviour was checked on a real 5.12 against seihai-gserver's implementation of the same rules (#226, #227); this port has no real-client run of its own. |
 
 ## 2026-11-26
 

@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-25, 2026-11-26: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-25, 2026-11-26, 2026-11-27: see CHANGES-SEIHAI.md.
 // New file: one accepted Graal 3D (Torque) UDP connection, server side. It keeps
 // Torque's notify protocol (sequence numbers, acks, pings), resends guaranteed
 // events that were lost, drives the mission start phases and carries Graal's
@@ -115,6 +115,18 @@ namespace graal3d
 		// Posts one TerrainChunkEvent: chunk x, y (0-15), its stamp and its zlib
 		// bytes (at most 1023). False if the client has no such event class.
 		bool postTerrainChunk(uint32_t x, uint32_t y, uint32_t stamp, std::string_view packed);
+		// A large terrain's chunks sent mid-session (Graal3DBigWorld.h): once the
+		// client has acked every one, MissionStartPhase2 goes again so it lights
+		// them. A real 5.12 drew such chunks flat-lit, and after a second phase 2
+		// lit them as a static terrain ("Terrain lit" in 0.03 to 0.04 s; lab,
+		// 2026-11-27). Its ack is taken quietly. False if the client has no
+		// TerrainChunkEvent class.
+		bool postTerrainChunkToRelight(uint32_t x, uint32_t y, uint32_t stamp, std::string_view packed);
+		[[nodiscard]] bool relightOwed() const { return m_relightOwed; }
+
+		// graal3dsendms: the least time between two data packets (default
+		// SendIntervalMs). A real 5.12 took 10 ms on loopback with no loss.
+		void setSendInterval(uint64_t ms) { m_sendIntervalMs = ms == 0 ? SendIntervalMs : ms; }
 
 		// Strings inside game packets carry the packet string flag (default on;
 		// see TorqueBitStream.h). Set before anything is sent.
@@ -321,6 +333,10 @@ namespace graal3d
 		bool m_terrainAsked = false;    // the client sent TerrainRequestUpdatesEvent
 		bool m_terrainAnswered = false; // and the service answered it
 		std::vector<int32_t> m_chunkSeqs; // the TerrainChunkEvents of that answer
+		std::vector<int32_t> m_relightSeqs; // mid-session chunks (postTerrainChunkToRelight)
+		bool m_relightOwed = false;
+		uint64_t m_sendIntervalMs = SendIntervalMs;
+		void relightWhenLit();
 		// Sharp3D route: the GhostAlwaysObjectEvent that creates each ghost, by
 		// event sequence; its ack marks the ghost created.
 		std::map<int32_t, ObjectKey> m_ghostAlwaysEvents;

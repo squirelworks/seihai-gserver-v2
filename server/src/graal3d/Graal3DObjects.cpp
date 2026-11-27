@@ -1,8 +1,9 @@
-// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-20, 2026-11-25, 2026-11-26: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-20, 2026-11-25, 2026-11-26, 2026-11-27: see CHANGES-SEIHAI.md.
 // New file: GameObject and Sun updates for the Graal 3D world, and the lab's raw
 // objects and events. See Graal3DObjects.h.
 
 #include <graal3d/Graal3DObjects.h>
+#include <graal3d/Graal3DBigWorld.h>
 
 #include <cmath>
 #include <format>
@@ -907,7 +908,7 @@ namespace graal3d
 					world.objects.push_back(std::move(object));
 				}
 			}
-			else if (w[0] == "terrain" && w.size() >= 2 && w.size() <= 4 && !world.terrain)
+			else if (w[0] == "terrain" && w.size() >= 2 && w.size() <= 5 && !world.terrain)
 			{
 				Terrain terrain;
 				terrain.folder = w[1];
@@ -916,6 +917,19 @@ namespace graal3d
 				{
 					if (w[i] == "repeat")
 						terrain.repeat = true;
+					else if (const auto x = w[i].find_first_of("xX"); x != std::string_view::npos)
+					{
+						// A large terrain: <width>x<height> chunks, each even, 16 to 256 (Graal3DBigWorld.h).
+						const auto side = [](std::string_view v) -> uint32_t {
+							const std::string word(v);
+							char* end = nullptr;
+							const unsigned long n = std::strtoul(word.c_str(), &end, 10);
+							return !word.empty() && end && *end == '\0' && n >= 16 && n <= MaxLargeChunks && n % 2 == 0 ? static_cast<uint32_t>(n) : 0;
+						};
+						terrain.largeWidth = side(w[i].substr(0, x));
+						terrain.largeHeight = side(w[i].substr(x + 1));
+						ok = terrain.largeWidth != 0 && terrain.largeHeight != 0;
+					}
 					else
 					{
 						char* end = nullptr;
@@ -926,6 +940,16 @@ namespace graal3d
 						terrain.squareSize = static_cast<uint32_t>(size);
 					}
 				}
+				// Without repeat the client draws only its own grid round the origin.
+				if (ok && terrain.isLarge() && !terrain.repeat)
+				{
+					world.errors.push_back("line " + std::to_string(lineNo) + ": a large terrain needs repeat");
+					ok = false;
+				}
+				if (ok && terrain.largeWidth == 16 && terrain.largeHeight == 16)
+					terrain.largeWidth = terrain.largeHeight = 0; // the plain grid
+				if (ok && terrain.isLarge())
+					terrain.large.resize(static_cast<size_t>(terrain.largeWidth) * terrain.largeHeight);
 				if (ok)
 				{
 					GhostObject block;
@@ -1366,11 +1390,13 @@ namespace graal3d
 										 const std::function<std::optional<std::string>(const std::string&)>& read)
 	{
 		std::vector<std::string> errors;
-		for (int y = 0; y < 16; ++y)
+		const int width = terrain.isLarge() ? static_cast<int>(terrain.largeWidth) : 16;
+		const int height = terrain.isLarge() ? static_cast<int>(terrain.largeHeight) : 16;
+		for (int y = 0; y < height; ++y)
 		{
-			for (int x = 0; x < 16; ++x)
+			for (int x = 0; x < width; ++x)
 			{
-				auto& slot = terrain.chunks[static_cast<size_t>(y * 16 + x)];
+				auto& slot = terrain.isLarge() ? terrain.large[static_cast<size_t>(y * width + x)] : terrain.chunks[static_cast<size_t>(y * 16 + x)];
 				slot.reset();
 				const std::string name = "heights" + std::to_string(x) + "-" + std::to_string(y) + ".dat";
 				auto packed = read(terrain.folder + "/" + name);
