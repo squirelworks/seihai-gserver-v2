@@ -181,7 +181,10 @@ namespace preagonal
 		const auto option = std::string(name) + "module";
 		const auto setting = h.settingString(option).value_or("");
 		if (lower(setting) == "off")
+		{
+			log::printLine(log::server, "Add-on {}: {} = true, but {} = off; not loading a module. Running without it.", name, name, option);
 			return;
+		}
 
 		std::vector<std::filesystem::path> candidates;
 		if (!setting.empty() && lower(setting) != "auto")
