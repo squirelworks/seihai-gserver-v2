@@ -94,7 +94,7 @@ cmake --build build-module --target seihai-graal3d
 `GRAAL3D=ON` (built in) and `GRAAL3D_MODULE=ON` can be on together; a server
 with the add-on built in never loads the module.
 
-**Releases.** From `v4.0.0-seihai.7`, the server release archives
+**Releases.** From `v4.0.0-seihai.6`, the server release archives
 ("Seihai build and release", `.github/workflows/seihai-release.yml`) are built with
 `-DGRAAL3D=OFF` and carry an `addons/` folder holding only a README.txt. The 3D side is released only
 as the module (`graal3d-v*`, `.github/workflows/graal3d-module.yml`), at its own
@@ -145,7 +145,7 @@ release made by the same CI always match.
 
 | What | Version | Tag | Notes |
 |---|---|---|---|
-| The server | `v<upstream>-seihai.N` | `v4.0.0-seihai.7`, ... | `VERSIONING.md` |
+| The server | `v<upstream>-seihai.N` | `v4.0.0-seihai.6`, ... | `VERSIONING.md` |
 | The Graal 3D module | `addons/graal3d/VERSION` | `graal3d-v<version>` | `addons/graal3d/README.md`, `.github/workflows/graal3d-module.yml` |
 | The add-on API | `kAddonApiVersion` | none | bumped with any change to the three headers |
 | The 3D protocol | stock Graal3D (Torque 19, 21, 24) | none | the module does not speak `seihai3d` yet (seihai-core `three_d_ext`) |

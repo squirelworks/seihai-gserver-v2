@@ -49,7 +49,7 @@ platform always do.
 ### 0.1.1 (2026-11-27)
 
 - The first module released for the server releases that have no 3D code of their
-  own: from `v4.0.0-seihai.7`, every server archive is built with `-DGRAAL3D=OFF`
+  own: from `v4.0.0-seihai.6`, every server archive is built with `-DGRAAL3D=OFF`
   and gets its 3D from this module, released at its own times.
 - Built from `seihai` after #186: on Linux a linker version script
   (`Graal3DModule.map`) leaves only the three entry points exported (0.1.0 also
