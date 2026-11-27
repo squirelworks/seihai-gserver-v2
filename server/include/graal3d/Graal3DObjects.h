@@ -237,6 +237,19 @@ namespace graal3d
 		uint32_t squareSize = 8;
 		bool repeat = false;
 		std::array<std::optional<TerrainChunk>, 256> chunks; // y * 16 + x, filled by loadTerrain
+		// A large terrain (`terrain <folder> <size> repeat <w>x<h>`, Graal3DBigWorld.h):
+		// width x height chunks, y * largeWidth + x; `chunks` is then unused.
+		uint32_t largeWidth = 0;
+		uint32_t largeHeight = 0;
+		std::vector<std::optional<TerrainChunk>> large;
+		[[nodiscard]] bool isLarge() const { return largeWidth > 0; }
+		[[nodiscard]] const TerrainChunk* largeChunk(uint32_t x, uint32_t y) const
+		{
+			if (x >= largeWidth || y >= largeHeight)
+				return nullptr;
+			const auto& c = large[static_cast<size_t>(y) * largeWidth + x];
+			return c ? &*c : nullptr;
+		}
 	};
 
 	// Torque's calculateCRC: the CRC-32 table, starting at 0xFFFFFFFF, without

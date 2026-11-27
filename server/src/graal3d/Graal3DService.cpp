@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-14, 2026-11-19, 2026-11-20, 2026-11-25, 2026-11-26: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-14, 2026-11-19, 2026-11-20, 2026-11-25, 2026-11-26, 2026-11-27: see CHANGES-SEIHAI.md.
 // New file: the gserver's Graal 3D UDP side. See Graal3DService.h.
 
 #include <graal3d/Graal3DService.h>
@@ -234,6 +234,69 @@ namespace graal3d
 			closeSession(endpoint, "The 3D connection timed out.", false);
 		relayTgeMoves();
 		relayTcpPlayers(now);
+		bigWorldPass(now);
+	}
+
+	void Service::bigWorldPass(uint64_t now)
+	{
+		if (now < m_nextBigWorldPass)
+			return;
+		m_nextBigWorldPass = now + BigWorldPassMs;
+		const auto& terrain = m_world.terrain;
+		for (auto& [endpoint, session] : m_sessions)
+		{
+			const auto a = m_avatars.find(session.player);
+			if (a == m_avatars.end())
+				continue;
+			const auto pos = a->second.object.transform.position;
+			auto& connection = *session.connection;
+			// Distance scoping: world objects that came within the radius, out
+			// past radius + hysteresis.
+			if (session.scope)
+			{
+				std::vector<ScopeCandidate> objects;
+				for (size_t i = 0; i < m_world.objects.size(); ++i)
+					if (m_world.objects[i].kind == GhostObject::Kind::GameObject)
+						objects.push_back({i, m_world.objects[i].object.transform.position});
+				const auto plan = planScope(*session.scope, pos, objects, m_scope, ScopeBudget);
+				for (auto i : plan.remove)
+				{
+					connection.removeGhost(static_cast<ObjectKey>(i + 1));
+					session.scope->erase(i);
+				}
+				for (auto i : plan.add)
+				{
+					const auto key = static_cast<ObjectKey>(i + 1);
+					connection.setGhost(key, m_world.objects[i]);
+					if (connection.ghostIndex(key))
+						session.scope->insert(i);
+				}
+				if (m_trace && (!plan.add.empty() || !plan.remove.empty()))
+					trace(m_avatars[session.player].object.name, connection.profile().protocol,
+						  std::format("scope\t+{} -{}\t{} in scope\t{} ghosts\t{:.0f} {:.0f} {:.0f}", plan.add.size(), plan.remove.size(),
+									  session.scope->size(), connection.ghostCount(), pos[0], pos[1], pos[2]));
+			}
+			// A large terrain: the chunks that came into the window, then a relight.
+			if (session.window && terrain && terrain->isLarge() && connection.missionState() == MissionState::Done)
+			{
+				const auto window = terrainWindow(pos, terrain->squareSize, terrain->largeWidth, terrain->largeHeight);
+				if (window == *session.window)
+					continue;
+				size_t sent = 0;
+				for (size_t i = 0; i < 256; ++i)
+				{
+					if (window[i] == (*session.window)[i])
+						continue;
+					if (const auto* c = terrain->largeChunk(window[i].first, window[i].second))
+						if (connection.postTerrainChunkToRelight(static_cast<uint32_t>(i % 16), static_cast<uint32_t>(i / 16), c->stamp, c->packed))
+							++sent;
+				}
+				session.window = window;
+				if (sent > 0)
+					log::printLine(log::server, "Graal3D: {}: terrain window moved (at {:.0f},{:.0f}): {} chunks.", a->second.object.name, pos[0], pos[1],
+								   sent);
+			}
+		}
 	}
 
 	std::array<float, 3> Service::spawnPosition() const
@@ -603,12 +666,13 @@ namespace graal3d
 		cb.onTerrainRequest = [this, playerId, account](const std::array<uint32_t, 256>& stamps) {
 			if (auto it = m_byPlayer.find(playerId); it != m_byPlayer.end())
 				if (auto s = m_sessions.find(it->second); s != m_sessions.end())
-					sendTerrain(account, *s->second.connection, s->second.caps, stamps);
+					sendTerrain(account, s->second, stamps);
 		};
 
 		Session session{from, playerId, std::make_unique<Connection>(*profile, req->sequence, now, std::move(cb)), caps};
 		auto& connection = *session.connection;
 		connection.setPacketStrings(m_packetStrings);
+		connection.setSendInterval(m_sendMs);
 		m_sessions.emplace(from, std::move(session));
 		m_byPlayer[playerId] = from;
 		player->setAddonLinked(true);
@@ -1164,8 +1228,10 @@ namespace graal3d
 		return offersWorldObject(caps, object);
 	}
 
-	void Service::sendTerrain(const std::string& account, Connection& connection, const Capabilities* caps, const std::array<uint32_t, 256>& stamps)
+	void Service::sendTerrain(const std::string& account, Session& session, const std::array<uint32_t, 256>& stamps)
 	{
+		auto& connection = *session.connection;
+		const Capabilities* caps = session.caps;
 		if (!m_world.terrain)
 		{
 			log::printLine(log::server, "Graal3D: {} asked for terrain chunks; the world has no terrain line.", account);
@@ -1178,9 +1244,21 @@ namespace graal3d
 			return;
 		}
 		size_t sent = 0, current = 0;
+		// A large terrain answers with the window round where the player is now,
+		// so a returning player far from the spawn gets only what it lacks there.
+		std::optional<TerrainWindow> window;
+		if (m_world.terrain->isLarge())
+		{
+			const auto a = m_avatars.find(session.player);
+			const auto pos = a != m_avatars.end() ? a->second.object.transform.position : m_world.spawn.position;
+			window = terrainWindow(pos, m_world.terrain->squareSize, m_world.terrain->largeWidth, m_world.terrain->largeHeight);
+			session.window = window;
+		}
 		for (size_t i = 0; i < 256; ++i)
 		{
-			const auto& chunk = m_world.terrain->chunks[i];
+			std::optional<TerrainChunk> none;
+			const auto* large = window ? m_world.terrain->largeChunk((*window)[i].first, (*window)[i].second) : nullptr;
+			const auto& chunk = window ? (large ? std::optional<TerrainChunk>(*large) : none) : m_world.terrain->chunks[i];
 			if (!chunk)
 				continue;
 			if (chunk->stamp == stamps[i])
@@ -1316,33 +1394,17 @@ namespace graal3d
 			return;
 		}
 
-		ObjectKey key = 1;
 		const Capabilities* caps = capabilitiesOf(playerId);
-		bool sky = false;
-		size_t held = 0;
-		for (const auto& object : m_world.objects)
-		{
-			// Lab: graal3dgrassdelay holds grass back so the pushed texture can
-			// land first (5.12 drew no grass on a first visit, lab 2026-11-26).
-			if (m_grassDelayMs > 0 && isGrass(object) && offers(caps, object, static_cast<int>(connection.profile().protocol)))
-				++held;
-			else if (offers(caps, object, static_cast<int>(connection.profile().protocol)))
-				connection.setGhost(key, object);
-			sky = sky || object.kind == GhostObject::Kind::Sky;
-			++key;
-		}
-		if (held > 0)
-			if (const auto it = m_byPlayer.find(playerId); it != m_byPlayer.end())
-				if (const auto session = m_sessions.find(it->second); session != m_sessions.end())
-				{
-					session->second.grassDueMs = nowMs() + m_grassDelayMs;
-					log::printLine(log::server, "Graal3D: {} gets {} grass objects in {} ms (graal3dgrassdelay).", account, held, m_grassDelayMs);
-				}
-		if (caps && caps->requiresSky && !sky)
-			log::printLine(log::server, "Graal3D: {}'s build ({}) crashes without a Sky, and graal3dworld.txt has no sky line.", account,
-						   caps->label);
-		for (const auto& [other, avatar] : m_avatars)
-			connection.setGhost(avatarKey(other), avatar); // its own included: the control object
+		const int protocol = static_cast<int>(connection.profile().protocol);
+		// The ghost table holds 4096. Its first entries go to what the client
+		// cannot draw without: its own object and its Camera, then the rest of
+		// the world but its objects (the TerrainBlock, Sun, Sky, water and
+		// ground cover), then the other players, and the world objects last.
+		// With the objects first, a world of 4094 or more filled the table
+		// before the own object and Camera, and a real 5.12 drew a black view
+		// all session (lab, 2026-11-27).
+		if (const auto own = m_avatars.find(playerId); own != m_avatars.end())
+			connection.setGhost(avatarKey(playerId), own->second); // the control object
 		// The Sharp3D route's control object is the client's Camera (set below).
 		if (!connection.profile().ghostAlwaysWorld)
 			connection.setControlObject(avatarKey(playerId));
@@ -1360,6 +1422,76 @@ namespace graal3d
 		connection.setCameraObject(cameraKey(playerId));
 		if (connection.profile().ghostAlwaysWorld)
 			connection.setControlObject(cameraKey(playerId));
+
+		bool sky = false;
+		size_t held = 0, worldObjects = 0;
+		for (size_t i = 0; i < m_world.objects.size(); ++i)
+		{
+			const auto& object = m_world.objects[i];
+			const auto key = static_cast<ObjectKey>(i + 1);
+			sky = sky || object.kind == GhostObject::Kind::Sky;
+			if (object.kind == GhostObject::Kind::GameObject)
+			{
+				++worldObjects;
+				continue;
+			}
+			// Lab: graal3dgrassdelay holds grass back so the pushed texture can
+			// land first (5.12 drew no grass on a first visit, lab 2026-11-26).
+			if (m_grassDelayMs > 0 && isGrass(object) && offers(caps, object, protocol))
+				++held;
+			else if (offers(caps, object, protocol))
+				connection.setGhost(key, object);
+		}
+		if (held > 0)
+			if (const auto it = m_byPlayer.find(playerId); it != m_byPlayer.end())
+				if (const auto session = m_sessions.find(it->second); session != m_sessions.end())
+				{
+					session->second.grassDueMs = nowMs() + m_grassDelayMs;
+					log::printLine(log::server, "Graal3D: {} gets {} grass objects in {} ms (graal3dgrassdelay).", account, held, m_grassDelayMs);
+				}
+		if (caps && caps->requiresSky && !sky)
+			log::printLine(log::server, "Graal3D: {}'s build ({}) crashes without a Sky, and graal3dworld.txt has no sky line.", account,
+						   caps->label);
+		for (const auto& [other, avatar] : m_avatars)
+			if (other != playerId)
+				connection.setGhost(avatarKey(other), avatar);
+
+		// The world objects: all of them, or with graal3dscope only those near
+		// the player (Graal3DBigWorld.h).
+		Session* self = nullptr;
+		if (const auto it = m_byPlayer.find(playerId); it != m_byPlayer.end())
+			if (const auto session = m_sessions.find(it->second); session != m_sessions.end())
+				self = &session->second;
+		if (self)
+			self->window.reset(); // the client asks for the terrain again
+		if (m_scope.applies(worldObjects) && self)
+		{
+			const auto a = m_avatars.find(playerId);
+			const auto at = a != m_avatars.end() ? a->second.object.transform.position : m_world.spawn.position;
+			std::vector<ScopeCandidate> objects;
+			for (size_t i = 0; i < m_world.objects.size(); ++i)
+				if (m_world.objects[i].kind == GhostObject::Kind::GameObject && offers(caps, m_world.objects[i], protocol))
+					objects.push_back({i, m_world.objects[i].object.transform.position});
+			std::set<size_t> scoped;
+			for (auto i : planScope({}, at, objects, m_scope, ScopeBudget).add)
+			{
+				const auto key = static_cast<ObjectKey>(i + 1);
+				connection.setGhost(key, m_world.objects[i]);
+				if (connection.ghostIndex(key))
+					scoped.insert(i);
+			}
+			log::printLine(log::server, "Graal3D: {}: {} of {} world objects in scope at link (radius {}).", account, scoped.size(), worldObjects,
+						   m_scope.radius);
+			self->scope = std::move(scoped);
+		}
+		else
+		{
+			if (self)
+				self->scope.reset();
+			for (size_t i = 0; i < m_world.objects.size(); ++i)
+				if (m_world.objects[i].kind == GhostObject::Kind::GameObject && offers(caps, m_world.objects[i], protocol))
+					connection.setGhost(static_cast<ObjectKey>(i + 1), m_world.objects[i]);
+		}
 		log::printLine(log::server, "Graal3D: {} gets {} world objects and {} players.", account, m_world.objects.size(), m_avatars.size());
 		sendRawEvents(account, connection, false);
 	}

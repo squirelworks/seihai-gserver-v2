@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-20, 2026-11-25, 2026-11-26: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-15, 2026-11-20, 2026-11-25, 2026-11-26, 2026-11-27: see CHANGES-SEIHAI.md.
 // New file: tests for the Graal 3D (Torque) UDP side. The client bytes are from the
 // 2026-10-30 Wine lab, where the real 5.12 client joined a test 3D server
 // (Graal_analysis torque/network.md, "The full handshake, live").
@@ -1589,6 +1589,59 @@ SCENARIO("MissionStartPhase2 waits for the terrain and its chunks (T3D-162)")
 				if (l.find("phase 2 sent with no terrain request answered yet") != std::string::npos)
 					logged = true;
 			REQUIRE(logged);
+		}
+	}
+}
+
+SCENARIO("Terrain chunks sent mid-session are relit once acked (large terrains)")
+{
+	Harness h;
+	GhostObject me;
+	me.object.name = "G3DPlayer_guest";
+	me.object.shape = "player.dts";
+	h.conn.setGhost(3, me);
+	h.conn.setControlObject(3);
+	h.conn.receive(kFirstData, h.now);
+	h.tick(60);
+	h.phase1Ack();
+	REQUIRE(h.mission.back() == MissionState::Phase2Sent);
+	std::vector<OutEvent> ack;
+	ack.push_back({"NetStringEvent", netStringEvent(3, "MissionStartPhase2Ack")});
+	ack.push_back({"RemoteCommandEvent", remoteCommandEvent({CommandArg{true, 3, {}}})});
+	h.conn.receive(clientDataPacket(h.profile, 3, lastServerSeq(h), 0xFF, ack, 1), h.now);
+	h.tick(60);
+	REQUIRE(h.conn.missionState() == MissionState::Done);
+
+	const std::string packed("\x78\x9c\x03\x00\x00\x00\x00\x01", 8);
+	REQUIRE(h.conn.postTerrainChunkToRelight(0, 0, 7, packed));
+	REQUIRE(h.conn.postTerrainChunkToRelight(0, 1, 7, packed));
+	REQUIRE(h.conn.relightOwed());
+	const auto relit = [&] {
+		for (const auto& l : h.logs)
+			if (l.find("MissionStartPhase2 again") != std::string::npos)
+				return true;
+		return false;
+	};
+	h.tick(60);
+	h.tick(1000);
+	THEN("nothing goes before the chunks are acked, and phase 2 goes again after")
+	{
+		REQUIRE_FALSE(relit());
+		REQUIRE(h.conn.relightOwed());
+		h.conn.receive(clientDataPacket(h.profile, 4, lastServerSeq(h), 0xFF, {}, 0), h.now);
+		h.tick(60);
+		REQUIRE(relit());
+		REQUIRE_FALSE(h.conn.relightOwed());
+		REQUIRE(h.conn.missionState() == MissionState::Done);
+
+		AND_THEN("its ack is taken quietly")
+		{
+			std::vector<OutEvent> again;
+			again.push_back({"RemoteCommandEvent", remoteCommandEvent({CommandArg{false, 0, "MissionStartPhase2Ack"}})});
+			h.conn.receive(clientDataPacket(h.profile, 5, lastServerSeq(h), 0xFF, again, 3), h.now);
+			REQUIRE(h.conn.missionState() == MissionState::Done);
+			for (const auto& l : h.logs)
+				REQUIRE(l.find("remote command ignored") == std::string::npos);
 		}
 	}
 }

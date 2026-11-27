@@ -1,6 +1,6 @@
 # Graal 3D (Seihai)
 
-<!-- Modified by the Seihai project, 2026-11-14: reconcile recorded lab coverage; 2026-11-19: protocol 19 Sky and Player; 2026-11-20: default Camera facing the spawn; 2026-11-25: lab raw objects and events, the Sharp3D route. -->
+<!-- Modified by the Seihai project, 2026-11-14: reconcile recorded lab coverage; 2026-11-19: protocol 19 Sky and Player; 2026-11-20: default Camera facing the spawn; 2026-11-25: lab raw objects and events, the Sharp3D route; 2026-11-27: big worlds (distance scoping, ghost order, large terrains). -->
 
 This file is part of the Seihai fork (GPL-3.0, see `LICENSE.md` and `CHANGES-SEIHAI.md`).
 
@@ -32,6 +32,8 @@ graal3d = true
 # graal3dstringprefix = true
 # graal3droute = mission   (or sharp3d: see "The Sharp3D route")
 # graal3dshapecheck = skip  (or warn, or off: see "Shipping a 3D world")
+# graal3dscope = off        (or on, or auto: see "Big worlds")
+# graal3dsendms = 50        (least ms between two data packets to a client, 10 to 1000)
 ```
 
 `graal3dstringprefix` says whether strings inside game packets start with Torque's
@@ -341,6 +343,62 @@ world/3d/                        any folder the file folders cover
 
 `seihai-servertools gen terrain DIR --world NAME --stream --playerworld` writes a whole
 world in this layout from a generated height field.
+
+## Big worlds
+
+Ported from seihai-gserver #226 and #227 (checked there on a real 5.12, lab 2026-11-27); the
+planner and the window are in `Graal3DBigWorld.h`.
+
+**Ghost order.** A GameObject-era client (4.20r6, 4.20r8, 5.x) has a ghost table of 4096
+entries, and the first ghosts set take the first entries. The server now ghosts the player's
+own object and its Camera first, then the rest of the world but its objects (the
+TerrainBlock, Sun, Sky, water, ground cover and raw objects), then the other players, and
+the world objects last. With the objects first, a world of 4094 or more objects filled the
+table before the own object and Camera, and a real 5.12 drew a black view all session.
+
+**Distance scoping** (off by default):
+
+```
+graal3dscope = auto            # off, on (every world) or auto
+graal3dscopeauto = 2000        # auto: only a world with more objects than this
+graal3dscoperadius = 1100      # world units
+graal3dscopehysteresis = 200   # world units
+```
+
+- A world `object` is ghosted only while it is within the radius of the player's own object
+  (3D distance), and deleted once it is farther than radius + hysteresis.
+- Each client's scope is looked at 5 times a second. With `graal3dtrace` on, each look that
+  changed something adds a `scope` line.
+- Only `object` lines are scoped; everything else always goes.
+- A scoped client holds at most 3584 world objects (the table less 512), nearest first.
+- On a real 5.12, 4000 unscoped objects took 31 s to come in at the default pacing. With
+  20,164 objects and the defaults, the join took about 3 s and the peak was about 1400
+  table entries while walking.
+
+`graal3dsendms` is the least time between two data packets (default 50 ms, at most 400
+bytes each). A real 5.12 took 10 ms on loopback with no loss (terrain 4x faster). That is
+untried over a real network, so the default stays.
+
+**Large terrains** (a sliding window):
+
+```
+terrain world/continent 8 repeat 48x48
+```
+
+- `<width>x<height>` chunks, each even and 16 to 256. `repeat` is required, and `16x16` is
+  the plain terrain.
+- The folder holds `heights<X>-<Y>.dat` for X < width and Y < height.
+- The terrain is centred on the origin: world chunk X covers x from (X - width / 2) x span
+  to (X - width / 2 + 1) x span, where span is 16 squares.
+- The client tiles its 16 x 16 grid, so world chunk X sits in slot (X - width / 2 + 8) mod
+  16 (X mod 16 for a width of 48). Each slot holds the chunk that falls in it among the 16
+  round the player's own chunk.
+- The terrain request is answered for the window where the player is now.
+- Each chunk crossing sends the slots that changed (16 straight, 31 diagonal). Once the
+  client has acked them all, `MissionStartPhase2` goes again so it lights them. A real 5.12
+  drew such chunks flat-lit until then; after it, they matched a static terrain pixel for
+  pixel. The ack of that phase 2 is taken quietly.
+- Past the edge, a slot keeps the nearest chunk of the terrain that falls in it.
 
 ## Lab: ground cover (`replicator`)
 

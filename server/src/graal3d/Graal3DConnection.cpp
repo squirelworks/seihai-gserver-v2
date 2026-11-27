@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-25, 2026-11-26: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-19, 2026-11-25, 2026-11-26, 2026-11-27: see CHANGES-SEIHAI.md.
 // New file: one Graal 3D (Torque) UDP connection, server side. See Graal3DConnection.h.
 // The notify protocol follows Torque's ConnectionProtocol::processRawPacket and
 // NetConnection's event code (MIT-licensed Torque3D source), with Graal's 12-bit
@@ -134,13 +134,14 @@ namespace graal3d
 			advanceTge();
 		if (releasePhase2(nowMs) && m_cb.onMission)
 			m_cb.onMission(m_mission);
+		relightWhenLit();
 		if (m_mutation != Mutation::None && !isAcceptMutation(m_mutation) && !m_mutationDone && m_mutationAt == 0 && m_mission == MissionState::Done)
 			m_mutationAt = nowMs + 2000;
 		if (sendsEvents() && m_established)
 		{
 			const bool work = !m_sendQueue.empty() || m_ackOwed || ghostWorkPending() || controlPending() || (m_controlDelivered && m_controlMoved) ||
 							  mutationDue(nowMs);
-			const bool due = work && sinceSend >= SendIntervalMs;
+			const bool due = work && sinceSend >= m_sendIntervalMs;
 			if (due || sinceSend >= KeepAliveMs)
 				sendPacket(PacketType::Data, nowMs);
 		}
@@ -231,6 +232,28 @@ namespace graal3d
 		if (postEvent("TerrainChunkEvent", std::move(payload)) && m_terrainAsked && !m_terrainAnswered)
 			m_chunkSeqs.push_back(m_nextSendEventSeq - 1);
 		return true;
+	}
+
+	bool Connection::postTerrainChunkToRelight(uint32_t x, uint32_t y, uint32_t stamp, std::string_view packed)
+	{
+		if (!postTerrainChunk(x, y, stamp, packed))
+			return false;
+		m_relightSeqs.push_back(m_nextSendEventSeq - 1);
+		m_relightOwed = true;
+		return true;
+	}
+
+	void Connection::relightWhenLit()
+	{
+		if (!m_relightOwed || m_mission != MissionState::Done)
+			return;
+		for (auto seq : m_relightSeqs)
+			if (m_events.contains(seq))
+				return;
+		m_relightSeqs.clear();
+		m_relightOwed = false;
+		sendCommand("MissionStartPhase2", {std::to_string(m_missionSeq), "Graal3D"});
+		log("new terrain chunks are in: MissionStartPhase2 again, to light them");
 	}
 
 	bool Connection::lightsTheMission(const GhostObject& object)
@@ -1398,6 +1421,8 @@ namespace graal3d
 			}
 			else if (command == "MissionStartPhase3Ack" && m_mission == MissionState::Phase3Sent)
 				m_mission = MissionState::Done;
+			else if (command == "MissionStartPhase2Ack" && m_mission == MissionState::Done)
+				return; // the answer to a relight (postTerrainChunkToRelight)
 			else
 			{
 				log("remote command ignored: " + command);

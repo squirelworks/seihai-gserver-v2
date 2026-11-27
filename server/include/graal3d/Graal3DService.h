@@ -1,4 +1,4 @@
-// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-19, 2026-11-25, 2026-11-26: see CHANGES-SEIHAI.md.
+// Modified by the Seihai project, 2026-11-11, 2026-11-12, 2026-11-19, 2026-11-25, 2026-11-26, 2026-11-27: see CHANGES-SEIHAI.md.
 // New file: the gserver's Graal 3D side. A Graal 3D server is two servers on one
 // host: this gserver on TCP port P, and a Torque UDP server on port P + 1, which the
 // 3.153 to 5.x clients open when the server's listed name starts with "3 ". This
@@ -38,6 +38,7 @@
 #include <CSocket.h>
 #include <CString.h>
 
+#include <graal3d/Graal3DBigWorld.h>
 #include <graal3d/Graal3DCapabilities.h>
 #include <graal3d/Graal3DConnection.h>
 #include <graal3d/Graal3DObjects.h>
@@ -125,6 +126,12 @@ namespace graal3d
 		// Lab: graal3dgrassdelay = <ms> ghosts the grass replicators that long
 		// after the rest of the world (0, the default: with the rest).
 		void setGrassDelay(uint32_t ms) { m_grassDelayMs = ms; }
+		// graal3dscope, graal3dscoperadius, graal3dscopehysteresis, graal3dscopeauto:
+		// world objects only near each player (Graal3DBigWorld.h). Off by default.
+		void setScope(const ScopeOptions& scope) { m_scope = scope; }
+		// graal3dsendms: the least time between two data packets to one client
+		// (0: Connection::SendIntervalMs).
+		void setSendInterval(uint64_t ms) { m_sendMs = ms; }
 
 		// Files the start-up check found would crash a client (graal3dshapecheck
 		// = skip): a 3D client asking for one is answered as if the server did
@@ -181,6 +188,12 @@ namespace graal3d
 			std::map<PlayerID, GhostObject> tcpShown;
 			// graal3dgrassdelay: when the held grass objects are ghosted (0: none held).
 			uint64_t grassDueMs = 0;
+			// graal3dscope on for the world: the world objects (indices into
+			// m_world.objects) the client is ghosted.
+			std::optional<std::set<size_t>> scope;
+			// A large terrain: each slot's world chunk, once the terrain request
+			// is answered.
+			std::optional<TerrainWindow> window;
 		};
 
 		void handleDatagram(const Endpoint& from, std::string_view data, uint64_t nowMs);
@@ -218,7 +231,12 @@ namespace graal3d
 		// Lab: the world's rawevent lines (`late`: the ones for after the mission
 		// start) and, for protocol 19, its rawobject lines.
 		void sendRawEvents(const std::string& account, Connection& connection, bool late);
-		void sendTerrain(const std::string& account, Connection& connection, const Capabilities* caps, const std::array<uint32_t, 256>& stamps);
+		void sendTerrain(const std::string& account, Session& session, const std::array<uint32_t, 256>& stamps);
+		// Distance scoping and large-terrain windows, every BigWorldPassMs.
+		void bigWorldPass(uint64_t now);
+		uint64_t m_nextBigWorldPass = 0;
+		ScopeOptions m_scope;
+		uint64_t m_sendMs = 0;
 		void ghostRawObjects(const std::string& account, Connection& connection, const Capabilities* caps, ObjectKey firstKey);
 		// The capabilities of the player's 3D session, or nullptr.
 		const Capabilities* capabilitiesOf(PlayerID player) const;

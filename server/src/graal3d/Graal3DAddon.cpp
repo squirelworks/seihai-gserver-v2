@@ -1,4 +1,4 @@
-// Seihai project, 2026-11-25, 2026-11-26: see CHANGES-SEIHAI.md.
+// Seihai project, 2026-11-25, 2026-11-26, 2026-11-27: see CHANGES-SEIHAI.md.
 // New file: the Graal 3D add-on. See Graal3DAddon.h.
 
 #include <graal3d/Graal3DAddon.h>
@@ -67,6 +67,27 @@ namespace graal3d
 		m_service->setPushGrassTextures(settings.get<bool>("graal3dpushgrass").value_or(true));
 		// graal3dgrassdelay = <ms>: lab, ghost grass that long after the world (0 to 60000).
 		m_service->setGrassDelay(static_cast<uint32_t>(std::clamp(settings.get<int>("graal3dgrassdelay").value_or(0), 0, 60000)));
+		// graal3dscope = off (default), on or auto, with graal3dscoperadius (1100),
+		// graal3dscopehysteresis (200) and graal3dscopeauto (2000): world objects
+		// only near each player (see bin/docs/graal3d.md, "Big worlds").
+		{
+			ScopeOptions scope;
+			const auto mode = settings.get<std::string>("graal3dscope").value_or("off"s);
+			if (const auto m = ScopeOptions::parseMode(mode))
+				scope.mode = *m;
+			else
+				log::printLine(log::server, "** [Error] Graal3D: graal3dscope {} is not off, on or auto; using off.", mode);
+			scope.radius = std::clamp(settings.get<float>("graal3dscoperadius").value_or(1100.0f), 1.0f, 100000.0f);
+			scope.hysteresis = std::clamp(settings.get<float>("graal3dscopehysteresis").value_or(200.0f), 0.0f, 100000.0f);
+			scope.autoAbove = static_cast<size_t>(std::max(0, settings.get<int>("graal3dscopeauto").value_or(2000)));
+			m_service->setScope(scope);
+			if (scope.mode != ScopeOptions::Mode::Off)
+				log::printLine(log::server, "Graal3D: world objects within {} units of each player, deleted past {} ({}).", scope.radius,
+							   scope.radius + scope.hysteresis,
+							   scope.mode == ScopeOptions::Mode::On ? "every world"s : "worlds of more than "s + std::to_string(scope.autoAbove) + " objects");
+		}
+		// graal3dsendms = <ms>: the least time between two 3D data packets to a client (10 to 1000; default 50).
+		m_service->setSendInterval(static_cast<uint64_t>(std::clamp(settings.get<int>("graal3dsendms").value_or(50), 10, 1000)));
 		m_service->setWorld(std::move(world), settings.get<bool>("graal3dstringprefix").value_or(true));
 		// graal3droute = sharp3d: the route of a server real 5.12 joined (see bin/docs/graal3d.md).
 		const auto route = settings.get<std::string>("graal3droute").value_or("mission"s);
