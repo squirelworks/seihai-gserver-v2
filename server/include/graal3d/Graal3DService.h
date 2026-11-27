@@ -19,7 +19,9 @@
 // login step 5. Each client reports its position in every packet; the service
 // moves that player's object on everyone else's screen, and passes on its chat.
 //
-// Off unless the server option `graal3d` is true.
+// Off unless the server option `graal3d` is true. It reaches the server only
+// through preagonal::AddonHost (addons/AddonHost.h), so it builds into the
+// gserver and into the separate module seihai-graal3d alike.
 
 #ifndef SEIHAI_GRAAL3D_GRAAL3DSERVICE_H
 #define SEIHAI_GRAAL3D_GRAAL3DSERVICE_H
@@ -29,6 +31,7 @@
 #include <fstream>
 #include <functional>
 #include <map>
+#include <optional>
 #include <memory>
 #include <random>
 #include <set>
@@ -38,17 +41,13 @@
 #include <CSocket.h>
 #include <CString.h>
 
+#include <addons/AddonHost.h>
 #include <graal3d/Graal3DBigWorld.h>
 #include <graal3d/Graal3DCapabilities.h>
 #include <graal3d/Graal3DConnection.h>
 #include <graal3d/Graal3DObjects.h>
 #include <utilities/CommonTypes.h>
 
-namespace preagonal
-{
-	class Server;
-	class Player;
-}
 
 namespace graal3d
 {
@@ -57,7 +56,7 @@ namespace graal3d
 	class Service
 	{
 	public:
-		explicit Service(preagonal::Server& server);
+		explicit Service(preagonal::AddonHost& host);
 		~Service();
 		Service(const Service&) = delete;
 		Service& operator=(const Service&) = delete;
@@ -157,7 +156,7 @@ namespace graal3d
 		void onPlayerLeft(PlayerID player);
 
 		// A TCP packet is about to go to a player who has a 3D link.
-		void mirrorPacket(PlayerID player, const CString& packet);
+		void mirrorPacket(PlayerID player, std::string_view packet);
 
 		// A script on the player's client asked for its own object to be moved, with
 		// triggerserver(<kind>, <weapon>, "g3dpos", x, y, z), which a 5.12 client in 3D
@@ -200,7 +199,7 @@ namespace graal3d
 		void handleConnectRequest(const Endpoint& from, std::string_view data, uint64_t nowMs);
 		// The TCP client a 3D connect request belongs to: the named account,
 		// logged in from `ip`, or for "guest" that address's guest client.
-		std::shared_ptr<preagonal::Player> findTcpPlayer(const std::string& requested, const std::string& ip);
+		std::optional<preagonal::AddonPlayerInfo> findTcpPlayer(const std::string& requested, const std::string& ip);
 		void handleText(PlayerID player, const TextMessage& message);
 		void handleClientState(PlayerID player, const ClientState& state);
 		void ghostWorld(PlayerID player, const std::string& account, Connection& connection);
@@ -248,7 +247,7 @@ namespace graal3d
 		static std::string ipString(const Endpoint& endpoint);
 		static uint64_t nowMs();
 
-		preagonal::Server& m_server;
+		preagonal::AddonHost& m_host;
 		SOCKET m_socket = INVALID_SOCKET;
 		uint16_t m_port = 0;
 		std::array<uint32_t, 4> m_secret{};

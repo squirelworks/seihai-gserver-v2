@@ -1,4 +1,4 @@
-# Seihai project, 2026-11-19, 2026-11-20, 2026-11-25: see CHANGES-SEIHAI.md.
+# Seihai project, 2026-11-19, 2026-11-20, 2026-11-25, 2026-11-27: see CHANGES-SEIHAI.md.
 # Crash hunting (#87): build gs2emu and the Seihai regression tests with AddressSanitizer
 # and UndefinedBehaviorSanitizer (-DSANITIZE=ON) and run them, including ShortPackets,
 # which sends every client id with an empty body through the real handlers. Then a
@@ -138,7 +138,9 @@ jobs:
           [ $ok = 1 ]
 
   # The core with no add-on compiled in (-DGRAAL3D=OFF, docs/addons.md): it builds,
-  # the add-on hook tests pass, and the default world starts and listens.
+  # the add-on hook tests pass, and the default world starts and listens. The
+  # Graal 3D module (-DGRAAL3D_MODULE=ON) is built beside it, and the hook tests
+  # load it into the server that has no 3D code.
   addons-off:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -172,19 +174,20 @@ jobs:
       - name: Configure without add-ons
         run: |
           CC=clang-18 CXX=clang++-18 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
-            -DTESTS=ON -DUPNP=OFF -DSANITIZE=ON -DGRAAL3D=OFF \
+            -DTESTS=ON -DUPNP=OFF -DSANITIZE=ON -DGRAAL3D=OFF -DGRAAL3D_MODULE=ON \
             -DANTLR4_JAR_LOCATION="$RUNNER_TEMP/antlr.jar"
       - name: Build
         run: |
           cmake --build build --target gs2emu
           cmake --build build --target ServerOptions
+          cmake --build build --target seihai-graal3d
       - name: No Graal 3D code in the build
         run: |
           if nm -C build/lib/liblibgs2emu*.a 2>/dev/null | grep -q "graal3d::"; then
             echo "graal3d symbols found with GRAAL3D=OFF"; exit 1
           fi
-      - name: Add-on hook tests
-        run: timeout 300 bin/ServerOptions
+      - name: Add-on hook tests, with the Graal 3D module loaded
+        run: SEIHAI_GRAAL3D_MODULE="$PWD/bin/addons/libseihai-graal3d.so" timeout 300 bin/ServerOptions
       - name: Default world starts and listens
         shell: bash
         run: |

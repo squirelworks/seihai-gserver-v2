@@ -1,9 +1,13 @@
-// Seihai project, 2026-11-25: see CHANGES-SEIHAI.md.
+// Seihai project, 2026-11-25, 2026-11-27: see CHANGES-SEIHAI.md.
 // New file: the add-on hook surface. An add-on is an optional subsystem (the
 // Graal 3D side is the first) that is compiled in with a CMake option, switched
 // on by a server option, and reached by the core only through the hooks below.
 // With no add-on compiled in, or none switched on, every hook is a no-op and the
 // server behaves exactly as without this file. See docs/addons.md.
+//
+// Only standard types cross these hooks and AddonHost.h, so an add-on can also be
+// built as a separate module and loaded at start (addons/AddonModule.h). Any
+// change here changes the add-on API: bump kAddonApiVersion in AddonModule.h.
 
 #ifndef SEIHAI_ADDONS_SERVERADDON_H
 #define SEIHAI_ADDONS_SERVERADDON_H
@@ -15,8 +19,6 @@
 #include <span>
 #include <string_view>
 #include <vector>
-
-#include <CString.h>
 
 #include <utilities/CommonTypes.h>
 
@@ -84,8 +86,9 @@ namespace preagonal
 		virtual void onPlayerLeft(PlayerID) {}
 
 		/// A packet is about to be queued for a player whose `addonLinked` flag is
-		/// set (Player::setAddonLinked). Called from Player::sendPacket.
-		virtual void onPacketToPlayer(PlayerID, const CString& /*packet*/) {}
+		/// set (Player::setAddonLinked). Called from Player::sendPacket. `packet`
+		/// is the packet's bytes, its id first.
+		virtual void onPacketToPlayer(PlayerID, std::string_view /*packet*/) {}
 
 		/// The HQ level the server registers at with the listserver, or nullopt to
 		/// leave it to `hq_level`. `onlystaff` still wins (level 0).

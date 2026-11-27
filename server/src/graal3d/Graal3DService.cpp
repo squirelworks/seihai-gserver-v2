@@ -25,14 +25,10 @@
 #endif
 
 #include <IEnums.h>
+#include <IUtil.h>
 
-#include <Server.h>
-#include <object/Player.h>
-#include <npcserver/NPCServer.h>
-#include <object/Weapon.h>
-#include <player/PlayerClient.h>
-#include <scripting/ScriptContainers.h>
-#include <utilities/Log.h>
+#include <addons/AddonHost.h>
+#include <graal3d/Graal3DLog.h>
 #include <utilities/StringUtils.h>
 
 using namespace preagonal;
@@ -114,9 +110,26 @@ namespace graal3d
 		return clientHasGraal3D(version) && version != CLVER_4_208;
 	}
 
-	Service::Service(Server& server)
-		: m_server(server)
+	namespace
 	{
+		preagonal::AddonHost* g_logHost = nullptr;
+	}
+
+	void setLogHost(preagonal::AddonHost* host)
+	{
+		g_logHost = host;
+	}
+
+	void logText(std::string_view text)
+	{
+		if (g_logHost != nullptr)
+			g_logHost->logLine(text);
+	}
+
+	Service::Service(AddonHost& host)
+		: m_host(host)
+	{
+		setLogHost(&host);
 		std::random_device rd;
 		for (auto& s : m_secret)
 			s = rd();
@@ -293,7 +306,7 @@ namespace graal3d
 				}
 				session.window = window;
 				if (sent > 0)
-					log::printLine(log::server, "Graal3D: {}: terrain window moved (at {:.0f},{:.0f}): {} chunks.", a->second.object.name, pos[0], pos[1],
+					logLine("Graal3D: {}: terrain window moved (at {:.0f},{:.0f}): {} chunks.", a->second.object.name, pos[0], pos[1],
 								   sent);
 			}
 		}
@@ -342,29 +355,31 @@ namespace graal3d
 		m_nextTcpRelay = now + 200;
 		for (auto& [endpoint, session] : m_sessions)
 		{
-			const auto me = m_server.getPlayer(session.player);
-			const auto level = me != nullptr ? me->getLevel() : nullptr;
+			const auto me = m_host.player(session.player);
+			const std::string level = me ? me->level : std::string();
 			std::map<PlayerID, GhostObject> want;
-			if (level != nullptr)
+			if (!level.empty())
 			{
-				for (const auto& [id, p] : m_server.getPlayerList())
+				for (const auto id : m_host.playerIds())
 				{
-					if (p == nullptr || id == session.player || m_byPlayer.contains(id) || !p->isClient() || !p->isLoaded() || p->getLevel() != level)
+					if (id == session.player || m_byPlayer.contains(id))
+						continue;
+					const auto p = m_host.player(id);
+					if (!p || !p->isClient || !p->isLoaded || p->level != level)
 						continue;
 					GhostObject avatar;
-					avatar.object.name = "G2DPlayer_" + p->account.name;
+					avatar.object.name = "G2DPlayer_" + p->account;
 					avatar.object.shape = m_world.playerShape;
 					avatar.object.transform = m_world.spawn;
-					const auto tile = p->getTilePosition();
-					avatar.object.transform.position = {static_cast<float>(tile.x()), -static_cast<float>(tile.y()), m_world.spawn.position[2]};
-					avatar.object.nickname = p->account.character.nickName;
-					avatar.object.chat = p->account.character.chatMessage;
+					avatar.object.transform.position = {p->tileX, -p->tileY, m_world.spawn.position[2]};
+					avatar.object.nickname = p->nickname;
+					avatar.object.chat = p->chat;
 					avatar.object.flags = GameObjectFlags::Shadow;
 					want.emplace(id, std::move(avatar));
 				}
 			}
 			auto& shown = session.tcpShown;
-			const auto account = me != nullptr ? me->account.name : std::to_string(session.player);
+			const auto account = me ? me->account : std::to_string(session.player);
 			const int protocol = static_cast<int>(session.connection->profile().protocol);
 			for (auto it = shown.begin(); it != shown.end();)
 			{
@@ -450,23 +465,20 @@ namespace graal3d
 		// (4.04r2, lab 2026-11-25). Positions off the map (x or -y below 0) are left.
 		// PlayerClient::setPosition sends the new x2/y2 to the level, so 2D
 		// clients there see the 3D player walk.
-		const auto player = m_server.getPlayer(playerId);
-		if (player == nullptr)
+		const auto player = m_host.player(playerId);
+		if (!player)
 			return;
 		if (!std::isfinite(position[0]) || !std::isfinite(position[1]) || position[0] < 0.0f || position[1] > 0.0f)
 		{
-			trace(player->account.name, 0, std::format("tcp position not set: {:.3f},{:.3f} is off the map (needs x >= 0, y <= 0)", position[0], position[1]));
+			trace(player->account, 0, std::format("tcp position not set: {:.3f},{:.3f} is off the map (needs x >= 0, y <= 0)", position[0], position[1]));
 			return;
 		}
-		auto tile = player->getTilePosition();
-		tile.x() = position[0];
-		tile.y() = -position[1];
-		player->setPosition(toPixelPosition(tile));
+		m_host.setTilePosition(playerId, position[0], -position[1]);
 		if (m_trace)
 		{
-			const auto level = player->getLevel();
-			trace(player->account.name, 0,
-				  std::format("tcp position {:.2f},{:.2f} in {}", position[0], -position[1], level != nullptr ? std::string(level->levelName) : std::string("no level")));
+			const auto moved = m_host.player(playerId);
+			const std::string level = moved ? moved->level : std::string();
+			trace(player->account, 0, std::format("tcp position {:.2f},{:.2f} in {}", position[0], -position[1], !level.empty() ? level : std::string("no level")));
 		}
 	}
 
@@ -515,7 +527,7 @@ namespace graal3d
 				if (!rate.warned)
 				{
 					rate.warned = true;
-					log::printLine(log::server, "** [Warning] Graal3D: {} sent more than {} datagrams in a second; the rest of that second is dropped (logged once per address).",
+					logLine("** [Warning] Graal3D: {} sent more than {} datagrams in a second; the rest of that second is dropped (logged once per address).",
 								   ipString(from), linked ? kLinkedDatagramsPerSecond : kUnlinkedDatagramsPerSecond);
 				}
 				return;
@@ -582,18 +594,18 @@ namespace graal3d
 		// yet. Until it is, say nothing: Torque resends the connect request.
 		const std::string& requested = req->args[0];
 		auto player = findTcpPlayer(requested, ipString(from));
-		if (player == nullptr)
+		if (!player)
 		{
 			// Say it once per address and name, not on every resend.
 			if (m_unmatched.size() > 1024)
 				m_unmatched.clear();
 			if (m_unmatched.insert(ipString(from) + "," + requested).second)
-				log::printLine(log::server, "Graal3D: {} asked for a 3D link from {}, but no client logged in over TCP from there matches it (yet).", requested, ipString(from));
+				logLine("Graal3D: {} asked for a 3D link from {}, but no client logged in over TCP from there matches it (yet).", requested, ipString(from));
 			return;
 		}
-		const std::string account = player->account.name;
+		const std::string account = player->account;
 
-		if (!Service::mayLinkGraal3D(player->getVersion()))
+		if (!Service::mayLinkGraal3D(player->versionId))
 		{
 			sendTo(from, buildConnectReject(req->sequence, "CHR_PROTOCOL"));
 			return;
@@ -605,15 +617,15 @@ namespace graal3d
 			if (const auto* sharp = sharp3dProfileForProtocol(req->currentProtocol))
 				profile = sharp;
 		}
-		const PlayerID playerId = player->getId();
-		const Capabilities* caps = capabilitiesFor(player->getVersionStr(), profile->protocol);
+		const PlayerID playerId = player->id;
+		const Capabilities* caps = capabilitiesFor(player->versionToken, profile->protocol);
 		if (caps)
 		{
 			const char* terrain = caps->takesStreamedTerrain512() ? (caps->terrainTextures ? "streamed" : "streamed, drawn untextured")
 								  : takesTerrain(caps, static_cast<int>(profile->protocol)) ? "streamed (graal3dterrainall)"
 								  : caps->terrainChunks ? "stock TGE only (not served)"
 														: "none";
-			log::printLine(log::server, "Graal3D: {} is a {} client: {}, terrain {}, TorqueScript {}{}.", account, caps->label,
+			logLine("Graal3D: {} is a {} client: {}, terrain {}, TorqueScript {}{}.", account, caps->label,
 						   caps->gameLayer == GameLayer::Tge ? "TGE layer" : "GameObject layer", terrain, caps->torqueScript ? "yes" : "no",
 						   caps->allAssumed() ? " (every capability assumed)" : caps->confirmed(CapField::Protocol) ? "" : " (protocol assumed)");
 		}
@@ -625,7 +637,7 @@ namespace graal3d
 		Connection::Callbacks cb;
 		cb.send = [this, from](std::string_view d) { sendTo(from, d); };
 		cb.onText = [this, playerId](const TextMessage& m) { handleText(playerId, m); };
-		cb.log = [account](std::string_view text) { log::printLine(log::server, "Graal3D {}: {}", account, text); };
+		cb.log = [account](std::string_view text) { logLine("Graal3D {}: {}", account, text); };
 		cb.onMission = [this, playerId, account](MissionState state) {
 			if (state == MissionState::Phase1Sent)
 			{
@@ -640,7 +652,7 @@ namespace graal3d
 			}
 			else if (state == MissionState::Done)
 			{
-				log::printLine(log::server, "Graal3D: {} finished the mission start.", account);
+				logLine("Graal3D: {} finished the mission start.", account);
 				// The client loads a Sky's material list only when it unpacks the Sky,
 				// and the list arrives over TCP after the first unpack: send it again.
 				if (auto it = m_byPlayer.find(playerId); it != m_byPlayer.end())
@@ -675,7 +687,7 @@ namespace graal3d
 		connection.setSendInterval(m_sendMs);
 		m_sessions.emplace(from, std::move(session));
 		m_byPlayer[playerId] = from;
-		player->setAddonLinked(true);
+		m_host.setAddonLinked(playerId, true);
 		// Once per account per server run: a client keeps what it was sent, so
 		// pushing again on every link only repeats the same transfers. A build
 		// that never reads terrain textures or heights.info (4.20r8, lab
@@ -686,7 +698,7 @@ namespace graal3d
 		else if (m_pushTerrainFiles && m_world.terrain && takesTerrain(caps, static_cast<int>(profile->protocol)) && m_terrainPushedTo.insert(account).second)
 		{
 			for (const auto& name : m_terrainFiles)
-				player->sendFile(name);
+				m_host.sendFile(playerId, name);
 			trace(account, profile->protocol, std::format("pushed {} terrain files over TCP (graal3dpushterrain)", m_terrainFiles.size()));
 		}
 		// Grass textures: 5.12 draws grass only from a texture it already has
@@ -697,9 +709,9 @@ namespace graal3d
 			m_grassPushedTo.insert(account).second)
 		{
 			for (const auto& name : m_grassTextures)
-				player->sendFile(name);
+				m_host.sendFile(playerId, name);
 			trace(account, profile->protocol, std::format("pushed {} grass textures over TCP (graal3dpushgrass)", m_grassTextures.size()));
-			log::printLine(log::server, "Graal3D: {} is sent {} grass textures (graal3dpushgrass).", account, m_grassTextures.size());
+			logLine("Graal3D: {} is sent {} grass textures (graal3dpushgrass).", account, m_grassTextures.size());
 		}
 
 		// The player's own object, on every screen; the world and the other
@@ -709,7 +721,7 @@ namespace graal3d
 		avatar.object.shape = m_world.playerShape;
 		avatar.object.transform = m_world.spawn;
 		avatar.object.transform.position = spawnPosition();
-		avatar.object.nickname = player->account.character.nickName;
+		avatar.object.nickname = player->nickname;
 		avatar.object.flags = GameObjectFlags::Shadow;
 		m_avatars[playerId] = avatar;
 		// The TCP side starts where the 3D object does: a 3D spawn at (20, -20)
@@ -725,11 +737,11 @@ namespace graal3d
 		{
 			const auto line = std::format("mutation {}:{} in the connect accept: {}; packet {}", mutationName(m_mutation), m_mutationSeed, tweaked,
 										  hexString(acceptPacket));
-			log::printLine(log::server, "Graal3D {}: {}", account, line);
+			logLine("Graal3D {}: {}", account, line);
 			trace(account, profile->protocol, line);
 		}
 		sendTo(from, acceptPacket);
-		log::printLine(log::server, "Graal3D: {} linked from {} (protocol {}, {}).", account, ipString(from), profile->protocol, profile->clients);
+		logLine("Graal3D: {} linked from {} (protocol {}, {}).", account, ipString(from), profile->protocol, profile->clients);
 		{
 			const auto& at = m_avatars[playerId].object.transform.position;
 			trace(account, profile->protocol,
@@ -738,32 +750,33 @@ namespace graal3d
 		}
 	}
 
-	std::shared_ptr<Player> Service::findTcpPlayer(const std::string& requested, const std::string& ip)
+	std::optional<AddonPlayerInfo> Service::findTcpPlayer(const std::string& requested, const std::string& ip)
 	{
-		const auto fromThere = [&](const std::shared_ptr<Player>& p) {
-			if (p == nullptr || !p->isLoaded() || p->getSocket() == nullptr || !p->isClient())
+		const auto fromThere = [&](const std::optional<AddonPlayerInfo>& p) {
+			if (!p || !p->isLoaded || p->ip.empty() || !p->isClient)
 				return false;
-			const char* tcpIp = p->getSocket()->getRemoteIp();
-			return tcpIp != nullptr && plainIpv4(tcpIp) == ip;
+			return plainIpv4(p->ip.c_str()) == ip;
 		};
 
-		if (auto p = m_server.getPlayer(CString(requested), PLTYPE_ANYCLIENT); fromThere(p))
-			return p;
+		if (const auto id = m_host.findClient(requested))
+			if (auto p = m_host.player(*id); fromThere(p))
+				return p;
 
 		// The 5.x client sends "guest" for a guest login, but the gserver renames
 		// guests to pc:<number>. Take the guest client from the same address,
 		// preferring one without a 3D link; the newest login wins a tie.
 		if (requested != "guest")
-			return nullptr;
-		std::shared_ptr<Player> best;
-		for (const auto& [id, p] : m_server.getPlayerList())
+			return std::nullopt;
+		std::optional<AddonPlayerInfo> best;
+		for (const auto id : m_host.playerIds())
 		{
-			if (!fromThere(p) || !p->isGuest() || !Service::mayLinkGraal3D(p->getVersion()))
+			auto p = m_host.player(id);
+			if (!fromThere(p) || !p->isGuest || !Service::mayLinkGraal3D(p->versionId))
 				continue;
 			const bool linked = m_byPlayer.contains(id);
-			const bool bestLinked = best != nullptr && m_byPlayer.contains(best->getId());
-			if (best == nullptr || (bestLinked && !linked) || (bestLinked == linked && id > best->getId()))
-				best = p;
+			const bool bestLinked = best && m_byPlayer.contains(best->id);
+			if (!best || (bestLinked && !linked) || (bestLinked == linked && id > best->id))
+				best = std::move(p);
 		}
 		return best;
 	}
@@ -789,8 +802,7 @@ namespace graal3d
 		if (auto p = m_byPlayer.find(playerId); p != m_byPlayer.end() && p->second == endpoint)
 		{
 			m_byPlayer.erase(p);
-			if (auto player = m_server.getPlayer(playerId))
-				player->setAddonLinked(false);
+			m_host.setAddonLinked(playerId, false);
 			const auto a = m_avatars.find(playerId);
 			const std::string name = a != m_avatars.end() ? a->second.object.name : std::to_string(playerId);
 			m_avatars.erase(playerId);
@@ -805,7 +817,7 @@ namespace graal3d
 			});
 			trace(name, it->second.connection->profile().protocol, std::format("left: its object goes from {} other 3D clients", removed));
 		}
-		log::printLine(log::server, "Graal3D: link from {} closed ({}).", ipString(endpoint), reason);
+		logLine("Graal3D: link from {} closed ({}).", ipString(endpoint), reason);
 		m_sessions.erase(it);
 	}
 
@@ -815,7 +827,6 @@ namespace graal3d
 		// case-insensitively, and a bare texture name as <name>.<image extension>.
 		// Files are meant to keep their real extensions on disk; the clients
 		// drop them when they ask (bin/docs/graal3d.md, "Shipping a 3D world").
-		const auto& files = m_server.getFileSystem();
 		m_terrainFiles.clear();
 		m_grassTextures.clear();
 		m_refusedFiles.clear();
@@ -831,12 +842,22 @@ namespace graal3d
 		const auto hasPath = [](std::string_view name) {
 			return name.find_first_of("/\\:") != std::string_view::npos || name.find("..") != std::string_view::npos;
 		};
-		const auto find = [&](const std::string& name) -> preagonal::fs::FileData* {
+		// The server's own file for a name, as the host finds it (any served folder).
+		struct FoundFile
+		{
+			std::filesystem::path file;
+		};
+		const auto lookup = [&](const std::string& name) -> std::shared_ptr<const FoundFile> {
+			if (auto path = m_host.findFile(name))
+				return std::make_shared<const FoundFile>(FoundFile{std::filesystem::path(*path)});
+			return nullptr;
+		};
+		const auto find = [&](const std::string& name) -> std::shared_ptr<const FoundFile> {
 			const std::filesystem::path path{name};
-			auto info = files.infoi(preagonal::fs::FileCategory::ALL, path.filename());
+			auto info = lookup(path.filename().string());
 			if (info == nullptr && !path.has_extension())
 				for (const auto* ext : kImageExtensions)
-					if ((info = files.infoi(preagonal::fs::FileCategory::ALL, path.filename().string() + ext)) != nullptr)
+					if ((info = lookup(path.filename().string() + ext)) != nullptr)
 						break;
 			return info;
 		};
@@ -848,14 +869,14 @@ namespace graal3d
 		// A texture cannot be left out the way an object can, so a bad one is
 		// only logged (lab, 2026-11-25: a PNG claiming 30000x30000 crashed 5.12).
 		std::set<std::string> checkedShapes; // .3ds files whose textures were checked
-		const auto checkImage = [&](const preagonal::fs::FileData& info) {
+		const auto checkImage = [&](const FoundFile& info) {
 			if (m_shapeCheck == ShapeCheck::Off)
 				return;
 			const auto data = readAll(info.file);
 			if (const auto why = unsafeImage(data))
 			{
 				const bool skip = m_shapeCheck == ShapeCheck::Skip;
-				log::printLine(log::server, "** [Error] Graal3D: {} would crash a client ({}); {}.", info.file.filename().string(), *why,
+				logLine("** [Error] Graal3D: {} would crash a client ({}); {}.", info.file.filename().string(), *why,
 							   skip ? "3D clients are told the server does not have it" : "sent anyway (graal3dshapecheck = warn)");
 				if (skip)
 					refuse(info.file);
@@ -863,19 +884,19 @@ namespace graal3d
 			// 8-bit PNG, JPEG and GIF draw on 5.12; a 16-bit PNG does not
 			// (texture probe, Graal_analysis, 2026-11-25).
 			else if (pngSize(data) && static_cast<uint8_t>(data[24]) == 16)
-				log::printLine(log::server, "** [Warning] Graal3D: {} is a 16-bit PNG, which 5.12 does not draw; save it as 8-bit.", info.file.filename().string());
+				logLine("** [Warning] Graal3D: {} is a 16-bit PNG, which 5.12 does not draw; save it as 8-bit.", info.file.filename().string());
 			// 5.12 drew textures up to 1024 a side; 2048 and 4096 came out white
 			// (live, Graal_analysis torque/live-512-shapes-2026-11-25.md).
 			else if (const auto size = pngSize(data); size && (size->first > kMaxDrawnImageSide || size->second > kMaxDrawnImageSide))
-				log::printLine(log::server, "** [Warning] Graal3D: {} is {}x{}; 5.12 draws nothing over {} a side.", info.file.filename().string(), size->first,
+				logLine("** [Warning] Graal3D: {} is {}x{}; 5.12 draws nothing over {} a side.", info.file.filename().string(), size->first,
 							   size->second, kMaxDrawnImageSide);
 			if (data.empty())
-				log::printLine(log::server, "** [Warning] Graal3D: {} is empty; clients draw it white.", info.file.filename().string());
+				logLine("** [Warning] Graal3D: {} is empty; clients draw it white.", info.file.filename().string());
 			auto ext = info.file.extension().string();
 			for (auto& ch : ext)
 				ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
 			if (ext == ".bmp")
-				log::printLine(log::server, "** [Warning] Graal3D: {} is a BMP, which 5.12 does not draw; use PNG, JPEG or GIF.", info.file.filename().string());
+				logLine("** [Warning] Graal3D: {} is a BMP, which 5.12 does not draw; use PNG, JPEG or GIF.", info.file.filename().string());
 		};
 
 		size_t found = 0, missing = 0, dropped = 0;
@@ -896,7 +917,7 @@ namespace graal3d
 					if (const auto info = find(name); info == nullptr)
 					{
 						++missing;
-						log::printLine(log::server, "** [Warning] Graal3D: the Sky's texture {} is not in the file folders.", name);
+						logLine("** [Warning] Graal3D: the Sky's texture {} is not in the file folders.", name);
 					}
 					else
 					{
@@ -913,12 +934,12 @@ namespace graal3d
 			if (info == nullptr)
 			{
 				++missing;
-				log::printLine(log::server, "** [Warning] Graal3D: {}'s shape {} is not in the file folders.", object.object.name, shape);
+				logLine("** [Warning] Graal3D: {}'s shape {} is not in the file folders.", object.object.name, shape);
 				return false;
 			}
 			++found;
 			if (!info->file.has_extension())
-				log::printLine(log::server, "** [Warning] Graal3D: {} has no extension on disk; ship it under its real name.", info->file.filename().string());
+				logLine("** [Warning] Graal3D: {} has no extension on disk; ship it under its real name.", info->file.filename().string());
 			auto ext = info->file.extension().string();
 			for (auto& ch : ext)
 				ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
@@ -926,7 +947,7 @@ namespace graal3d
 			{
 				const auto version = difVersion(readAll(info->file));
 				if (!version || *version != kDifVersion)
-					log::printLine(log::server, "** [Warning] Graal3D: interior {} is {}; Graal 3D clients read InteriorResource version {}, so it may not draw.", shape,
+					logLine("** [Warning] Graal3D: interior {} is {}; Graal 3D clients read InteriorResource version {}, so it may not draw.", shape,
 								   version ? std::format("version {}", *version) : std::string("shorter than its header"), kDifVersion);
 			}
 			if ((ext != ".3ds" && ext != ".dts") || m_shapeCheck == ShapeCheck::Off)
@@ -940,24 +961,24 @@ namespace graal3d
 				{
 					if (hasPath(texture))
 					{
-						log::printLine(log::server, "** [Warning] Graal3D: {} names the texture {}, which is not a bare file name; the client may not find it.", shape, texture);
+						logLine("** [Warning] Graal3D: {} names the texture {}, which is not a bare file name; the client may not find it.", shape, texture);
 						continue;
 					}
 					if (const auto tex = find(texture))
 						checkImage(*tex);
 					else
-						log::printLine(log::server, "** [Warning] Graal3D: {}'s texture {} is not in the file folders.", shape, texture);
+						logLine("** [Warning] Graal3D: {}'s texture {} is not in the file folders.", shape, texture);
 				}
 			const auto why = unsafeAsset(ext, bytes);
 			if (!why)
 				return false;
 			if (m_shapeCheck == ShapeCheck::Warn)
 			{
-				log::printLine(log::server, "** [Warning] Graal3D: {} would crash a client ({}); sent anyway (graal3dshapecheck = warn).", shape, *why);
+				logLine("** [Warning] Graal3D: {} would crash a client ({}); sent anyway (graal3dshapecheck = warn).", shape, *why);
 				return false;
 			}
 			++dropped;
-			log::printLine(log::server, "** [Error] Graal3D: {} would crash a client ({}); {} is left out (graal3dshapecheck = warn sends it).", shape, *why, object.object.name);
+			logLine("** [Error] Graal3D: {} would crash a client ({}); {} is left out (graal3dshapecheck = warn sends it).", shape, *why, object.object.name);
 			refuse(info->file);
 			return true;
 		});
@@ -973,7 +994,7 @@ namespace graal3d
 			if (info == nullptr)
 			{
 				++missing;
-				log::printLine(log::server, "** [Warning] Graal3D: the player shape {} is not in the file folders.", *shape);
+				logLine("** [Warning] Graal3D: the player shape {} is not in the file folders.", *shape);
 				continue;
 			}
 			++found;
@@ -987,10 +1008,10 @@ namespace graal3d
 				continue;
 			if (m_shapeCheck == ShapeCheck::Warn)
 			{
-				log::printLine(log::server, "** [Warning] Graal3D: the player shape {} would crash a client at login ({}); sent anyway (graal3dshapecheck = warn).", *shape, *why);
+				logLine("** [Warning] Graal3D: the player shape {} would crash a client at login ({}); sent anyway (graal3dshapecheck = warn).", *shape, *why);
 				continue;
 			}
-			log::printLine(log::server, "** [Error] Graal3D: the player shape {} would crash a client at login ({}); it is not used.", *shape, *why);
+			logLine("** [Error] Graal3D: the player shape {} would crash a client at login ({}); it is not used.", *shape, *why);
 			refuse(info->file);
 			shape->clear();
 		}
@@ -1001,14 +1022,14 @@ namespace graal3d
 		{
 			if (hasPath(shape))
 			{
-				log::printLine(log::server, "** [Error] Graal3D: the replicator file {} is not a bare file name; it is not checked or pushed.", shape);
+				logLine("** [Error] Graal3D: the replicator file {} is not a bare file name; it is not checked or pushed.", shape);
 				continue;
 			}
 			const auto info = find(shape);
 			if (info == nullptr)
 			{
 				++missing;
-				log::printLine(log::server, "** [Warning] Graal3D: the replicator shape {} is not in the file folders.", shape);
+				logLine("** [Warning] Graal3D: the replicator shape {} is not in the file folders.", shape);
 				continue;
 			}
 			++found;
@@ -1019,7 +1040,7 @@ namespace graal3d
 				if (const auto why = unsafeAsset(ext, readAll(info->file)))
 				{
 					const bool skip = m_shapeCheck == ShapeCheck::Skip;
-					log::printLine(log::server, "** [Error] Graal3D: the replicator shape {} would crash a client ({}); {}.", shape, *why,
+					logLine("** [Error] Graal3D: the replicator shape {} would crash a client ({}); {}.", shape, *why,
 								   skip ? "3D clients are told the server does not have it" : "sent anyway (graal3dshapecheck = warn)");
 					if (skip)
 						refuse(info->file);
@@ -1049,7 +1070,7 @@ namespace graal3d
 			if (info == nullptr)
 			{
 				++missing;
-				log::printLine(log::server, "** [Warning] Graal3D: heights.info is not in the file folders, so clients draw the terrain white; add a foldersconfig line for {}.",
+				logLine("** [Warning] Graal3D: heights.info is not in the file folders, so clients draw the terrain white; add a foldersconfig line for {}.",
 							   m_world.terrain->folder);
 			}
 			else
@@ -1063,7 +1084,7 @@ namespace graal3d
 				// textures (lab, 2026-11-25: a stray world/global/heights.info
 				// gave "Missing terrain texture: grass/rock").
 				if (!std::filesystem::equivalent(info->file, expected, ec))
-					log::printLine(log::server, "** [Error] Graal3D: clients get {} as heights.info, not the one in {}; remove or rename the other file, or the terrain asks for the wrong textures.",
+					logLine("** [Error] Graal3D: clients get {} as heights.info, not the one in {}; remove or rename the other file, or the terrain asks for the wrong textures.",
 								   info->file.string(), m_world.terrain->folder);
 				std::istringstream lines(readAll(info->file));
 				for (std::string line; std::getline(lines, line);)
@@ -1076,20 +1097,20 @@ namespace graal3d
 					// on one line become one request for a file that is not there
 					// (fuzzing, lab 2026-11-25).
 					if (line.find_first_of(" \t,") != std::string::npos)
-						log::printLine(log::server, "** [Warning] Graal3D: heights.info line \"{}\" is not one texture name; clients ask for the whole line. Put one name on each line.", line);
+						logLine("** [Warning] Graal3D: heights.info line \"{}\" is not one texture name; clients ask for the whole line. Put one name on each line.", line);
 					// A name listed again is drawn from the same file: check and
 					// push it once (1000 repeats made the push about 60 MB).
 					if (std::ranges::find(m_terrainFiles, line) != m_terrainFiles.end())
 						continue;
 					if (hasPath(line))
 					{
-						log::printLine(log::server, "** [Error] Graal3D: heights.info line \"{}\" is not a bare file name; it is not pushed.", line);
+						logLine("** [Error] Graal3D: heights.info line \"{}\" is not a bare file name; it is not pushed.", line);
 						continue;
 					}
 					if (const auto texture = find(line); texture == nullptr)
 					{
 						++missing;
-						log::printLine(log::server, "** [Warning] Graal3D: terrain texture {} (heights.info) is not in the file folders.", line);
+						logLine("** [Warning] Graal3D: terrain texture {} (heights.info) is not in the file folders.", line);
 					}
 					else
 					{
@@ -1099,7 +1120,7 @@ namespace graal3d
 						// Anything else and the client draws its default texture
 						// instead (lab, 2026-11-25).
 						if (const auto size = pngSize(data); size && (size->first != 256 || size->second != 256))
-							log::printLine(log::server, "** [Warning] Graal3D: terrain texture {} is {}x{}; clients draw only 256x256 ones.",
+							logLine("** [Warning] Graal3D: terrain texture {} is {}x{}; clients draw only 256x256 ones.",
 										   texture->file.filename().string(), size->first, size->second);
 						// One that would crash a client (30000x30000 and 65536x1
 						// did) is never pushed unasked.
@@ -1109,7 +1130,7 @@ namespace graal3d
 				}
 			}
 		}
-		log::printLine(log::server, "Graal3D: the world names {} files the folders have, {} they do not{}.", found, missing,
+		logLine("Graal3D: the world names {} files the folders have, {} they do not{}.", found, missing,
 					   dropped ? std::format(", and {} objects with unsafe shapes were left out", dropped) : std::string{});
 		rebuildLoginFiles();
 	}
@@ -1138,7 +1159,7 @@ namespace graal3d
 		// but lays them only on the second (terrain lab, 2026-11-25).
 		const auto terrainBlocks = std::ranges::count_if(m_world.objects, [](const GhostObject& o) { return o.rawClass == "TerrainBlock"; });
 		if (terrainBlocks > 1)
-			log::printLine(log::server, "** [Warning] Graal3D: the world has {} TerrainBlocks; 5.12 lays the streamed chunks only on the last. Keep one.",
+			logLine("** [Warning] Graal3D: the world has {} TerrainBlocks; 5.12 lays the streamed chunks only on the last. Keep one.",
 						   terrainBlocks);
 
 		// The lab's raw fields may name files (file:, zfile:), relative to the
@@ -1178,13 +1199,13 @@ namespace graal3d
 			size_t chunks = 0;
 			for (const auto& c : m_world.terrain->chunks)
 				chunks += c ? 1 : 0;
-			log::printLine(log::server, "Graal3D: terrain from {}: {} of 256 chunks, square size {}{}.", m_world.terrain->folder, chunks,
+			logLine("Graal3D: terrain from {}: {} of 256 chunks, square size {}{}.", m_world.terrain->folder, chunks,
 						   m_world.terrain->squareSize, m_world.terrain->repeat ? ", repeating" : "");
 		}
 		for (const auto& e : errors)
-			log::printLine(log::server, "** [Error] Graal3D: graal3dworld.txt {}", e);
+			logLine("** [Error] Graal3D: graal3dworld.txt {}", e);
 		if (raw > 0)
-			log::printLine(log::server, "Graal3D: the world has {} lab raw events.", raw);
+			logLine("Graal3D: the world has {} lab raw events.", raw);
 	}
 
 	void Service::sendRawEvents(const std::string& account, Connection& connection, bool late)
@@ -1201,9 +1222,9 @@ namespace graal3d
 				missing.insert(event.className);
 		}
 		if (sent > 0)
-			log::printLine(log::server, "Graal3D: {} gets {} raw events{}.", account, sent, late ? " after the mission start" : "");
+			logLine("Graal3D: {} gets {} raw events{}.", account, sent, late ? " after the mission start" : "");
 		for (const auto& name : missing)
-			log::printLine(log::server, "Graal3D: {}'s client has no event class {}: its raw events are not sent.", account, name);
+			logLine("Graal3D: {}'s client has no event class {}: its raw events are not sent.", account, name);
 	}
 
 	const Capabilities* Service::capabilitiesOf(PlayerID player) const
@@ -1234,12 +1255,12 @@ namespace graal3d
 		const Capabilities* caps = session.caps;
 		if (!m_world.terrain)
 		{
-			log::printLine(log::server, "Graal3D: {} asked for terrain chunks; the world has no terrain line.", account);
+			logLine("Graal3D: {} asked for terrain chunks; the world has no terrain line.", account);
 			return;
 		}
 		if (!takesTerrain(caps, static_cast<int>(connection.profile().protocol)))
 		{
-			log::printLine(log::server, "Graal3D: {} asked for terrain chunks; its build ({}) does not take the 5.x terrain layout.", account,
+			logLine("Graal3D: {} asked for terrain chunks; its build ({}) does not take the 5.x terrain layout.", account,
 						   caps ? caps->label : "unknown");
 			return;
 		}
@@ -1268,12 +1289,12 @@ namespace graal3d
 			}
 			if (!connection.postTerrainChunk(static_cast<uint32_t>(i % 16), static_cast<uint32_t>(i / 16), chunk->stamp, chunk->packed))
 			{
-				log::printLine(log::server, "Graal3D: {}'s client has no TerrainChunkEvent class: no terrain sent.", account);
+				logLine("Graal3D: {}'s client has no TerrainChunkEvent class: no terrain sent.", account);
 				return;
 			}
 			++sent;
 		}
-		log::printLine(log::server, "Graal3D: {} gets {} terrain chunks ({} already current).", account, sent, current);
+		logLine("Graal3D: {} gets {} terrain chunks ({} already current).", account, sent, current);
 	}
 
 	void Service::ghostRawObjects(const std::string& account, Connection& connection, const Capabilities* caps, ObjectKey firstKey)
@@ -1298,9 +1319,9 @@ namespace graal3d
 			++key;
 		}
 		if (count > 0)
-			log::printLine(log::server, "Graal3D: {} gets {} raw objects.", account, count);
+			logLine("Graal3D: {} gets {} raw objects.", account, count);
 		if (skipped > 0)
-			log::printLine(log::server, "Graal3D: {}'s build ({}) does not take the 5.x terrain or water layout: {} objects not sent.", account,
+			logLine("Graal3D: {}'s build ({}) does not take the 5.x terrain or water layout: {} objects not sent.", account,
 						   caps ? caps->label : "unknown", skipped);
 	}
 
@@ -1337,7 +1358,7 @@ namespace graal3d
 								names += (names.empty() ? "" : ", ") + tgeCaps->skyTextureRequestName(name);
 							list = comma == std::string_view::npos ? std::string_view{} : list.substr(comma + 1);
 						}
-						log::printLine(log::server, "Graal3D: {}'s build ({}) asks for the sky textures as .gif: {}.", account, tgeCaps->label,
+						logLine("Graal3D: {}'s build ({}) asks for the sky textures as .gif: {}.", account, tgeCaps->label,
 									   names);
 					}
 				}
@@ -1356,7 +1377,7 @@ namespace graal3d
 			// without a tgeplayershape the client gets the Camera.
 			const bool player = m_world.tgeControl == World::TgeControl::Player && !m_world.tgePlayerShape.empty();
 			if (m_world.tgeControl == World::TgeControl::Player && !player)
-				log::printLine(log::server, "Graal3D: no tgeplayershape in graal3dworld.txt, so {} (protocol 19) gets a Camera.", account);
+				logLine("Graal3D: no tgeplayershape in graal3dworld.txt, so {} (protocol 19) gets a Camera.", account);
 			// Its own spawn point (see spawnPosition), set before ghostWorld.
 			const auto own = m_avatars.find(playerId);
 			const auto spawnAt = own != m_avatars.end() ? own->second.object.transform.position : m_world.spawn.position;
@@ -1389,7 +1410,7 @@ namespace graal3d
 			}
 			ghostRawObjects(account, connection, capabilitiesOf(playerId), 1);
 			sendRawEvents(account, connection, false);
-			log::printLine(log::server, "Graal3D: {} (protocol 19) gets a Sky and a {} at the spawn point as its control object.", account,
+			logLine("Graal3D: {} (protocol 19) gets a Sky and a {} at the spawn point as its control object.", account,
 						   control.className());
 			return;
 		}
@@ -1447,10 +1468,10 @@ namespace graal3d
 				if (const auto session = m_sessions.find(it->second); session != m_sessions.end())
 				{
 					session->second.grassDueMs = nowMs() + m_grassDelayMs;
-					log::printLine(log::server, "Graal3D: {} gets {} grass objects in {} ms (graal3dgrassdelay).", account, held, m_grassDelayMs);
+					logLine("Graal3D: {} gets {} grass objects in {} ms (graal3dgrassdelay).", account, held, m_grassDelayMs);
 				}
 		if (caps && caps->requiresSky && !sky)
-			log::printLine(log::server, "Graal3D: {}'s build ({}) crashes without a Sky, and graal3dworld.txt has no sky line.", account,
+			logLine("Graal3D: {}'s build ({}) crashes without a Sky, and graal3dworld.txt has no sky line.", account,
 						   caps->label);
 		for (const auto& [other, avatar] : m_avatars)
 			if (other != playerId)
@@ -1480,7 +1501,7 @@ namespace graal3d
 				if (connection.ghostIndex(key))
 					scoped.insert(i);
 			}
-			log::printLine(log::server, "Graal3D: {}: {} of {} world objects in scope at link (radius {}).", account, scoped.size(), worldObjects,
+			logLine("Graal3D: {}: {} of {} world objects in scope at link (radius {}).", account, scoped.size(), worldObjects,
 						   m_scope.radius);
 			self->scope = std::move(scoped);
 		}
@@ -1492,7 +1513,7 @@ namespace graal3d
 				if (m_world.objects[i].kind == GhostObject::Kind::GameObject && offers(caps, m_world.objects[i], protocol))
 					connection.setGhost(static_cast<ObjectKey>(i + 1), m_world.objects[i]);
 		}
-		log::printLine(log::server, "Graal3D: {} gets {} world objects and {} players.", account, m_world.objects.size(), m_avatars.size());
+		logLine("Graal3D: {} gets {} world objects and {} players.", account, m_world.objects.size(), m_avatars.size());
 		sendRawEvents(account, connection, false);
 	}
 
@@ -1504,11 +1525,11 @@ namespace graal3d
 		if (const auto parsed = parseMutation(text))
 		{
 			std::tie(m_mutation, m_mutationSeed) = *parsed;
-			log::printLine(log::server, "Graal3D: LAB MUTATION {}:{} on every 3D link (graal3dmutate). Never on a public server.", mutationName(m_mutation),
+			logLine("Graal3D: LAB MUTATION {}:{} on every 3D link (graal3dmutate). Never on a public server.", mutationName(m_mutation),
 						   m_mutationSeed);
 		}
 		else
-			log::printLine(log::server, "** [Error] Graal3D: graal3dmutate {} is not a known mutation; off.", text);
+			logLine("** [Error] Graal3D: graal3dmutate {} is not a known mutation; off.", text);
 	}
 
 	void Service::setTrace(const std::string& path)
@@ -1519,11 +1540,11 @@ namespace graal3d
 		auto file = std::make_unique<std::ofstream>(path, std::ios::app);
 		if (!*file)
 		{
-			log::printLine(log::server, "** [Error] Graal3D: cannot open graal3dtrace file {}.", path);
+			logLine("** [Error] Graal3D: cannot open graal3dtrace file {}.", path);
 			return;
 		}
 		m_trace = std::move(file);
-		log::printLine(log::server, "Graal3D: tracing every 3D client to {}.", path);
+		logLine("Graal3D: tracing every 3D client to {}.", path);
 	}
 
 	void Service::trace(std::string_view account, int protocol, std::string_view what)
@@ -1564,7 +1585,7 @@ namespace graal3d
 		if (!saneVector(state.position) || (state.controlling && (state.changed & GameObjectBits::Transform) && !saneTransform(state.object.transform)))
 		{
 			if (m_insaneReported.insert(playerId).second)
-				log::printLine(log::server, "** [Warning] Graal3D: {} reported a position that is not a finite world coordinate ({}, {}, {}); dropped (logged once).",
+				logLine("** [Warning] Graal3D: {} reported a position that is not a finite world coordinate ({}, {}, {}); dropped (logged once).",
 							   it->second.object.name, state.position[0], state.position[1], state.position[2]);
 			++m_droppedReports;
 			return;
@@ -1597,8 +1618,7 @@ namespace graal3d
 			{
 				object.chat = state.object.chat;
 				// And to the 2D clients in its level, as its chat prop.
-				if (auto player = m_server.getPlayer(playerId))
-					player->setChat(CString(object.chat));
+				m_host.setChat(playerId, object.chat);
 			}
 			if (state.changed & GameObjectBits::Scale)
 				object.scale = state.object.scale;
@@ -1663,9 +1683,9 @@ namespace graal3d
 			closeSession(it->second, "You have been disconnected from the game server.", true);
 	}
 
-	void Service::mirrorPacket(PlayerID player, const CString& packet)
+	void Service::mirrorPacket(PlayerID player, std::string_view packet)
 	{
-		if (packet.isEmpty())
+		if (packet.empty())
 			return;
 		auto it = m_byPlayer.find(player);
 		if (it == m_byPlayer.end())
@@ -1678,7 +1698,7 @@ namespace graal3d
 		if (id != PLO_FLAGSET && id != PLO_FLAGDEL)
 			return;
 
-		std::string body(packet.text() + 1, static_cast<size_t>(packet.length() - 1));
+		std::string body(packet.substr(1));
 		while (!body.empty() && (body.back() == '\n' || body.back() == '\0'))
 			body.pop_back();
 		s->second.connection->sendText(TextMessage{"", id == PLO_FLAGSET ? "set" : "unset", "", body});
@@ -1686,24 +1706,13 @@ namespace graal3d
 
 	void Service::sendInitialFlags(PlayerID playerId, Connection& connection)
 	{
-		auto player = m_server.getPlayer(playerId);
-		if (player == nullptr)
+		if (!m_host.player(playerId))
 			return;
 
 		// The same flags the TCP login sends, as one "events" text of `s` lines.
 		std::string lines;
-		for (const auto& [flag, value] : player->account.variables.store | variables::serializable)
-		{
-			if (auto serialized = player->account.variables.serializeModern(flag); serialized.has_value())
-				lines += "s " + *serialized + "\n";
-		}
-		const bool npcServer = m_server.hasNPCServer();
-		for (const auto& flag : m_server.Scripting.variables.store | std::views::keys)
-		{
-			if (npcServer && !flag.starts_with("serverr.")) continue;
-			if (auto serialized = m_server.Scripting.variables.serializeModern(flag); serialized.has_value())
-				lines += "s " + *serialized + "\n";
-		}
+		for (const auto& flag : m_host.loginFlags(playerId))
+			lines += "s " + flag + "\n";
 		// Where the player's 3D object starts, for a script that moves it with
 		// triggerserver (see moveAvatar).
 		if (auto avatar = m_avatars.find(playerId); avatar != m_avatars.end())
@@ -1717,10 +1726,6 @@ namespace graal3d
 
 	std::string Service::compileClientScript(const std::string& name, std::string_view source)
 	{
-		const auto npcServer = m_server.getNPCServer();
-		if (npcServer == nullptr)
-			return {};
-
 		// The file holds clientside code; drop a //#CLIENTSIDE line if it has one.
 		if (const auto mark = source.find("//#CLIENTSIDE"); mark != std::string_view::npos)
 		{
@@ -1732,13 +1737,7 @@ namespace graal3d
 		std::string text{string::trim(source)};
 		if (!text.starts_with("//#"))
 			text = "//#GS2\n" + text;
-		const auto compiled = npcServer->scripting.getCompiledClientScript(name, text);
-		if (compiled == nullptr || compiled->script == nullptr || !compiled->script->has_value())
-			return {};
-		const auto* bytecode = std::any_cast<ScriptByteCode>(compiled->script.get());
-		if (bytecode == nullptr)
-			return {};
-		return std::string(reinterpret_cast<const char*>(bytecode->data()), bytecode->size());
+		return m_host.compileClientScript(name, text);
 	}
 
 	void Service::sendWorldWeapons(Connection& connection)
@@ -1761,19 +1760,14 @@ namespace graal3d
 					if (auto bytecode = compileClientScript(weapon.name, script); !bytecode.empty())
 						script = std::move(bytecode);
 					else
-						log::printLine(log::server, "** [Warning] Graal3D: weapon3d {}: not compiled (needs serverside = true, or a compile error); sending the source", weapon.name);
+						logLine("** [Warning] Graal3D: weapon3d {}: not compiled (needs serverside = true, or a compile error); sending the source", weapon.name);
 				}
 			}
-			else if (const auto w = m_server.getWeapon(weapon.name); w != nullptr)
-			{
-				if (const auto& bytecode = w->getScript().getClientSideByteCode(); !bytecode.empty())
-					script.assign(reinterpret_cast<const char*>(bytecode.data()), bytecode.size());
-				else
-					script = std::string(w->getScript().getClientSideScript());
-			}
+			else if (auto w = m_host.weaponClientScript(weapon.name))
+				script = std::move(*w);
 			if (script.empty())
 			{
-				log::printLine(log::server, "** [Error] Graal3D: weapon3d {}: no script ({})", weapon.name,
+				logLine("** [Error] Graal3D: weapon3d {}: no script ({})", weapon.name,
 							   weapon.file.empty() ? "no server weapon of that name" : "cannot read " + weapon.file);
 				continue;
 			}
@@ -1786,13 +1780,13 @@ namespace graal3d
 
 	void Service::handleText(PlayerID playerId, const TextMessage& message)
 	{
-		auto player = m_server.getPlayer<PlayerClient>(playerId);
-		if (player == nullptr)
+		const auto player = m_host.player(playerId);
+		if (!player || !player->isClient)
 			return;
 
 		if (!message.weapon.empty() || message.type != "events")
 		{
-			log::printLine(log::server, "Graal3D {}: text ignored ({}, {}, {}).", player->account.name, message.weapon, message.type, message.option);
+			logLine("Graal3D {}: text ignored ({}, {}, {}).", player->account, message.weapon, message.type, message.option);
 			return;
 		}
 
@@ -1812,13 +1806,11 @@ namespace graal3d
 			{
 				case 's':
 				{
-					CString packet = CString() >> (char)PLI_FLAGSET << arg;
-					packet.setRead(1);
-					player->msgPLI_FLAGSET(packet);
+					m_host.playerFlagSet(playerId, arg);
 					break;
 				}
 				case 'w':
-					player->addWeapon(std::string_view{arg});
+					m_host.addWeapon(playerId, arg);
 					break;
 				case 't':
 				{
@@ -1827,22 +1819,16 @@ namespace graal3d
 					if (const auto fields = string::fromCSV(arg); fields.size() == 6 && fields[2] == "g3dpos")
 					{
 						if (!moveAvatar(playerId, fields[3] + " " + fields[4] + " " + fields[5]))
-							log::printLine(log::server, "Graal3D {}: g3dpos not moved ({}).", player->account.name, arg);
+							logLine("Graal3D {}: g3dpos not moved ({}).", player->account, arg);
 						break;
 					}
 					// `t weapon,<name>,<params>` is a serverside triggeraction from a weapon.
 					if (!arg.starts_with("weapon,"))
 					{
-						log::printLine(log::server, "Graal3D {}: trigger ignored ({}).", player->account.name, arg);
+						logLine("Graal3D {}: trigger ignored ({}).", player->account, arg);
 						break;
 					}
-					CString packet = CString() >> (char)PLI_TRIGGERACTION;
-					packet.writeGInt(0);
-					packet.writeGChar(0);
-					packet.writeGChar(0);
-					packet << "serverside," << arg.substr(7);
-					packet.setRead(1);
-					player->msgPLI_TRIGGERACTION(packet);
+					m_host.playerTriggerAction(playerId, "serverside," + arg.substr(7));
 					break;
 				}
 				default:
