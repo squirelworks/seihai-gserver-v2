@@ -96,8 +96,9 @@ with the add-on built in never loads the module.
 
 The module is compiled from the same sources as the built-in add-on
 (`server/src/graal3d/`), plus `Graal3DModule.cpp`, and links its own copy of
-gs2lib and zlib. It exports three C functions and nothing else; its own symbols
-stay hidden.
+gs2lib and zlib. It exports three C functions and nothing else: its own symbols
+are hidden, and on Linux a linker version script (`Graal3DModule.map`) also keeps
+back the standard-library objects GCC's headers mark visible.
 
 ### Turning it on
 
@@ -107,7 +108,7 @@ the built-in add-on. Every `graal3d*` option means the same.
 
 | Option | Default | Meaning |
 |---|---|---|
-| `graal3dmodule` | `auto` | `auto`: look for the module in the places above. A path: load that file. `off`: never load one |
+| `graal3dmodule` | `auto` | `auto`: look for the module in the places above. A path: load that file. `off`: never load one (the log says so once at start) |
 
 At start the log says which module was loaded:
 
@@ -126,7 +127,7 @@ info and refuses it, with a log line saying why, and runs without 3D, when:
 |---|---|
 | Name | the file is another add-on's module |
 | Add-on API | the module was built for another `kAddonApiVersion` |
-| Toolchain | another C++ standard library ABI, platform or CPU (`addonToolchain()`, for example `libstdc++-cxx11/linux/x86_64`, `libc++1/macos/arm64` or `msvcstl/windows/x86_64`). The compiler is not part of it: a GCC server and a Clang module (or the other way round) share libstdc++'s ABI |
+| Toolchain | another C++ standard library ABI, platform or CPU (`addonToolchain()`, for example `libstdc++-cxx11/linux/x86_64`, `libc++1/macos/arm64` or `msvcstl/windows/x86_64`). The compiler is not part of it: a GCC server and a Clang module (or the other way round) share libstdc++'s ABI. A Debug build is not refused for being Debug; a module built with `_GLIBCXX_DEBUG` is (`libstdc++-cxx11-debug`) |
 | Client versions | its gs2lib numbers the 3D client versions differently (`addonVersionTableFingerprint()`) |
 
 Within one add-on API version, a module works with any server build, older or

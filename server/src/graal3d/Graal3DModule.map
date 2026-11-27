@@ -1,0 +1,7 @@
+/* Seihai project, 2026-11-27: see CHANGES-SEIHAI.md.
+   The seihai-graal3d module exports its three entry points and nothing else
+   (GCC's headers give some standard-library objects default visibility). */
+{
+	global: seihai_addon_module_*;
+	local: *;
+};

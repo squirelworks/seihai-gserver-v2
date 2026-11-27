@@ -55,3 +55,8 @@ platform always do.
   `bin/docs/graal3d.md` applies as written.
 - Same behaviour as the built-in add-on: the module is the same code reached
   through `AddonHost` instead of `Server`.
+- Checked on a real 5.12 (Windows, under Wine with software OpenGL, in a
+  headless lab VM): a server with no 3D code and this module did everything
+  the built-in add-on did, through login, terrain streaming, a return visit and
+  two players seeing each other, with no crash or error line.
+- Exports only its three entry points (a linker version script on Linux).

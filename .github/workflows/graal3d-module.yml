@@ -73,10 +73,8 @@ jobs:
           CC=gcc-14 CXX=g++-14 cmake -S . -B build-module -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DTESTS=OFF -DUPNP=OFF -DGRAAL3D=OFF -DGRAAL3D_MODULE=ON -DANTLR4_JAR_LOCATION="$RUNNER_TEMP/antlr.jar"
           cmake --build build-module --target seihai-graal3d
-          # GCC's headers give some standard-library objects (typeinfo, inline
-          # variables) default visibility; those are not the module's own.
-          nm -D --defined-only bin/addons/libseihai-graal3d.so | grep -v ' [VWvwu] ' | awk '{print $3}' | c++filt \
-            | grep -Ev '^((typeinfo|typeinfo name|vtable|guard variable) for )?(std::|__gnu_cxx::)' | tee exports.txt
+          # The version script (Graal3DModule.map) leaves only the entry points.
+          nm -D --defined-only bin/addons/libseihai-graal3d.so | grep -v ' [VWvw] ' | tee exports.txt
           [ "$(grep -c seihai_addon_module_ exports.txt)" = 3 ]
           [ "$(grep -vc seihai_addon_module_ exports.txt)" = 0 ] || { echo "the module exports more than its entry points"; exit 1; }
       - name: The server loads the module and opens the 3D port
