@@ -144,6 +144,9 @@ jobs:
           fi
           TAG=graal3d-v$v
           case "$GITHUB_REF" in refs/tags/graal3d-v*) [ "${GITHUB_REF#refs/tags/}" = "$TAG" ] || { echo "tag does not match addons/graal3d/VERSION ($v)"; exit 1; } ;; esac
+          # The module's full source, as the GPL asks, and one SHA256SUMS for every file.
+          git archive --format=tar.gz --prefix=seihai-graal3d-$v-source/ -o dist/seihai-graal3d-$v-source.tar.gz HEAD
+          (cd dist && rm -f SHA256SUMS && sha256sum -- *.tar.gz *.zip 2>/dev/null > SHA256SUMS; cat SHA256SUMS)
           NOTES=$(mktemp)
           { echo "The Graal 3D add-on for Seihai GServer-v2 as its own module (add-on API 1). See addons/graal3d/README.md and docs/addons.md."; echo; \
             awk "/^### $v /{f=1;next} /^### /{f=0} f" addons/graal3d/README.md; } > "$NOTES"
