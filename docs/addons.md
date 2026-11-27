@@ -112,7 +112,7 @@ the built-in add-on. Every `graal3d*` option means the same.
 At start the log says which module was loaded:
 
 ```text
-Add-on graal3d: module libseihai-graal3d.so 0.1.0 (add-on API 1, gcc/libstdc++/linux/x86_64; Torque UDP protocols 19, 21 and 24 (3.151 to 5.x); seihai3d: none; built from 1a2b3c4d).
+Add-on graal3d: module libseihai-graal3d.so 0.1.0 (add-on API 1, libstdc++-cxx11/linux/x86_64; Torque UDP protocols 19, 21 and 24 (3.151 to 5.x); seihai3d: none; built from 1a2b3c4d).
   Graal3D: listening on UDP port 14803.
 ```
 
@@ -126,11 +126,11 @@ info and refuses it, with a log line saying why, and runs without 3D, when:
 |---|---|
 | Name | the file is another add-on's module |
 | Add-on API | the module was built for another `kAddonApiVersion` |
-| Toolchain | another compiler family, standard library, platform or CPU (`addonToolchain()`, for example `gcc/libstdc++/linux/x86_64` or `msvc/msvcstl/windows/x86_64`) |
+| Toolchain | another C++ standard library ABI, platform or CPU (`addonToolchain()`, for example `libstdc++-cxx11/linux/x86_64`, `libc++1/macos/arm64` or `msvcstl/windows/x86_64`). The compiler is not part of it: a GCC server and a Clang module (or the other way round) share libstdc++'s ABI |
 | Client versions | its gs2lib numbers the 3D client versions differently (`addonVersionTableFingerprint()`) |
 
 Within one add-on API version, a module works with any server build, older or
-newer, made with the same kind of toolchain. A server release and a module
+newer, that uses the same standard library ABI. A server release and a module
 release made by the same CI always match.
 
 ### Versions and tags

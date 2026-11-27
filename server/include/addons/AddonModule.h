@@ -11,8 +11,8 @@
 //
 // The info is read first, and the module is used only if its API version, its
 // toolchain and its client version table match the server's. The hooks and the
-// host are C++ classes, so the module and the server must be built with the same
-// kind of compiler and standard library (the toolchain string).
+// host are C++ classes, so the module and the server must use the same C++
+// standard library ABI (the toolchain string).
 
 #ifndef SEIHAI_ADDONS_ADDONMODULE_H
 #define SEIHAI_ADDONS_ADDONMODULE_H
@@ -40,26 +40,33 @@ namespace preagonal
 	/// "SHAI" in the first field of the info.
 	inline constexpr uint32_t kAddonModuleMagic = 0x49414853u;
 
-	/// The C++ ABI the hooks cross: compiler family, standard library and
-	/// platform. Two builds with the same string can share C++ classes.
+	/// The C++ ABI the hooks cross: standard library, its string ABI and debug
+	/// mode, platform and CPU. The compiler is left out: GCC and Clang share
+	/// libstdc++'s ABI, MSVC and clang-cl the MSVC STL's. Two builds with the same
+	/// string can share the hook and host classes.
 	inline std::string addonToolchain()
 	{
 		std::string s;
-#if defined(_MSC_VER) && !defined(__clang__)
-		s += "msvc";
-#elif defined(__clang__)
-		s += "clang";
-#elif defined(__GNUC__)
-		s += "gcc";
-#else
-		s += "cxx";
-#endif
 #if defined(_LIBCPP_VERSION)
-		s += "/libc++";
+		s += "libc++";
+	#if defined(_LIBCPP_ABI_VERSION)
+		s += std::to_string(_LIBCPP_ABI_VERSION);
+	#endif
 #elif defined(__GLIBCXX__)
-		s += "/libstdc++";
-#elif defined(_MSVC_STL_VERSION)
-		s += "/msvcstl";
+		s += "libstdc++";
+	#if defined(_GLIBCXX_USE_CXX11_ABI) && _GLIBCXX_USE_CXX11_ABI
+		s += "-cxx11";
+	#endif
+	#if defined(_GLIBCXX_DEBUG)
+		s += "-debug";
+	#endif
+#elif defined(_MSVC_STL_VERSION) || defined(_MSC_VER)
+		s += "msvcstl";
+	#if defined(_DEBUG)
+		s += "-debug"; // the debug CRT's containers have another layout
+	#endif
+#else
+		s += "unknown-stdlib";
 #endif
 #if defined(_WIN32)
 		s += "/windows";
@@ -72,9 +79,6 @@ namespace preagonal
 		s += "/x86_64";
 #elif defined(__aarch64__) || defined(_M_ARM64)
 		s += "/arm64";
-#endif
-#if defined(_DEBUG)
-		s += "/debug-crt";
 #endif
 		return s;
 	}
