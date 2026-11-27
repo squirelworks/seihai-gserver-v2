@@ -1,4 +1,4 @@
-# Modified by the Seihai project, 2026-11-19, 2026-11-20: see CHANGES-SEIHAI.md.
+# Modified by the Seihai project, 2026-11-19, 2026-11-20, 2026-11-27: see CHANGES-SEIHAI.md.
 #
 #  CMakeLists.txt
 #
@@ -87,7 +87,14 @@ endif()
 # vcpkg configuration.
 set(VCPKG_TARGET_TRIPLET "x64-windows-static" CACHE STRING "vcpkg triplet")
 set(VCPKG_INSTALLED_DIR "${CMAKE_BINARY_DIR}/vcpkg_installed")
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+# Seihai, 2026-11-27: a "-static" triplet links the C++ runtime in (/MT); any other
+# (x64-windows-static-md, which the releases use) takes the shared one (/MD), so the
+# server and the Graal 3D module DLL share one runtime and one heap (docs/addons.md).
+if(VCPKG_TARGET_TRIPLET MATCHES "-static$")
+	set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+else()
+	set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
 	set(CMAKE_EXECUTABLE_SUFFIX ".exe")
 endif()

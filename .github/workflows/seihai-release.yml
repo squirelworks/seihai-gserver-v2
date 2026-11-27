@@ -39,7 +39,7 @@ jobs:
       matrix:
         include:
           - {os: ubuntu-24.04, name: seihai-gserver-v2-linux-x86_64, triplet: x64-linux}
-          - {os: windows-latest, name: seihai-gserver-v2-windows-x86_64, triplet: x64-windows-static}
+          - {os: windows-latest, name: seihai-gserver-v2-windows-x86_64, triplet: x64-windows-static-md}
     runs-on: ${{ matrix.os }}
     env:
       # Not VCPKG_ROOT: the MSVC developer prompt overwrites that one.
@@ -113,9 +113,15 @@ jobs:
           mkdir -p dist/${{ matrix.name }}
           cp -r bin/. dist/${{ matrix.name }}/
           cp LICENSE.md CHANGES-SEIHAI.md README.md dist/${{ matrix.name }}/
+          # Windows: the server uses the shared C++ runtime (so the Graal 3D module can
+          # share it); ship Microsoft's redistributable DLLs beside it.
+          if [ "$RUNNER_OS" = Windows ]; then
+            crt=$(ls -d "$(cygpath -u "$VCToolsRedistDir")"x64/Microsoft.VC*.CRT 2>/dev/null | head -n1)
+            if [ -n "$crt" ]; then cp "$crt"/msvcp140*.dll "$crt"/vcruntime140*.dll dist/${{ matrix.name }}/; else echo "::warning::no VC++ runtime DLLs found to bundle"; fi
+          fi
           # The Graal 3D module goes here (docs/addons.md, "Add-on modules").
           mkdir -p dist/${{ matrix.name }}/addons
-          printf '%s\n' 'Put the Graal 3D module here: libseihai-graal3d.so (Linux) from a graal3d-v* release' \
+          printf '%s\n' 'Put the Graal 3D module here (libseihai-graal3d.so, seihai-graal3d.dll or libseihai-graal3d.dylib) from a graal3d-v* release' \
             'of seihai-gserver-v2, then set graal3d = true in servers/<name>/config/serveroptions.txt.' \
             'This server has no 3D code of its own. See docs/GSERVER-V2-3D-STARTUP.md in the source.' \
             > dist/${{ matrix.name }}/addons/README.txt
@@ -247,9 +253,15 @@ jobs:
           mkdir -p dist/${{ matrix.name }}
           cp -r bin/. dist/${{ matrix.name }}/
           cp LICENSE.md CHANGES-SEIHAI.md README.md dist/${{ matrix.name }}/
+          # Windows: the server uses the shared C++ runtime (so the Graal 3D module can
+          # share it); ship Microsoft's redistributable DLLs beside it.
+          if [ "$RUNNER_OS" = Windows ]; then
+            crt=$(ls -d "$(cygpath -u "$VCToolsRedistDir")"x64/Microsoft.VC*.CRT 2>/dev/null | head -n1)
+            if [ -n "$crt" ]; then cp "$crt"/msvcp140*.dll "$crt"/vcruntime140*.dll dist/${{ matrix.name }}/; else echo "::warning::no VC++ runtime DLLs found to bundle"; fi
+          fi
           # The Graal 3D module goes here (docs/addons.md, "Add-on modules").
           mkdir -p dist/${{ matrix.name }}/addons
-          printf '%s\n' 'Put the Graal 3D module here: libseihai-graal3d.so (Linux) from a graal3d-v* release' \
+          printf '%s\n' 'Put the Graal 3D module here (libseihai-graal3d.so, seihai-graal3d.dll or libseihai-graal3d.dylib) from a graal3d-v* release' \
             'of seihai-gserver-v2, then set graal3d = true in servers/<name>/config/serveroptions.txt.' \
             'This server has no 3D code of its own. See docs/GSERVER-V2-3D-STARTUP.md in the source.' \
             > dist/${{ matrix.name }}/addons/README.txt

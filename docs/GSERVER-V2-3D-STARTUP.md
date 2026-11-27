@@ -17,18 +17,33 @@ From `v4.0.0-seihai.6` the server and its 3D side are two separate releases,
 updated at their own times. A 3D fix ships as a new module; you swap one file and
 restart.
 
-| Download | Release | File | What it is |
+| Download | Release | What it is |
+|---|---|---|
+| The server | `v4.0.0-seihai.6` (later: any `v*-seihai.N`) | `gs2emu` with no 3D code, the four lab worlds, the docs, and an `addons/` folder for the module |
+| The 3D module | `graal3d-v0.1.1` (later: any `graal3d-v*`) | the module, its README, the 3D reference and this guide |
+
+Both are at <https://github.com/squirelworks/seihai-gserver-v2/releases>. Take the
+server and the module for the same system:
+
+| System | Server archive | Module archive | Module file |
 |---|---|---|---|
-| The server | `v4.0.0-seihai.6` (later: any `v*-seihai.N`) | `seihai-gserver-v2-linux-x86_64.tar.gz`, `SHA256SUMS` | `gs2emu` with no 3D code, the four lab worlds, the docs, and an `addons/` folder for the module |
-| The 3D module | `graal3d-v0.1.1` (later: any `graal3d-v*`) | `seihai-graal3d-0.1.1-linux-x86_64.tar.gz`, `SHA256SUMS` | `libseihai-graal3d.so`, its README and the 3D reference |
+| Linux x86_64 | `seihai-gserver-v2-linux-x86_64.tar.gz` | `seihai-graal3d-0.1.1-linux-x86_64.tar.gz` | `libseihai-graal3d.so` |
+| Windows x86_64 | `seihai-gserver-v2-windows-x86_64.zip` | `seihai-graal3d-0.1.1-windows-x86_64.zip` | `seihai-graal3d.dll` |
+| macOS Intel | `seihai-gserver-v2-macos-x86_64.tar.gz` | `seihai-graal3d-0.1.1-macos-x86_64.tar.gz` | `libseihai-graal3d.dylib` |
+| macOS Apple Silicon | `seihai-gserver-v2-macos-aarch64.tar.gz` | `seihai-graal3d-0.1.1-macos-aarch64.tar.gz` | `libseihai-graal3d.dylib` |
 
-Both are at <https://github.com/squirelworks/seihai-gserver-v2/releases>. The module
-exists for Linux x86_64 only so far. The Windows and macOS server archives load a
-module the same way, but there is none for them yet, so they run 2D only.
+The Linux module has run with a real 5.12; the Windows and macOS modules are built
+the same way but have not been run with a client yet. The examples below use Linux;
+on Windows, unpack the `.zip` files and use `gs2emu.exe`.
 
-**System:** Linux x86_64 with glibc 2.38 or newer (Ubuntu 24.04, Debian 13 or
-later), with `libz.so.1` and `libbz2.so.1.0` installed (`zlib1g` and `libbz2-1.0`
-on Debian and Ubuntu). Both releases are built on Ubuntu 24.04 with GCC 14.
+**Linux:** x86_64 with glibc 2.38 or newer (Ubuntu 24.04, Debian 13 or later), with
+`libz.so.1` and `libbz2.so.1.0` installed (`zlib1g` and `libbz2-1.0` on Debian and
+Ubuntu). Both are built on Ubuntu 24.04 with GCC 14.
+**Windows:** 64-bit Windows 10 or later. The server archive carries Microsoft's C++
+runtime DLLs (`msvcp140*.dll`, `vcruntime140*.dll`) beside `gs2emu.exe`; leave them
+there, or install the Visual C++ 2015-2022 x64 redistributable.
+**macOS:** the builds are not signed, so clear the download flag once in each
+unpacked folder: `xattr -dr com.apple.quarantine .`
 
 ## 1. Download and check
 
@@ -43,8 +58,9 @@ mkdir -p g3d/server g3d/module
 (cd g3d/module && sha256sum -c --ignore-missing SHA256SUMS)
 ```
 
-Each line must say `OK`. The module archive also has a `SHA256SUMS` inside it for
-the `.so` itself.
+Each line must say `OK` (on macOS use `shasum -a 256 -c`, on Windows compare
+`certutil -hashfile <file> SHA256` with the line in `SHA256SUMS`). The module archive
+also has a `SHA256SUMS` inside it for the module file itself.
 
 ## 2. Unpack and install the module
 
@@ -54,6 +70,9 @@ tar xzf server/seihai-gserver-v2-linux-x86_64.tar.gz
 tar xzf module/seihai-graal3d-0.1.1-linux-x86_64.tar.gz
 cp seihai-graal3d-0.1.1-linux-x86_64/libseihai-graal3d.so seihai-gserver-v2-linux-x86_64/addons/
 ```
+
+On Windows, copy `seihai-graal3d.dll` into the server folder's `addons\`; on macOS,
+`libseihai-graal3d.dylib`.
 
 The server looks for the module, in this order: the server folder, its `addons/`,
 the folder `gs2emu` is in, and that folder's `addons/`. The last one, used above,
@@ -161,10 +180,11 @@ or unsafe. Read those lines before you connect a client.
 
 ```sh
 cd seihai-gserver-v2-linux-x86_64
-./gs2emu --server modern
+./gs2emu --server modern            # Windows: gs2emu.exe --server modern
 ```
 
-Look for these two lines near the top of the log:
+Look for these two lines near the top of the log (the toolchain part reads
+`msvcstl/windows/x86_64` on Windows and `libc++1/macos/...` on macOS):
 
 ```text
 Add-on graal3d: module libseihai-graal3d.so 0.1.1 (add-on API 1, libstdc++-cxx11/linux/x86_64; Torque UDP protocols 19, 21 and 24 (3.151 to 5.x); seihai3d: none; built from <commit>).
@@ -224,6 +244,9 @@ draws some 3D builds badly; install a driver (or, under Wine, use Mesa).
 | No `Add-on graal3d` line, no UDP port | `graal3d` is still `false`, or you edited another world's `serveroptions.txt` | Set `graal3d = true` in the folder you started (`--server modern`) |
 | `graal3d = true, but this server has no graal3d built in and no libseihai-graal3d.so was found` | The module is not in any searched folder | Copy it into `addons/` beside `gs2emu`, or set `graal3dmodule` to its path |
 | `cannot load ... (... GLIBC_2.38 not found ...)` or a missing `libz`/`libbz2` | The system is older than the build, or a library is missing | Use Ubuntu 24.04 / Debian 13 or later; install `zlib1g` and `libbz2-1.0` |
+| Windows: `cannot load ... (error 126)` or a missing `MSVCP140.dll` | The C++ runtime DLLs are not beside `gs2emu.exe` | Keep the DLLs from the server archive in its folder, or install the VC++ 2015-2022 x64 redistributable |
+| Windows: `not loaded: ... msvcstl-mt ...` | A server or module built with its own static C++ runtime (an older or self-built one) | Use the server and module from the releases, or build both with the `x64-windows-static-md` triplet |
+| macOS: the module or `gs2emu` is blocked | The download flag on unsigned files | `xattr -dr com.apple.quarantine .` in the server folder |
 | `... not loaded: <reason>. Rebuild the module against this server` | The module was built for another add-on API, standard-library ABI or gs2lib client table | Take a module whose release notes list this server's add-on API (both releases here are API 1), or build both from one source tree |
 | `graal3d = true, but graal3dmodule = off` | The module is switched off | Remove the `graal3dmodule = off` line |
 | The server is not shown as `3 ` on the list | Not registered, or the listserver does not tag HQ level 4 | `localhostlist = true` (in localhost mode), check `listip` and `listport`, and use a listserver that shows HQ 4 as `3 ` |

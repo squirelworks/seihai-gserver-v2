@@ -134,7 +134,7 @@ info and refuses it, with a log line saying why, and runs without 3D, when:
 |---|---|
 | Name | the file is another add-on's module |
 | Add-on API | the module was built for another `kAddonApiVersion` |
-| Toolchain | another C++ standard library ABI, platform or CPU (`addonToolchain()`, for example `libstdc++-cxx11/linux/x86_64`, `libc++1/macos/arm64` or `msvcstl/windows/x86_64`). The compiler is not part of it: a GCC server and a Clang module (or the other way round) share libstdc++'s ABI. A Debug build is not refused for being Debug; a module built with `_GLIBCXX_DEBUG` is (`libstdc++-cxx11-debug`) |
+| Toolchain | another C++ standard library ABI, platform or CPU (`addonToolchain()`, for example `libstdc++-cxx11/linux/x86_64`, `libc++1/macos/arm64` or `msvcstl/windows/x86_64`). The compiler is not part of it: a GCC server and a Clang module (or the other way round) share libstdc++'s ABI. A Debug build is not refused for being Debug; a module built with `_GLIBCXX_DEBUG` is (`libstdc++-cxx11-debug`). On Windows, a build with its own static C++ runtime (`/MT`) is marked `-mt` (`msvcstl-mt/windows/x86_64`), since it cannot share objects with another module; the releases use the shared runtime |
 | Client versions | its gs2lib numbers the 3D client versions differently (`addonVersionTableFingerprint()`) |
 
 Within one add-on API version, a module works with any server build, older or
