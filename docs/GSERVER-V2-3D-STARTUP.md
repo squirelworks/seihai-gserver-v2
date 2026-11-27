@@ -13,13 +13,13 @@ archive and as `graal3d-reference.md` in the module archive).
 
 ## What you download
 
-From `v4.0.0-seihai.6` the server and its 3D side are two separate releases,
+From `v4.0.0-seihai.7` the server and its 3D side are two separate releases,
 updated at their own times. A 3D fix ships as a new module; you swap one file and
 restart.
 
 | Download | Release | What it is |
 |---|---|---|
-| The server | `v4.0.0-seihai.6` (later: any `v*-seihai.N`) | `gs2emu` with no 3D code, the four lab worlds, the docs, and an `addons/` folder for the module |
+| The server | `v4.0.0-seihai.7` (later: any `v*-seihai.N`) | `gs2emu` with no 3D code, the four lab worlds, the docs, and an `addons/` folder for the module |
 | The 3D module | `graal3d-v0.1.1` (later: any `graal3d-v*`) | the module, its README, the 3D reference and this guide |
 
 Both are at <https://github.com/squirelworks/seihai-gserver-v2/releases>. Take the
