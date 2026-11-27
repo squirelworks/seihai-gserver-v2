@@ -94,6 +94,13 @@ cmake --build build-module --target seihai-graal3d
 `GRAAL3D=ON` (built in) and `GRAAL3D_MODULE=ON` can be on together; a server
 with the add-on built in never loads the module.
 
+**Releases.** From `v4.0.0-seihai.6`, the server release archives
+("Seihai build and release", `.github/workflows/seihai-release.yml`) are built with
+`-DGRAAL3D=OFF` and carry an `addons/` folder holding only a README.txt. The 3D side is released only
+as the module (`graal3d-v*`, `.github/workflows/graal3d-module.yml`), at its own
+times: a 3D fix needs a new module, not a new server. How to put the two together
+and start a 3D server: `docs/GSERVER-V2-3D-STARTUP.md`.
+
 The module is compiled from the same sources as the built-in add-on
 (`server/src/graal3d/`), plus `Graal3DModule.cpp`, and links its own copy of
 gs2lib and zlib. It exports three C functions and nothing else: its own symbols

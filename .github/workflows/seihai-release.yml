@@ -76,7 +76,9 @@ jobs:
             EXTRA="-DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=$(brew --prefix lld)/bin/ld64.lld"
             if [ -n "${{ matrix.cross }}" ]; then EXTRA="$EXTRA -DCMAKE_OSX_ARCHITECTURES=${{ matrix.cross }}"; fi
           fi
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DTESTS=OFF -DUPNP=OFF \
+          # GRAAL3D=OFF: the release server has no 3D code; the Graal 3D add-on ships
+          # and is updated on its own, as the seihai-graal3d module (graal3d-module.yml).
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DTESTS=OFF -DUPNP=OFF -DGRAAL3D=OFF \
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_DIR/scripts/buildsystems/vcpkg.cmake" \
             -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} $EXTRA
       - name: Build
@@ -87,10 +89,9 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cmake -S . -B build -DTESTS=ON
-          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin ClientPing Scripting LegacyProps GS1ToGS2 GS1 FileSend ServerOptions ShortPackets LevelLoad ServerWarp
+          cmake --build build --target RC Gpak NPCServerGS1 ScriptCache SecureLogin ClientPing Scripting LegacyProps GS1ToGS2 GS1 FileSend ServerOptions ShortPackets LevelLoad ServerWarp
           timeout 60 bin/RC
           timeout 60 bin/Gpak
-          timeout 60 bin/Graal3D
           timeout 60 bin/NPCServerGS1
           timeout 60 bin/ScriptCache
           timeout 60 bin/SecureLogin
@@ -104,7 +105,7 @@ jobs:
           timeout 60 bin/ShortPackets
           timeout 60 bin/LevelLoad
           timeout 60 bin/ServerWarp
-          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin bin/ClientPing bin/Scripting bin/LegacyProps bin/GS1ToGS2 bin/GS1 bin/FileSend bin/ServerOptions bin/ShortPackets bin/LevelLoad bin/ServerWarp
+          rm -f bin/RC bin/Gpak bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin bin/ClientPing bin/Scripting bin/LegacyProps bin/GS1ToGS2 bin/GS1 bin/FileSend bin/ServerOptions bin/ShortPackets bin/LevelLoad bin/ServerWarp
           python3 -m unittest tools/lab/test_labcheck.py tools/lab/test_netdump2session.py
       - name: Package
         shell: bash
@@ -112,6 +113,12 @@ jobs:
           mkdir -p dist/${{ matrix.name }}
           cp -r bin/. dist/${{ matrix.name }}/
           cp LICENSE.md CHANGES-SEIHAI.md README.md dist/${{ matrix.name }}/
+          # The Graal 3D module goes here (docs/addons.md, "Add-on modules").
+          mkdir -p dist/${{ matrix.name }}/addons
+          printf '%s\n' 'Put the Graal 3D module here: libseihai-graal3d.so (Linux) from a graal3d-v* release' \
+            'of seihai-gserver-v2, then set graal3d = true in servers/<name>/config/serveroptions.txt.' \
+            'This server has no 3D code of its own. See docs/GSERVER-V2-3D-STARTUP.md in the source.' \
+            > dist/${{ matrix.name }}/addons/README.txt
           cd dist
           if [ "$RUNNER_OS" = Windows ]; then 7z a ${{ matrix.name }}.zip ${{ matrix.name }}; else tar czf ${{ matrix.name }}.tar.gz ${{ matrix.name }}; fi
       # Start the packaged default, classic and modern lab servers (after the archive is made, so the run's logs
@@ -203,7 +210,9 @@ jobs:
             # this, vcpkg uses its own port, which builds x86_64 on an Intel runner.
             EXTRA="$EXTRA -DVCPKG_OVERLAY_PORTS=$GITHUB_WORKSPACE/vcpkg-overlays/ports"
           fi
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DTESTS=OFF -DUPNP=OFF \
+          # GRAAL3D=OFF: the release server has no 3D code; the Graal 3D add-on ships
+          # and is updated on its own, as the seihai-graal3d module (graal3d-module.yml).
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DTESTS=OFF -DUPNP=OFF -DGRAAL3D=OFF \
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_DIR/scripts/buildsystems/vcpkg.cmake" \
             -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} $EXTRA
       - name: Build
@@ -214,10 +223,9 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cmake -S . -B build -DTESTS=ON
-          cmake --build build --target RC Gpak Graal3D NPCServerGS1 ScriptCache SecureLogin ClientPing Scripting LegacyProps GS1ToGS2 GS1 FileSend ServerOptions ShortPackets LevelLoad ServerWarp
+          cmake --build build --target RC Gpak NPCServerGS1 ScriptCache SecureLogin ClientPing Scripting LegacyProps GS1ToGS2 GS1 FileSend ServerOptions ShortPackets LevelLoad ServerWarp
           timeout 60 bin/RC
           timeout 60 bin/Gpak
-          timeout 60 bin/Graal3D
           timeout 60 bin/NPCServerGS1
           timeout 60 bin/ScriptCache
           timeout 60 bin/SecureLogin
@@ -231,7 +239,7 @@ jobs:
           timeout 60 bin/ShortPackets
           timeout 60 bin/LevelLoad
           timeout 60 bin/ServerWarp
-          rm -f bin/RC bin/Gpak bin/Graal3D bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin bin/ClientPing bin/Scripting bin/LegacyProps bin/GS1ToGS2 bin/GS1 bin/FileSend bin/ServerOptions bin/ShortPackets bin/LevelLoad bin/ServerWarp
+          rm -f bin/RC bin/Gpak bin/NPCServerGS1 bin/ScriptCache bin/SecureLogin bin/ClientPing bin/Scripting bin/LegacyProps bin/GS1ToGS2 bin/GS1 bin/FileSend bin/ServerOptions bin/ShortPackets bin/LevelLoad bin/ServerWarp
           python3 -m unittest tools/lab/test_labcheck.py tools/lab/test_netdump2session.py
       - name: Package
         shell: bash
@@ -239,6 +247,12 @@ jobs:
           mkdir -p dist/${{ matrix.name }}
           cp -r bin/. dist/${{ matrix.name }}/
           cp LICENSE.md CHANGES-SEIHAI.md README.md dist/${{ matrix.name }}/
+          # The Graal 3D module goes here (docs/addons.md, "Add-on modules").
+          mkdir -p dist/${{ matrix.name }}/addons
+          printf '%s\n' 'Put the Graal 3D module here: libseihai-graal3d.so (Linux) from a graal3d-v* release' \
+            'of seihai-gserver-v2, then set graal3d = true in servers/<name>/config/serveroptions.txt.' \
+            'This server has no 3D code of its own. See docs/GSERVER-V2-3D-STARTUP.md in the source.' \
+            > dist/${{ matrix.name }}/addons/README.txt
           cd dist
           if [ "$RUNNER_OS" = Windows ]; then 7z a ${{ matrix.name }}.zip ${{ matrix.name }}; else tar czf ${{ matrix.name }}.tar.gz ${{ matrix.name }}; fi
       # Start the packaged default, classic and modern lab servers (after the archive is made, so the run's logs

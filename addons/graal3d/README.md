@@ -39,11 +39,25 @@ platform always do.
 
 | Module | Add-on API | Built from | Server builds it loads into | 3D protocol |
 |---|---|---|---|---|
+| 0.1.1 | 1 | `seihai` after #186 | any server with add-on API 1 (`kAddonApiVersion = 1`), same toolchain | Torque 19, 21, 24; seihai3d: none |
 | 0.1.0 | 1 | `seihai` after #183 | any server with add-on API 1 (`kAddonApiVersion = 1`), same toolchain | Torque 19, 21, 24; seihai3d: none |
 
 ## Release notes
 
 ### Unreleased
+
+### 0.1.1 (2026-11-27)
+
+- The first module released for the server releases that have no 3D code of their
+  own: from `v4.0.0-seihai.6`, every server archive is built with `-DGRAAL3D=OFF`
+  and gets its 3D from this module, released at its own times.
+- Built from `seihai` after #186: on Linux a linker version script
+  (`Graal3DModule.map`) leaves only the three entry points exported (0.1.0 also
+  exported 22 standard-library objects GCC's headers mark visible), and
+  `graal3dmodule = off` logs one line saying no module is loaded.
+- The 3D behaviour is 0.1.0's, which a real 5.12 ran with a server with no 3D code
+  (below). Installing, the server options and the limits:
+  `docs/GSERVER-V2-3D-STARTUP.md`.
 
 ### 0.1.0 (first module, 2026-11-27)
 
